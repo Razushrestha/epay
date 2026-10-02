@@ -98,10 +98,10 @@ export const promoTiles = [
 ];
 
 export const premiumPicks = [
-  { label: "Smart watch", img: u("photo-1546868871-7041f2a55e12") },
-  { label: "Backpack", img: u("photo-1491637639811-60e2756cc1c7") },
-  { label: "Earbuds", img: u("photo-1572569511254-d8f925fe2cbb") },
-  { label: "Sleeve", img: u("photo-1627123424574-724758594e93") },
+  { label: "Smart watch", img: "/premium/watch.jpg" },
+  { label: "Backpack", img: "/premium/backpack.jpg" },
+  { label: "Earbuds", img: "/premium/earbuds.jpg" },
+  { label: "Sleeve", img: "/premium/sleeve.jpg" },
 ];
 
 export type Listing = {
