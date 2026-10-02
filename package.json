@@ -4,12 +4,22 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:api": "node server/index.mjs",
+    "dev:all": "concurrently -n web,api -c blue,green \"npm run dev\" \"npm run dev:api\"",
+    "db:migrate": "node --import dotenv/config scripts/migrate.mjs",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
+  "engines": {
+    "node": ">=18.18.0"
+  },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "dotenv": "^16.4.7",
     "next": "16.3.8",
+    "pg": "^8.13.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -18,6 +28,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",

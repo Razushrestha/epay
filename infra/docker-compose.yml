@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nexlo
+      POSTGRES_PASSWORD: nexlo
+      POSTGRES_DB: nexlo
+    ports:
+      - "5433:5432"
+    volumes:
+      - nexlo_pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+      DISABLE_SECURITY_PLUGIN: "true"
+    ports:
+      - "9200:9200"
+    volumes:
+      - nexlo_os_data:/usr/share/opensearch/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+volumes:
+  nexlo_pg_data:
+  nexlo_os_data:

@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Nexlo
 
-## Getting Started
+Full-stack starter with **Next.js** (React, App Router, TypeScript, Tailwind) and a small **Node.js** HTTP API.
 
-First, run the development server:
+## Requirements
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- [Node.js](https://nodejs.org/) 20+ (18+ should work)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Command | Description |
+|--------|-------------|
+| `npm run dev` | Next.js dev server at [http://localhost:3000](http://localhost:3000) |
+| `npm run dev:api` | Standalone Node API at [http://localhost:4000](http://localhost:4000) |
+| `npm run dev:all` | Next.js + Node API together |
+| `npm run db:up` | Start PostgreSQL + Redis (Docker; ports 5433 / 6380) |
+| `npm run db:migrate` | Apply SQL migrations |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Local DB without Docker:** set `USE_PGLITE=1` in `.env` (default). Data is stored in `.data/pglite`. For production-like dev, use Docker Postgres and set `USE_PGLITE=0`.
+| `npm run build` | Production build |
+| `npm run start` | Run production Next.js |
+| `npm run lint` | ESLint |
 
-## Learn More
+## Project layout
 
-To learn more about Next.js, take a look at the following resources:
+- `src/app/` — Next.js pages and route handlers
+- `src/app/api/` — Next.js API routes (Node runtime)
+- `server/` — Standalone Node.js server (`server/index.mjs`)
+- `docs/` — System architecture (§6–§11), ER diagrams, flows, algorithms
+- `database/` — Migration conventions and schema home
+- `infra/` — Docker Compose (PostgreSQL, Redis, OpenSearch, RabbitMQ)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Architecture index: [docs/README.md](./docs/README.md).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Full proposal breakdown & 4-month phases:** [phases/README.md](./phases/README.md) (every §4 feature, §5 table, milestones M1–M4, cost, client duties).
 
-## Deploy on Vercel
+## Health checks
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Next: `GET http://localhost:3000/api/health`
+- Node: `GET http://localhost:4000/health`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Optional: set `API_PORT` to change the Node server port.

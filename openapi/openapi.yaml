@@ -1,0 +1,76 @@
+openapi: 3.1.0
+info:
+  title: Nexlo API
+  version: 0.1.0
+  description: Milestone 1 — identity and catalog
+servers:
+  - url: http://localhost:4000
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /api/v1/categories:
+    get:
+      summary: List categories
+      parameters:
+        - name: parent
+          in: query
+          schema:
+            type: string
+          description: Parent category slug (omit for top-level)
+      responses:
+        "200":
+          description: Category list
+  /api/v1/conditions:
+    get:
+      summary: Item conditions
+      responses:
+        "200":
+          description: Condition list
+  /api/v1/auth/register:
+    post:
+      summary: Register user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                displayName:
+                  type: string
+      responses:
+        "201":
+          description: Created
+        "409":
+          description: Email already registered
+  /api/v1/auth/login:
+    post:
+      summary: Login (password check; JWT in a later release)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Invalid credentials
