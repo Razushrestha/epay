@@ -34,7 +34,7 @@ export function SiteHeader() {
       </div>
 
       {/* ── main bar ──────────────────────────────────── */}
-      <div className="page-shell flex items-center gap-3 pb-2 pt-3">
+      <div className="page-shell flex items-center gap-4 pb-2.5 pt-3">
         <Link href="/" className="flex shrink-0 items-center" aria-label="Nexlo home">
           <Image
             src="/logo.png"
@@ -57,10 +57,9 @@ export function SiteHeader() {
           </svg>
         </button>
 
-        {/* search */}
-        <form action="/search" method="get" className="flex min-w-0 flex-1 items-center">
-          <div className="flex h-[42px] min-w-0 flex-1 items-center rounded-full border-[1.5px] border-[#333] bg-white pl-4 pr-1.5">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.2" className="shrink-0">
+        <form action="/search" method="get" className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex h-11 min-w-0 flex-1 items-center rounded-full border border-[#d5d5d5] bg-white pl-4 pr-3 focus-within:border-[#3665f3]">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#707070" strokeWidth="2.2" className="shrink-0">
               <circle cx="11" cy="11" r="7" />
               <path d="m21 21-4.3-4.3" />
             </svg>
@@ -70,20 +69,20 @@ export function SiteHeader() {
               name="q"
               type="search"
               placeholder="Search for anything..."
-              className="min-w-0 flex-1 bg-transparent px-3 text-[14px] outline-none placeholder:text-[#767676]"
+              className="min-w-0 flex-1 bg-transparent px-3 text-[15px] outline-none placeholder:text-[#767676]"
             />
-            <button type="button" aria-label="Image search" className="mr-1 hidden shrink-0 text-[#555] sm:block">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <button type="button" aria-label="Image search" className="hidden shrink-0 text-[#555] sm:block">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                 <circle cx="12" cy="13" r="4" />
               </svg>
             </button>
-            <span className="hidden h-6 w-px bg-[#ddd] md:block" />
+            <span className="mx-2.5 hidden h-5 w-px bg-[#e0e0e0] md:block" />
             <select
               name="category"
               defaultValue="all"
               aria-label="All Categories"
-              className="hidden max-w-[150px] shrink-0 bg-transparent px-2 text-[12.5px] text-[#333] outline-none md:block"
+              className="hidden max-w-[148px] shrink-0 bg-transparent pr-1 text-[14px] text-[#191919] outline-none md:block"
             >
               <option value="all">All Categories</option>
               <option value="electronics">Electronics</option>
@@ -91,17 +90,16 @@ export function SiteHeader() {
               <option value="motors">Motors</option>
               <option value="collectibles">Collectibles & Art</option>
             </select>
-            <button
-              type="submit"
-              className="h-[34px] shrink-0 rounded-full bg-[#3665f3] px-8 text-[14px] font-medium text-white hover:bg-[#2953c6]"
-            >
-              Search
-            </button>
           </div>
+          <button
+            type="submit"
+            className="h-11 shrink-0 rounded-full bg-[#3665f3] px-6 text-[15px] font-semibold text-white hover:bg-[#2953c6] sm:px-7"
+          >
+            Search
+          </button>
         </form>
 
-        {/* icons */}
-        <div className="flex shrink-0 items-center gap-4 pr-1">
+        <div className="ml-2 flex shrink-0 items-center gap-5 sm:ml-4 sm:gap-6">
           <Link href="/watchlist" aria-label="Watchlist" className="text-[#333] hover:text-[#3665f3]">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
               <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z" />
