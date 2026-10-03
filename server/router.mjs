@@ -120,6 +120,9 @@ export async function handleRequest(req, res) {
     const email = String(body.email ?? "").trim().toLowerCase();
     const password = String(body.password ?? "");
     const displayName = String(body.displayName ?? "").trim() || null;
+    const accountType = body.accountType === "business" ? "business" : "individual";
+    const country = String(body.country ?? "").trim() || null;
+    const buyerOnly = Boolean(body.buyerOnly);
 
     if (!email || !email.includes("@")) {
       return json(req, res, 400, { error: "Valid email is required" });
@@ -127,23 +130,30 @@ export async function handleRequest(req, res) {
     if (password.length < 8) {
       return json(req, res, 400, { error: "Password must be at least 8 characters" });
     }
+    if (accountType === "business" && !country) {
+      return json(req, res, 400, { error: "Select where your business is registered" });
+    }
 
     const passwordHash = hashPassword(password);
     const client = await (await db()).connect();
     try {
+      await client.query("ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS country TEXT");
+      await client.query(
+        "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS buyer_only BOOLEAN NOT NULL DEFAULT FALSE",
+      );
       await client.query("BEGIN");
       const {
         rows: [user],
       } = await client.query(
-        `INSERT INTO users (public_id, email, password_hash, status)
-         VALUES ($1, $2, $3, 'active')
+        `INSERT INTO users (public_id, email, password_hash, status, account_type)
+         VALUES ($1, $2, $3, 'active', $4)
          RETURNING id, public_id, email, account_type, status, seller_level, created_at`,
-        [randomUUID(), email, passwordHash],
+        [randomUUID(), email, passwordHash, accountType],
       );
       await client.query(
-        `INSERT INTO user_profiles (user_id, display_name)
-         VALUES ($1, $2)`,
-        [user.id, displayName ?? email.split("@")[0]],
+        `INSERT INTO user_profiles (user_id, display_name, country, buyer_only)
+         VALUES ($1, $2, $3, $4)`,
+        [user.id, displayName ?? email.split("@")[0], country, buyerOnly],
       );
       await client.query(
         `INSERT INTO outbox (aggregate, event_type, payload)

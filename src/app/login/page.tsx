@@ -1,93 +1,157 @@
-"use client";
-
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { LoginForm } from "@/components/auth/LoginForm";
 
-const apiBase =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+export const metadata: Metadata = {
+  title: "Sign in — Nexlo",
+  description: "Sign in to your Nexlo account to bid, buy and sell.",
+};
+
+const features = [
+  {
+    label: "Secure & Trusted",
+    icon: (
+      <path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.4 7.5 9.5 4.4-1.1 7.5-4.9 7.5-9.5V6L12 3Zm-2.6 9.2 2 2 3.6-4" />
+    ),
+  },
+  {
+    label: "Fast & Easy Access",
+    icon: <path d="M13 2.5 5 13.5h6l-1 8 8-11h-6l1-8Z" />,
+  },
+  {
+    label: "Global Marketplace",
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9S14.6 18.4 12 21c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3Z" />
+      </>
+    ),
+  },
+  {
+    label: "Millions of Happy Users",
+    icon: (
+      <>
+        <circle cx="9" cy="8.5" r="3.2" />
+        <path d="M2.8 20c.4-3.5 3-5.5 6.2-5.5s5.8 2 6.2 5.5" />
+        <circle cx="17.2" cy="9.5" r="2.5" />
+        <path d="M17.5 14.3c2.2.2 3.8 1.8 4.1 4.2" />
+      </>
+    ),
+  },
+];
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<{ email: string; display_name?: string } | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(false);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setUser(null);
-    try {
-      const res = await fetch(`${apiBase}/api/v1/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        setError(body.error ?? "Login failed");
-        return;
-      }
-      setUser(body.data);
-    } catch {
-      setError("Could not reach API. Is npm run dev:api running?");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-6 py-12">
-      <h1 className="text-[24px] font-bold text-[#191919]">Sign in</h1>
-      <p className="mt-1 text-[13px] text-[#707070]">Use your Nexlo account to bid, buy and sell.</p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-4 rounded-2xl border border-[#e7e7e7] bg-white p-6">
-        <label className="block text-[13px] font-medium text-[#191919]">
-          Email
-          <input
-            type="email"
-            required
-            className="mt-1 w-full rounded-lg border border-[#ddd] px-3 py-2 text-[14px] outline-none focus:border-[#3665f3]"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-        </label>
-        <label className="block text-[13px] font-medium text-[#191919]">
-          Password
-          <input
-            type="password"
-            required
-            className="mt-1 w-full rounded-lg border border-[#ddd] px-3 py-2 text-[14px] outline-none focus:border-[#3665f3]"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </label>
-        {error && (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        )}
-        {user && (
-          <p className="text-sm text-green-700 dark:text-green-400">
-            Welcome, {user.display_name ?? user.email}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-full bg-[#3665f3] py-2.5 text-[14px] font-semibold text-white hover:bg-[#2953c6] disabled:opacity-50"
+    <main className="auth-lock grid h-dvh overflow-hidden bg-[#f5f8fc] lg:grid-cols-2">
+      <section className="relative hidden overflow-hidden bg-[#eef4fb] lg:block">
+        <Image
+          src="/auth/signin-scene.jpg"
+          alt=""
+          fill
+          priority
+          sizes="50vw"
+          className="object-cover object-[center_72%]"
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-b from-[#f5f8fc] from-0% via-[#f5f8fc]/88 via-[38%] to-transparent to-[58%]"
+        />
+
+        <div className="relative z-10 flex h-full flex-col px-10 pt-7 xl:px-14 xl:pt-8">
+          <Link href="/" aria-label="Nexlo home" className="w-fit">
+            <Image
+              src="/logo-transparent.png"
+              alt="Nexlo — Find What Comes Next."
+              width={808}
+              height={256}
+              priority
+              className="h-12 w-auto"
+            />
+          </Link>
+
+          <div className="mt-6 xl:mt-8">
+            <h2 className="text-[40px] font-extrabold leading-[1.02] tracking-tight text-[#0f1c3f] xl:text-[46px]">
+              Welcome Back!
+            </h2>
+            <p className="mt-0.5 bg-gradient-to-r from-[#08c4a6] to-[#2f6bff] bg-clip-text text-[36px] font-extrabold leading-[1.05] tracking-tight text-transparent xl:text-[42px]">
+              Let&apos;s get you going.
+            </p>
+            <p className="mt-3 max-w-[360px] text-[13.5px] leading-relaxed text-[#4b566b]">
+              Sign in to your Nexlo account and explore a world of products, services and
+              opportunities.
+            </p>
+          </div>
+
+          <ul className="mt-auto mb-5 flex w-full max-w-[560px] items-start rounded-2xl border border-white/70 bg-white/45 px-2 py-3 shadow-[0_10px_30px_-16px_rgba(15,40,80,0.45)] backdrop-blur-xl">
+            {features.map((f, i) => (
+              <li
+                key={f.label}
+                className={`flex flex-1 flex-col items-center px-1.5 text-center ${
+                  i > 0 ? "border-l border-white/70" : ""
+                }`}
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#2f6bff"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  {f.icon}
+                </svg>
+                <span className="mt-1.5 text-[11px] font-semibold leading-snug text-[#0f1c3f]">
+                  {f.label}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="relative flex h-full min-h-0 flex-col overflow-hidden">
+        <svg
+          viewBox="0 0 600 180"
+          preserveAspectRatio="none"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-28 w-full"
+          aria-hidden
         >
-          {loading ? "Signing in…" : "Log in"}
-        </button>
-      </form>
-      <p className="mt-6 text-center text-[13px] text-[#707070]">
-        New here?{" "}
-        <Link href="/register" className="font-medium text-[#3665f3] hover:underline">
-          Register
-        </Link>
-      </p>
-    </div>
+          <path
+            d="M0 110 C 140 60, 260 160, 400 110 S 540 40, 600 80 L600 180 L0 180 Z"
+            fill="#dbe9fb"
+            fillOpacity="0.55"
+          />
+        </svg>
+
+        <header className="relative z-10 flex shrink-0 items-center justify-between px-5 py-4 sm:px-8 lg:justify-end">
+          <Link href="/" aria-label="Nexlo home" className="lg:hidden">
+            <Image
+              src="/logo-transparent.png"
+              alt="Nexlo"
+              width={808}
+              height={256}
+              className="h-10 w-auto"
+            />
+          </Link>
+          <p className="flex items-center gap-3 text-[13px] text-[#4b566b]">
+            <span className="hidden sm:inline">Don&apos;t have an account?</span>
+            <Link
+              href="/register"
+              className="rounded-full border border-[#2f6bff] bg-white/80 px-4 py-1.5 text-[13px] font-semibold text-[#2f6bff] transition hover:bg-[#2f6bff] hover:text-white"
+            >
+              Create account
+            </Link>
+          </p>
+        </header>
+
+        <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-5 pb-4 sm:px-8">
+          <LoginForm />
+        </div>
+      </section>
+    </main>
   );
 }
