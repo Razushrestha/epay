@@ -12,6 +12,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool, initDb } from "./db.mjs";
 import { rateLimit, RateLimitConfig, clearRateLimit } from "./security/rate-limit.mjs";
+import { deliverCode } from "./mail.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
@@ -193,6 +194,7 @@ async function issueCode(user, purpose, destination, channel) {
      VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '10 minutes')`,
     [user.id, channel, purpose, destination, hashCode(code)],
   );
+  await deliverCode(channel, destination, code, purpose);
   return code;
 }
 
@@ -391,6 +393,7 @@ export async function handleIdentity(req, res, ctx) {
         [user.id, channel, destination, hashCode(code)],
       );
       await client.query("COMMIT");
+      await deliverCode(channel, destination, code, "verify");
       return json(req, res, 201, {
         data: { id: user.public_id, destination, channel, devCode: devCodes ? code : undefined },
       });
@@ -401,6 +404,29 @@ export async function handleIdentity(req, res, ctx) {
     } finally {
       client.release();
     }
+  }
+
+  if (pathname === `${API}/auth/resend` && method === "POST") {
+    const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_FORGOT_PASSWORD);
+    if (rateLimitResult) {
+      if (rateLimitResult.headers) {
+        Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
+          res.setHeader(key, value);
+        });
+      }
+      return json(req, res, rateLimitResult.status, rateLimitResult.body);
+    }
+
+    const body = await readJson(req);
+    const user = await findUser(body.identifier);
+    if (!user) return json(req, res, 200, { data: { sent: true } });
+    const channel = user.email ? "email" : user.phone ? "phone" : "email";
+    const destination = channel === "phone" ? user.phone : user.email;
+    if (!destination) return json(req, res, 400, { error: "This account has no email or phone" });
+    const code = await issueCode(user, "verify", destination, channel);
+    return json(req, res, 200, {
+      data: { sent: true, destination, channel, devCode: devCodes ? code : undefined },
+    });
   }
 
   if (pathname === `${API}/auth/verify` && method === "POST") {

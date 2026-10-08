@@ -24,6 +24,8 @@
     "@neon/config": "^1.8.4",
     "dotenv": "^16.4.7",
     "files-sdk": "^2.6.2",
+    "form-data": "^4.0.6",
+    "mailgun.js": "^14.1.0",
     "multer": "^2.4.0",
     "next": "16.3.8",
     "pg": "^8.13.3",
