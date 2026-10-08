@@ -32,3 +32,5 @@ services:
         sync: false
       - key: MAILGUN_FROM
         sync: false
+      - key: MAILGUN_API_URL
+        value: https://api.mailgun.net

@@ -33,7 +33,8 @@ export async function sendCodeEmail({ to, code, purpose = "verify" }) {
   }
 
   const from =
-    process.env.MAILGUN_FROM || `Nexlo <postmaster@${domain}>`;
+    process.env.MAILGUN_FROM ||
+    `Mailgun Sandbox <postmaster@${domain}>`;
   const subject = SUBJECTS[purpose] ?? "Your Nexlo code";
   const text = `Your Nexlo code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`;
 
