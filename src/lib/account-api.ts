@@ -23,4 +23,8 @@ export async function accountApi<T = unknown>(path: string, options: RequestInit
   return body as T;
 }
 
+// Attach helper methods to accountApi
+accountApi.getToken = getToken;
+accountApi.setToken = setToken;
+
 export { apiBase };
