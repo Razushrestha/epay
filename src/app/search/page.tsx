@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { apiBase } from "@/lib/account-api";
 
 interface Listing {
   id: number;
@@ -84,9 +85,9 @@ function SearchContent() {
   async function loadFilterOptions() {
     try {
       const [catRes, brandRes, condRes] = await Promise.all([
-        fetch("http://localhost:4000/api/v1/catalog/categories?level=1"),
-        fetch("http://localhost:4000/api/v1/catalog/brands?limit=100"),
-        fetch("http://localhost:4000/api/v1/catalog/conditions"),
+        fetch(`${apiBase}/api/v1/catalog/categories?level=1`),
+        fetch(`${apiBase}/api/v1/catalog/brands?limit=100`),
+        fetch(`${apiBase}/api/v1/catalog/conditions`),
       ]);
 
       const [catData, brandData, condData] = await Promise.all([
@@ -115,7 +116,7 @@ function SearchContent() {
 
       if (filters.category_id) params.set("category_id", filters.category_id);
 
-      const res = await fetch(`http://localhost:4000/api/v1/listings/search?${params}`);
+      const res = await fetch(`${apiBase}/api/v1/listings/search?${params}`);
       if (!res.ok) throw new Error("Search failed");
 
       const data = await res.json();
@@ -145,7 +146,7 @@ function SearchContent() {
       if (filters.min_price) params.set("min_price", filters.min_price);
       if (filters.max_price) params.set("max_price", filters.max_price);
 
-      const res = await fetch(`http://localhost:4000/api/v1/listings?${params}`);
+      const res = await fetch(`${apiBase}/api/v1/listings?${params}`);
       if (!res.ok) throw new Error("Failed to load listings");
 
       const data = await res.json();

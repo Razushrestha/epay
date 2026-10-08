@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { accountApi } from "@/lib/account-api";
+import { accountApi, apiBase } from "@/lib/account-api";
 import { useRouter } from "next/navigation";
 
 interface Category {
@@ -82,17 +82,17 @@ export default function CreateListingPage() {
   async function loadFormData() {
     try {
       // Load categories (level 1 for now - can add cascading later)
-      const catRes = await fetch("http://localhost:4000/api/v1/catalog/categories?level=1");
+      const catRes = await fetch(`${apiBase}/api/v1/catalog/categories?level=1`);
       const catData = await catRes.json();
       setCategories(catData.categories || []);
 
       // Load conditions
-      const condRes = await fetch("http://localhost:4000/api/v1/catalog/conditions");
+      const condRes = await fetch(`${apiBase}/api/v1/catalog/conditions`);
       const condData = await condRes.json();
       setConditions(condData.conditions || []);
 
       // Load brands
-      const brandRes = await fetch("http://localhost:4000/api/v1/catalog/brands?limit=100");
+      const brandRes = await fetch(`${apiBase}/api/v1/catalog/brands?limit=100`);
       const brandData = await brandRes.json();
       setBrands(brandData.brands || []);
     } catch (err: any) {
@@ -157,7 +157,7 @@ export default function CreateListingPage() {
           formData.append('removeBackground', 'true');
         }
 
-        const res = await fetch(`http://localhost:4000/api/v1/listings/${listingId}/photos/upload`, {
+        const res = await fetch(`${apiBase}/api/v1/listings/${listingId}/photos/upload`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -212,7 +212,7 @@ export default function CreateListingPage() {
           : null,
       };
 
-      const res = await fetch("http://localhost:4000/api/v1/listings", {
+      const res = await fetch(`${apiBase}/api/v1/listings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

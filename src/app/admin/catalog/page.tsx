@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { accountApi } from "@/lib/account-api";
+import { accountApi, apiBase } from "@/lib/account-api";
 
 interface Category {
   id: number;
@@ -80,15 +80,15 @@ export default function CatalogAdminPage() {
     setError(null);
     try {
       if (view === "categories") {
-        const res = await fetch("http://localhost:4000/api/v1/catalog/categories");
+        const res = await fetch(`${apiBase}/api/v1/catalog/categories`);
         const data = await res.json();
         setCategories(data.categories || []);
       } else if (view === "brands") {
-        const res = await fetch("http://localhost:4000/api/v1/catalog/brands");
+        const res = await fetch(`${apiBase}/api/v1/catalog/brands`);
         const data = await res.json();
         setBrands(data.brands || []);
       } else if (view === "conditions") {
-        const res = await fetch("http://localhost:4000/api/v1/catalog/conditions");
+        const res = await fetch(`${apiBase}/api/v1/catalog/conditions`);
         const data = await res.json();
         setConditions(data.conditions || []);
       }
@@ -106,7 +106,7 @@ export default function CatalogAdminPage() {
       const token = accountApi.getToken();
       if (!token) throw new Error("Not authenticated");
 
-      const res = await fetch("http://localhost:4000/api/v1/catalog/admin/categories", {
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/categories`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -144,7 +144,7 @@ export default function CatalogAdminPage() {
       const token = accountApi.getToken();
       if (!token) throw new Error("Not authenticated");
 
-      const res = await fetch("http://localhost:4000/api/v1/catalog/admin/brands", {
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/brands`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -178,7 +178,7 @@ export default function CatalogAdminPage() {
       const token = accountApi.getToken();
       if (!token) throw new Error("Not authenticated");
 
-      const res = await fetch(`http://localhost:4000/api/v1/catalog/admin/categories/${categoryId}`, {
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/categories/${categoryId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -201,7 +201,7 @@ export default function CatalogAdminPage() {
       const token = accountApi.getToken();
       if (!token) throw new Error("Not authenticated");
 
-      const res = await fetch(`http://localhost:4000/api/v1/catalog/admin/categories/${categoryId}`, {
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/categories/${categoryId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -226,7 +226,7 @@ export default function CatalogAdminPage() {
       const token = accountApi.getToken();
       if (!token) throw new Error("Not authenticated");
 
-      const res = await fetch(`http://localhost:4000/api/v1/catalog/admin/brands/${brandId}`, {
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/brands/${brandId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { accountApi } from "@/lib/account-api";
+import { accountApi, apiBase } from "@/lib/account-api";
 import Link from "next/link";
 
 interface Listing {
@@ -50,7 +50,7 @@ export default function SellerListingsPage() {
       }
 
       const res = await fetch(
-        `http://localhost:4000/api/v1/listings/seller/listings?status=${filter}`,
+        `${apiBase}/api/v1/listings/seller/listings?status=${filter}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -72,7 +72,7 @@ export default function SellerListingsPage() {
       const token = accountApi.getToken();
       if (!token) return;
 
-      const res = await fetch("http://localhost:4000/api/v1/listings/seller/analytics", {
+      const res = await fetch(`${apiBase}/api/v1/listings/seller/analytics`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -92,7 +92,7 @@ export default function SellerListingsPage() {
       const token = accountApi.getToken();
       if (!token) return;
 
-      const res = await fetch(`http://localhost:4000/api/v1/listings/${listingId}/end`, {
+      const res = await fetch(`${apiBase}/api/v1/listings/${listingId}/end`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -113,7 +113,7 @@ export default function SellerListingsPage() {
       const token = accountApi.getToken();
       if (!token) return;
 
-      const res = await fetch(`http://localhost:4000/api/v1/listings/${listingId}`, {
+      const res = await fetch(`${apiBase}/api/v1/listings/${listingId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -132,7 +132,7 @@ export default function SellerListingsPage() {
       const token = accountApi.getToken();
       if (!token) return;
 
-      const res = await fetch(`http://localhost:4000/api/v1/listings/${listingId}/publish`, {
+      const res = await fetch(`${apiBase}/api/v1/listings/${listingId}/publish`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });

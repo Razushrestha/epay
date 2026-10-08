@@ -1,4 +1,4 @@
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+export const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export const tokenKey = "nexlo_token";
 
@@ -26,5 +26,3 @@ export async function accountApi<T = unknown>(path: string, options: RequestInit
 // Attach helper methods to accountApi
 accountApi.getToken = getToken;
 accountApi.setToken = setToken;
-
-export { apiBase };

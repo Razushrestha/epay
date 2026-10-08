@@ -1,0 +1,15 @@
+node : file:///C:/Users/razus/OneDrive/Desktop/E-bay/server/catalog.mjs:6
+At line:1 char:1
++ node server/index.mjs 2>&1 | Tee-Object -FilePath backend.log
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (file:///C:/User...r/catalog.mjs:6:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+import { query } from './db.mjs';
+         ^^^^^
+SyntaxError: The requested module './db.mjs' does not provide an export named 'query'
+    at ModuleJob._instantiate (node:internal/modules/esm/module_job:180:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:263:5)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:547:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:116:5)
+Node.js v22.13.1

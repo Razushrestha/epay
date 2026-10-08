@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { accountApi } from "@/lib/account-api";
+import { accountApi, apiBase } from "@/lib/account-api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -56,7 +56,7 @@ export default function CartPage() {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      const res = await fetch("http://localhost:4000/api/v1/cart", { headers });
+      const res = await fetch(`${apiBase}/api/v1/cart`, { headers });
       if (!res.ok) throw new Error("Failed to load cart");
 
       const data = await res.json();
@@ -77,7 +77,7 @@ export default function CartPage() {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      const res = await fetch(`http://localhost:4000/api/v1/cart/${cartItemId}`, {
+      const res = await fetch(`${apiBase}/api/v1/cart/${cartItemId}`, {
         method: "PATCH",
         headers,
         body: JSON.stringify({ quantity }),
@@ -104,7 +104,7 @@ export default function CartPage() {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      const res = await fetch(`http://localhost:4000/api/v1/cart/${cartItemId}`, {
+      const res = await fetch(`${apiBase}/api/v1/cart/${cartItemId}`, {
         method: "DELETE",
         headers,
       });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { accountApi } from "@/lib/account-api";
+import { accountApi, apiBase } from "@/lib/account-api";
 import { useRouter } from "next/navigation";
 
 interface Address {
@@ -48,7 +48,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      const res = await fetch("http://localhost:4000/api/v1/account/addresses", {
+      const res = await fetch(`${apiBase}/api/v1/account/addresses`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -72,7 +72,7 @@ export default function CheckoutPage() {
       const token = accountApi.getToken();
       if (!token) return;
 
-      const res = await fetch("http://localhost:4000/api/v1/cart/checkout/calculate", {
+      const res = await fetch(`${apiBase}/api/v1/cart/checkout/calculate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -126,7 +126,7 @@ export default function CheckoutPage() {
       }
 
       // Step 1: Create order
-      const orderRes = await fetch("http://localhost:4000/api/v1/cart/checkout/create-order", {
+      const orderRes = await fetch(`${apiBase}/api/v1/cart/checkout/create-order`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -149,7 +149,7 @@ export default function CheckoutPage() {
       const orderId = orderData.order_id;
 
       // Step 2: Initiate payment with selected gateway
-      const paymentRes = await fetch("http://localhost:4000/api/v1/payments/initiate", {
+      const paymentRes = await fetch(`${apiBase}/api/v1/payments/initiate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
