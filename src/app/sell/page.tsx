@@ -4,8 +4,9 @@ import { SiteFooter } from "@/components/SiteFooter";
 export default function SellPage() {
   return (
     <>
-      <main className="mx-auto max-w-[760px] px-4 py-8">
-        <h1 className="text-[24px] font-bold text-[#191919]">Sell on Nexlo</h1>
+      <main className="page-shell py-6">
+        <div id="list" className="mx-auto max-w-[760px] scroll-mt-24">
+          <h1 className="text-[24px] font-bold text-[#191919]">Sell on Nexlo</h1>
         <p className="mt-2 text-[14px] text-[#555]">
           List as an auction, Buy It Now, or Best Offer. Photos, category and price come next.
         </p>
@@ -50,6 +51,7 @@ export default function SellPage() {
             <Link href="/register" className="text-[#3665f3] hover:underline">Create an account</Link>
           </p>
         </form>
+        </div>
       </main>
       <SiteFooter />
     </>

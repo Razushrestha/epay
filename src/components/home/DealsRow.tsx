@@ -21,7 +21,7 @@ export function DealsRow() {
         {todaysDeals.map((deal) => (
           <Link
             key={deal.id}
-            href="/deals"
+            href={`/listing/${deal.id}`}
             className="group overflow-hidden rounded-xl border border-[#e7e7e7] bg-white hover:shadow-md"
           >
             <span className="relative block bg-[#f7f7f7]">

@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { apiBase } from "@/lib/account-api";
 
 function Icon({ children }: { children: React.ReactNode }) {
   return (
@@ -53,6 +52,7 @@ export function RegisterForm() {
   const [country, setCountry] = useState("");
   const [buyerOnly, setBuyerOnly] = useState(false);
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -75,6 +75,10 @@ export function RegisterForm() {
       setError("Select where your business is registered.");
       return;
     }
+    if (!email.trim() && !phone.trim()) {
+      setError("Enter an email or a phone number.");
+      return;
+    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -86,6 +90,9 @@ export function RegisterForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim(),
+          phone: phone.trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
           password,
           displayName:
             accountType === "business"
@@ -101,7 +108,9 @@ export function RegisterForm() {
         setError(body.error ?? "We could not create your account.");
         return;
       }
-      router.push("/login");
+      if (body.data?.devCode) sessionStorage.setItem("nexlo_dev_code", body.data.devCode);
+      sessionStorage.setItem("nexlo_verify_id", email.trim() || phone.trim());
+      router.push("/verify");
     } catch {
       setError("We could not reach the server. Please try again in a moment.");
     } finally {
@@ -208,11 +217,25 @@ export function RegisterForm() {
           </Icon>
           <input
             type="email"
-            required
             autoComplete="email"
-            placeholder={accountType === "business" ? "Business email" : "Email address"}
+            placeholder={accountType === "business" ? "Business email" : "Email or leave blank and use phone"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
+          />
+        </label>
+
+        <label className={field}>
+          <Icon>
+            <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+            <path d="M11 18h2" />
+          </Icon>
+          <input
+            type="tel"
+            autoComplete="tel"
+            placeholder="Phone number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
           />
         </label>

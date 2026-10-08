@@ -30,3 +30,11 @@ export async function checkDb() {
   const { rows } = await pool.query("SELECT 1 AS ok");
   return rows[0]?.ok === 1;
 }
+
+/**
+ * Query helper function
+ */
+export async function query(text, params) {
+  if (!pool) await initDb();
+  return pool.query(text, params);
+}

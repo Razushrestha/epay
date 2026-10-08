@@ -11,7 +11,7 @@ const slides = [
     title: "All your favorites in one place",
     body: "Discover great deals, unique finds and top brands from around the world.",
     cta: "Shop now",
-    href: "/categories/electronics",
+    href: "/shop",
   },
   {
     eyebrow: "Auctions ending soon",

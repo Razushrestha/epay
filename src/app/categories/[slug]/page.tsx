@@ -1,4 +1,7 @@
 import { BrowsePage, titleForSlug } from "@/components/browse/BrowsePage";
+import { CategoryBrowse } from "@/components/browse/ElectronicsBrowse";
+import { SiteFooter } from "@/components/SiteFooter";
+import { categoryBrowse } from "@/lib/category-catalogs";
 import { categoryAliases, listings } from "@/lib/home-data";
 
 export default async function CategoryPage({
@@ -11,11 +14,23 @@ export default async function CategoryPage({
   const items = listings.filter((l) => l.category === key);
   const title = titleForSlug(slug);
 
+  const results = items.length > 0 ? items : listings;
+
+  const browse = categoryBrowse[key];
+  if (browse) {
+    return (
+      <>
+        <CategoryBrowse key={key} config={browse} />
+        <SiteFooter />
+      </>
+    );
+  }
+
   return (
     <BrowsePage
       title={title}
       crumb={title}
-      items={items.length > 0 ? items : listings}
+      items={results}
       subtitle={
         items.length > 0
           ? `${items.length} listings in ${title}`

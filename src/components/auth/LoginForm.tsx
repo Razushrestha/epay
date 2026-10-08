@@ -1,9 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { apiBase, setToken } from "@/lib/account-api";
 
 function MailIcon() {
   return (
@@ -76,6 +76,15 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<"password" | "challenge" | "google">("password");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [code, setCode] = useState("");
+
+  function finish(token: string) {
+    setToken(token);
+    router.push("/account");
+    router.refresh();
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -86,14 +95,72 @@ export function LoginForm() {
       const res = await fetch(`${apiBase}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: identifier.trim(), password }),
+        body: JSON.stringify({ identifier: identifier.trim(), password, remember }),
       });
       const body = await res.json();
       if (!res.ok) {
         setError(body.error ?? "We could not sign you in. Check your details and try again.");
         return;
       }
-      router.push("/");
+      if (body.step === "challenge") {
+        setStep("challenge");
+        setChallengeToken(body.challengeToken);
+        setNotice(body.devCode ? `Enter the code from your app, or use ${body.devCode}.` : "Enter the code from your authenticator or the message we sent.");
+        return;
+      }
+      if (body.step === "enroll") {
+        setToken("");
+        sessionStorage.setItem("nexlo_enroll", body.challengeToken);
+        router.push("/account?tab=security");
+        return;
+      }
+      finish(body.token);
+    } catch {
+      setError("We could not reach the server. Please try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirmCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/auth/2fa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeToken, code }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? "That code was not accepted.");
+        return;
+      }
+      finish(body.token);
+    } catch {
+      setError("We could not reach the server. Please try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function googleSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: identifier.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? "Google sign-in did not complete.");
+        return;
+      }
+      finish(body.token);
     } catch {
       setError("We could not reach the server. Please try again in a moment.");
     } finally {
@@ -116,7 +183,24 @@ export function LoginForm() {
         Welcome back! Please enter your details to continue.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
+      {step === "challenge" ? (
+        <form onSubmit={confirmCode} className="mt-6 space-y-3">
+          <p className="text-[13.5px] text-[#3a4458]">Two-factor check. Enter the 6-digit code.</p>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="123456"
+            className="h-11 w-full rounded-full border border-[#dfe5ee] px-4 text-[15px] outline-none focus:border-[#2f6bff]"
+          />
+          <button type="submit" disabled={loading} className="h-11 w-full rounded-full bg-[#2f6bff] text-[15px] font-semibold text-white disabled:opacity-60">
+            {loading ? "Checking…" : "Confirm"}
+          </button>
+        </form>
+      ) : null}
+
+      <form onSubmit={step === "google" ? googleSignIn : onSubmit} className={`mt-6 space-y-3 ${step === "challenge" ? "hidden" : ""}`}>
         <div>
           <label htmlFor="identifier" className="sr-only">
             Email or username
@@ -129,7 +213,7 @@ export function LoginForm() {
               type="text"
               required
               autoComplete="username"
-              placeholder="Email or username"
+              placeholder="Email or phone"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
@@ -137,7 +221,7 @@ export function LoginForm() {
           </div>
         </div>
 
-        <div>
+        {step === "google" ? null : <div>
           <label htmlFor="password" className="sr-only">
             Password
           </label>
@@ -164,9 +248,9 @@ export function LoginForm() {
               <EyeIcon off={showPassword} />
             </button>
           </div>
-        </div>
+        </div>}
 
-        <div className="flex items-center justify-between pt-0.5">
+        <div className={`flex items-center justify-between pt-0.5 ${step === "google" ? "hidden" : ""}`}>
           <label className="flex cursor-pointer select-none items-center gap-2 text-[13.5px] text-[#3a4458]">
             <input
               type="checkbox"
@@ -184,16 +268,9 @@ export function LoginForm() {
             </span>
             Remember me
           </label>
-          <button
-            type="button"
-            onClick={() => {
-              setError(null);
-              setNotice("Password reset by email is coming soon. Contact support if you are locked out.");
-            }}
-            className="text-[13.5px] font-medium text-[#2f6bff] hover:underline"
-          >
+          <Link href="/forgot" className="text-[13.5px] font-medium text-[#2f6bff] hover:underline">
             Forgot password?
-          </button>
+          </Link>
         </div>
 
         <div aria-live="polite">
@@ -236,7 +313,12 @@ export function LoginForm() {
             type="button"
             onClick={() => {
               setError(null);
-              setNotice(`${s.name} sign-in will be available soon. Please use your email for now.`);
+              if (s.name === "Google") {
+                setStep("google");
+                setNotice("Enter the Google email for this account, then continue.");
+                return;
+              }
+              setNotice(`${s.name} sign-in is not connected yet. Use Google or your email.`);
             }}
             className="relative flex h-11 w-full items-center justify-center rounded-full border border-[#dfe5ee] bg-white text-[14.5px] font-medium text-[#1a2338] transition hover:border-[#c3cddd] hover:bg-[#f8fafd]"
           >

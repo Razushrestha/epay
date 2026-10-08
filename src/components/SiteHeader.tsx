@@ -1,6 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { navCategories } from "@/lib/home-data";
+import { CategoryMenu } from "@/components/CategoryMenu";
+import { CategoryNav } from "@/components/CategoryNav";
+import { AccountLinks } from "@/components/account/AccountLinks";
+import { SearchCategoryMenu } from "@/components/SearchCategoryMenu";
 
 export function SiteHeader() {
   return (
@@ -23,12 +26,7 @@ export function SiteHeader() {
               </svg>
               Nepal (NPR)
             </button>
-            <Link href="/login" className="hover:text-[#3665f3] hover:underline">
-              Sign in
-            </Link>
-            <Link href="/register" className="hover:text-[#3665f3] hover:underline">
-              Register
-            </Link>
+            <AccountLinks />
           </div>
         </div>
       </div>
@@ -46,16 +44,7 @@ export function SiteHeader() {
           />
         </Link>
 
-        <button className="hidden shrink-0 items-center gap-1 text-[12px] leading-tight text-[#555] hover:text-black xl:flex">
-          <span className="text-left">
-            Shop by
-            <br />
-            category
-          </span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
+        <CategoryMenu />
 
         <form action="/search" method="get" className="flex min-w-0 flex-1 items-center gap-2">
           <div className="flex h-11 min-w-0 flex-1 items-center rounded-full border border-[#d5d5d5] bg-white pl-4 pr-3 focus-within:border-[#3665f3]">
@@ -78,18 +67,7 @@ export function SiteHeader() {
               </svg>
             </button>
             <span className="mx-2.5 hidden h-5 w-px bg-[#e0e0e0] md:block" />
-            <select
-              name="category"
-              defaultValue="all"
-              aria-label="All Categories"
-              className="hidden max-w-[148px] shrink-0 bg-transparent pr-1 text-[14px] text-[#191919] outline-none md:block"
-            >
-              <option value="all">All Categories</option>
-              <option value="electronics">Electronics</option>
-              <option value="fashion">Fashion</option>
-              <option value="motors">Motors</option>
-              <option value="collectibles">Collectibles & Art</option>
-            </select>
+            <SearchCategoryMenu />
           </div>
           <button
             type="submit"
@@ -115,49 +93,7 @@ export function SiteHeader() {
         </div>
       </div>
 
-      {/* ── category nav ──────────────────────────────── */}
-      <nav className="border-b border-[#e5e5e5]">
-        <ul className="mx-auto hidden w-full max-w-[1080px] items-center justify-center gap-x-7 py-2.5 text-[13px] text-[#191919] lg:flex">
-          {navCategories.map((item) => (
-            <li key={item}>
-              <Link
-                href={
-                  item === "Sell"
-                    ? "/sell"
-                    : item === "Deals"
-                      ? "/deals"
-                      : item === "Saved"
-                        ? "/watchlist"
-                        : `/categories/${item.toLowerCase().replace(/ & /g, "-").replace(/\s+/g, "-")}`
-                }
-                className="whitespace-nowrap hover:text-[#3665f3] hover:underline"
-              >
-                {item}
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <ul className="page-shell no-scrollbar flex gap-5 overflow-x-auto py-2.5 text-[13px] text-[#191919] lg:hidden">
-          {navCategories.map((item) => (
-            <li key={item} className="shrink-0">
-              <Link
-                href={
-                  item === "Sell"
-                    ? "/sell"
-                    : item === "Deals"
-                      ? "/deals"
-                      : item === "Saved"
-                        ? "/watchlist"
-                        : `/categories/${item.toLowerCase().replace(/ & /g, "-").replace(/\s+/g, "-")}`
-                }
-                className="whitespace-nowrap"
-              >
-                {item}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <CategoryNav />
     </header>
   );
 }
