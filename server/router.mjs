@@ -1,10 +1,12 @@
-import {
-  randomBytes,
-  randomUUID,
-  scryptSync,
-  timingSafeEqual,
-} from "node:crypto";
 import { pool, checkDb, initDb } from "./db.mjs";
+import { handleIdentity } from "./identity.mjs";
+import { handleCatalog } from "./catalog.mjs";
+import { handleListings } from "./listings.mjs";
+import { handleCart } from "./cart.mjs";
+import { handlePayments } from "./payments.mjs";
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { join } from 'node:path';
 
 async function db() {
   if (!pool) await initDb();
@@ -24,8 +26,8 @@ function setCors(req, res) {
   ) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
 function json(req, res, status, body) {
@@ -39,22 +41,6 @@ async function readJson(req) {
   for await (const chunk of req) chunks.push(chunk);
   if (chunks.length === 0) return {};
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-}
-
-function hashPassword(password) {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 64);
-  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
-}
-
-function verifyPassword(password, stored) {
-  const [algo, saltHex, hashHex] = stored.split(":");
-  if (algo !== "scrypt") return false;
-  const hash = scryptSync(password, Buffer.from(saltHex, "hex"), 64);
-  const expected = Buffer.from(hashHex, "hex");
-  return (
-    hash.length === expected.length && timingSafeEqual(hash, expected)
-  );
 }
 
 function parseUrl(req) {
@@ -88,117 +74,66 @@ export async function handleRequest(req, res) {
     });
   }
 
-  if (pathname === `${API_PREFIX}/categories` && method === "GET") {
-    const parentSlug = searchParams.get("parent");
-    let query = `
-      SELECT id, parent_id, name, slug, level, path, icon_url,
-             sort_order, allow_auction, allow_fixed, allow_offer, is_active
-      FROM categories c
-      WHERE is_active = TRUE
-    `;
-    const params = [];
-    if (parentSlug) {
-      params.push(parentSlug);
-      query += ` AND parent_id = (SELECT id FROM categories WHERE slug = $1 LIMIT 1)`;
-    } else {
-      query += " AND parent_id IS NULL";
-    }
-    query += " ORDER BY sort_order, name";
-    const { rows } = await (await db()).query(query, params);
-    return json(req, res, 200, { data: rows });
+  // Catalog API (categories, brands, conditions, item specifics)
+  if (pathname.startsWith(`${API_PREFIX}/catalog`)) {
+    const ipAddress = req.socket.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+    const body = ['POST', 'PATCH', 'PUT'].includes(method) ? await readJson(req) : null;
+    
+    const result = await handleCatalog(req, method, pathname, req.headers, body, ipAddress, userAgent);
+    return json(req, res, result.status, result.body);
   }
 
-  if (pathname === `${API_PREFIX}/conditions` && method === "GET") {
-    const { rows } = await (await db()).query(
-      "SELECT id, name, description FROM conditions ORDER BY id",
-    );
-    return json(req, res, 200, { data: rows });
+  // Listings API (create, manage, search listings)
+  if (pathname.startsWith(`${API_PREFIX}/listings`)) {
+    const ipAddress = req.socket.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+    const body = ['POST', 'PATCH', 'PUT'].includes(method) ? await readJson(req) : null;
+    
+    const result = await handleListings(req, method, pathname, req.headers, body, ipAddress, userAgent);
+    return json(req, res, result.status, result.body);
   }
 
-  if (pathname === `${API_PREFIX}/auth/register` && method === "POST") {
-    const body = await readJson(req);
-    const email = String(body.email ?? "").trim().toLowerCase();
-    const password = String(body.password ?? "");
-    const displayName = String(body.displayName ?? "").trim() || null;
-    const accountType = body.accountType === "business" ? "business" : "individual";
-    const country = String(body.country ?? "").trim() || null;
-    const buyerOnly = Boolean(body.buyerOnly);
-
-    if (!email || !email.includes("@")) {
-      return json(req, res, 400, { error: "Valid email is required" });
-    }
-    if (password.length < 8) {
-      return json(req, res, 400, { error: "Password must be at least 8 characters" });
-    }
-    if (accountType === "business" && !country) {
-      return json(req, res, 400, { error: "Select where your business is registered" });
-    }
-
-    const passwordHash = hashPassword(password);
-    const client = await (await db()).connect();
-    try {
-      await client.query("ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS country TEXT");
-      await client.query(
-        "ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS buyer_only BOOLEAN NOT NULL DEFAULT FALSE",
-      );
-      await client.query("BEGIN");
-      const {
-        rows: [user],
-      } = await client.query(
-        `INSERT INTO users (public_id, email, password_hash, status, account_type)
-         VALUES ($1, $2, $3, 'active', $4)
-         RETURNING id, public_id, email, account_type, status, seller_level, created_at`,
-        [randomUUID(), email, passwordHash, accountType],
-      );
-      await client.query(
-        `INSERT INTO user_profiles (user_id, display_name, country, buyer_only)
-         VALUES ($1, $2, $3, $4)`,
-        [user.id, displayName ?? email.split("@")[0], country, buyerOnly],
-      );
-      await client.query(
-        `INSERT INTO outbox (aggregate, event_type, payload)
-         VALUES ('user', 'user.registered', $1::jsonb)`,
-        [JSON.stringify({ userId: user.public_id, email })],
-      );
-      await client.query("COMMIT");
-      return json(req, res, 201, { data: user });
-    } catch (err) {
-      await client.query("ROLLBACK");
-      if (err.code === "23505") {
-        return json(req, res, 409, { error: "Email already registered" });
-      }
-      throw err;
-    } finally {
-      client.release();
-    }
+  // Cart & Checkout API (cart management, checkout flow, orders)
+  if (pathname.startsWith(`${API_PREFIX}/cart`)) {
+    const ipAddress = req.socket.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+    const body = ['POST', 'PATCH', 'PUT'].includes(method) ? await readJson(req) : null;
+    
+    const result = await handleCart(req, method, pathname, req.headers, body, ipAddress, userAgent);
+    return json(req, res, result.status, result.body);
   }
 
-  if (pathname === `${API_PREFIX}/auth/login` && method === "POST") {
-    const body = await readJson(req);
-    const email = String(body.email ?? "").trim().toLowerCase();
-    const password = String(body.password ?? "");
-
-    const { rows } = await (await db()).query(
-      `SELECT u.id, u.public_id, u.email, u.password_hash, u.status,
-              p.display_name
-       FROM users u
-       LEFT JOIN user_profiles p ON p.user_id = u.id
-       WHERE u.email = $1 AND u.deleted_at IS NULL`,
-      [email],
-    );
-    const user = rows[0];
-    if (!user || !verifyPassword(password, user.password_hash)) {
-      return json(req, res, 401, { error: "Invalid email or password" });
+  // Payments API (eSewa, Khalti integration, callbacks, webhooks)
+  if (pathname.startsWith(`${API_PREFIX}/payments`)) {
+    const ipAddress = req.socket.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+    const body = ['POST', 'PATCH', 'PUT'].includes(method) ? await readJson(req) : null;
+    
+    const result = await handlePayments(req, method, pathname, req.headers, body, ipAddress, userAgent);
+    
+    // Handle redirects
+    if (result.status === 302 && result.headers?.Location) {
+      res.writeHead(302, result.headers);
+      res.end();
+      return;
     }
-    if (user.status !== "active") {
-      return json(req, res, 403, { error: "Account is not active" });
-    }
-    const { password_hash: _, ...safe } = user;
-    return json(req, res, 200, {
-      data: safe,
-      message: "Session tokens (JWT) will be added in the identity module",
-    });
+    
+    return json(req, res, result.status, result.body);
   }
+
+  // Static file serving for uploads - NO LONGER NEEDED
+  // Images are now served directly from Neon Object Storage (S3)
+  // URLs in database point directly to S3 endpoints with public_read access
+  /* 
+  if (pathname.startsWith('/uploads/') && method === 'GET') {
+    // This code is kept for reference but is no longer active
+    // Images are served from: ${AWS_ENDPOINT_URL_S3}/uploads/listings/...
+  }
+  */
+
+  await handleIdentity(req, res, { json, readJson, pathname, method, searchParams });
+  if (res.headersSent) return;
 
   return json(req, res, 404, { error: "Not found" });
 }
