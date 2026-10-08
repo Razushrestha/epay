@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { accountApi } from "@/lib/account-api";
 
-export default function OrdersPage() {
+function OrdersContent() {
   const searchParams = useSearchParams();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,5 +84,13 @@ export default function OrdersPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 py-8"><div className="text-center">Loading...</div></div>}>
+      <OrdersContent />
+    </Suspense>
   );
 }
