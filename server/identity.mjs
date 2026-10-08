@@ -147,6 +147,7 @@ async function latestKyc(userId) {
 function publicUser(user, score, kyc) {
   return {
     id: user.public_id,
+    username: user.username,
     email: user.email,
     phone: user.phone,
     accountType: user.account_type,
@@ -159,6 +160,7 @@ function publicUser(user, score, kyc) {
     lastName: user.last_name,
     country: user.country,
     bio: user.bio,
+    avatarUrl: user.avatar_url || null,
     buyerOnly: user.buyer_only,
     business: user.legal_name
       ? {
@@ -179,12 +181,17 @@ function publicUser(user, score, kyc) {
     kyc: kyc
       ? { id: kyc.public_id, type: kyc.doc_type, status: kyc.status, reason: kyc.rejection_reason }
       : null,
+    createdAt: user.created_at,
   };
 }
 
 async function loadPublic(user) {
-  const [score, kyc] = await Promise.all([feedbackFor(user.id), latestKyc(user.id)]);
-  return publicUser(user, score, kyc);
+  const [score, kyc, social] = await Promise.all([
+    feedbackFor(user.id),
+    latestKyc(user.id),
+    (await db()).query(`SELECT provider FROM social_accounts WHERE user_id = $1`, [user.id]),
+  ]);
+  return { ...publicUser(user, score, kyc), social: social.rows.map((row) => row.provider) };
 }
 
 async function issueCode(user, purpose, destination, channel) {
@@ -635,6 +642,12 @@ export async function handleIdentity(req, res, ctx) {
         body.country ?? null,
       ],
     );
+    if (typeof body.username === "string") {
+      const username = body.username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 32);
+      if (username.length >= 3) {
+        await (await db()).query(`UPDATE users SET username = $2, updated_at = NOW() WHERE id = $1`, [actor.id, username]);
+      }
+    }
     if (body.accountType === "business" || body.accountType === "individual") {
       await (await db()).query(`UPDATE users SET account_type = $2, updated_at = NOW() WHERE id = $1`, [
         actor.id,
@@ -725,11 +738,49 @@ export async function handleIdentity(req, res, ctx) {
     }
     await (await db()).query(
       `UPDATE addresses SET
-         is_default_shipping = CASE WHEN $3 THEN TRUE ELSE is_default_shipping END,
-         is_default_billing = CASE WHEN $4 THEN TRUE ELSE is_default_billing END
+         label = COALESCE($3, label),
+         full_name = COALESCE($4, full_name),
+         phone = COALESCE($5, phone),
+         line1 = COALESCE($6, line1),
+         line2 = COALESCE($7, line2),
+         city = COALESCE($8, city),
+         region = COALESCE($9, region),
+         postal_code = COALESCE($10, postal_code),
+         country = COALESCE($11, country),
+         is_default_shipping = CASE WHEN $12 THEN TRUE ELSE is_default_shipping END,
+         is_default_billing = CASE WHEN $13 THEN TRUE ELSE is_default_billing END
        WHERE public_id = $1 AND user_id = $2`,
-      [addressMatch[1], actor.id, Boolean(body.defaultShipping), Boolean(body.defaultBilling)],
+      [
+        addressMatch[1],
+        actor.id,
+        body.label ?? null,
+        body.fullName ?? null,
+        body.phone ?? null,
+        body.line1 ?? null,
+        body.line2 ?? null,
+        body.city ?? null,
+        body.region ?? null,
+        body.postalCode ?? null,
+        body.country ?? null,
+        Boolean(body.defaultShipping),
+        Boolean(body.defaultBilling),
+      ],
     );
+    return json(req, res, 200, { data: { updated: true } });
+  }
+
+  if (pathname === `${API}/account/password` && method === "POST") {
+    const body = await readJson(req);
+    if (!verifyPassword(String(body.currentPassword ?? ""), actor.password_hash)) {
+      return json(req, res, 400, { error: "Current password is not correct" });
+    }
+    if (String(body.password ?? "").length < 8) {
+      return json(req, res, 400, { error: "Password must be at least 8 characters" });
+    }
+    await (await db()).query(`UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, [
+      actor.id,
+      hashPassword(String(body.password)),
+    ]);
     return json(req, res, 200, { data: { updated: true } });
   }
 
@@ -818,9 +869,31 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/account/feedback` && method === "GET") {
     const score = await feedbackFor(actor.id);
+    const received = await (await db()).query(
+      `SELECT f.public_id, f.rating, f.comment, f.created_at,
+              COALESCE(p.display_name, u.email, u.phone) AS from_name
+       FROM feedback f
+       JOIN users u ON u.id = f.buyer_id
+       LEFT JOIN user_profiles p ON p.user_id = u.id
+       WHERE f.seller_id = $1
+       ORDER BY f.created_at DESC`,
+      [actor.id],
+    );
+    const left = await (await db()).query(
+      `SELECT f.public_id, f.rating, f.comment, f.created_at,
+              COALESCE(p.display_name, u.email, u.phone) AS to_name
+       FROM feedback f
+       JOIN users u ON u.id = f.seller_id
+       LEFT JOIN user_profiles p ON p.user_id = u.id
+       WHERE f.buyer_id = $1
+       ORDER BY f.created_at DESC`,
+      [actor.id],
+    );
     return json(req, res, 200, {
       score,
       level: actor.seller_level,
+      received: received.rows,
+      left: left.rows,
     });
   }
 

@@ -27,7 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <HideOnRoutes routes={["/login", "/register"]}>
+        <HideOnRoutes routes={["/login", "/register", "/verify", "/forgot", "/account"]}>
           <SiteHeader />
         </HideOnRoutes>
         {children}
