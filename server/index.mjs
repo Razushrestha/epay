@@ -3,7 +3,7 @@ import "dotenv/config";
 import { initDb } from "./db.mjs";
 import { handleRequest } from "./router.mjs";
 
-const PORT = Number(process.env.API_PORT) || 4000;
+const PORT = Number(process.env.PORT || process.env.API_PORT) || 4000;
 
 await initDb();
 
