@@ -86,7 +86,9 @@ async function validateToken(token) {
     [hash]
   );
 
-  return result.rows[0] || null;
+  const row = result.rows[0];
+  if (!row) return null;
+  return { ...row, userId: Number(row.user_id), user_id: Number(row.user_id) };
 }
 
 /**

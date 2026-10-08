@@ -38,3 +38,23 @@ export async function query(text, params) {
   if (!pool) await initDb();
   return pool.query(text, params);
 }
+
+export async function withTx(fn) {
+  if (!pool) await initDb();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}

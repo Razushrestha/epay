@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import "dotenv/config";
 import { initDb } from "./db.mjs";
 import { handleRequest } from "./router.mjs";
+import { startJobs } from "./jobs.mjs";
 
 const PORT = Number(process.env.PORT || process.env.API_PORT) || 4000;
 
@@ -27,4 +28,5 @@ server.listen(PORT, () => {
   console.log(`  GET  /api/v1/categories`);
   console.log(`  POST /api/v1/auth/register`);
   console.log(`  POST /api/v1/auth/login`);
+  startJobs();
 });

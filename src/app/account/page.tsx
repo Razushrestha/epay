@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { accountApi, setToken } from "@/lib/account-api";
 import { AccountChrome, fullName, initials } from "@/components/account/AccountChrome";
 import { FeedbackBoard } from "@/components/account/FeedbackBoard";
+import { MessagesInbox } from "@/components/account/MessagesInbox";
+import { SellerWallet } from "@/components/account/SellerWallet";
 
 type User = {
   id: string;
@@ -537,17 +539,13 @@ function AccountScreen() {
         </section>
       )}
 
-      {tab === "messages" && (
-        <section className="rounded-[24px] border border-[#e7eef6] bg-white p-8 text-center">
-          <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Messages</h1>
-          <p className="mt-2 text-[14px] text-[#6b7587]">You have no conversations yet. Buyer and seller messages will show up here.</p>
-        </section>
-      )}
+      {tab === "messages" && <MessagesInbox />}
 
       {tab === "payment" && (
         <section className="rounded-[24px] border border-[#e7eef6] bg-white p-8">
           <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Payment information</h1>
-          <p className="mt-2 text-[14px] text-[#6b7587]">Saved cards and wallets will appear here. Checkout currently uses eSewa and Khalti at payment time.</p>
+          <p className="mt-2 text-[14px] text-[#6b7587]">Checkout uses eSewa and Khalti. Seller payout accounts live under Selling.</p>
+          <NotificationPrefs />
         </section>
       )}
 
@@ -825,6 +823,12 @@ function AccountScreen() {
           <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Selling</h1>
           <p className="mt-1 text-[14px]">Seller level: <strong>{levelLabel[user.sellerLevel] ?? user.sellerLevel}</strong></p>
           <p className="mt-1 text-[13px] text-[#667085]">Positive {user.feedback.positive} · Neutral {user.feedback.neutral} · Negative {user.feedback.negative}</p>
+          <div className="mt-6">
+            <h2 className="text-[16px] font-bold">Wallet & payouts</h2>
+            <div className="mt-3"><SellerWallet /></div>
+          </div>
+          <SellingOrders />
+          <PendingOffers />
           {!user.isSeller ? (
             <button type="button" className="mt-4 h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white" onClick={async () => {
               const body = await accountApi<{ data: { twoFactorRequired: boolean } }>("/api/v1/account/seller", { method: "POST", body: "{}" });
@@ -874,9 +878,147 @@ function AccountScreen() {
       )}
 
       {tab === "activity" && (
-        <Standing user={user} appeal={appeal} setAppeal={setAppeal} onDone={() => load()} />
+        <>
+          <Standing user={user} appeal={appeal} setAppeal={setAppeal} onDone={() => load()} />
+          <BiddingActivity />
+        </>
       )}
     </AccountChrome>
+  );
+}
+
+function NotificationPrefs() {
+  const [email, setEmail] = useState(true);
+  const [sms, setSms] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => {
+    accountApi<{ data: { email_enabled: boolean; sms_enabled: boolean } }>("/api/v1/notifications/preferences")
+      .then((b) => {
+        setEmail(b.data.email_enabled !== false);
+        setSms(Boolean(b.data.sms_enabled));
+      })
+      .catch(() => undefined);
+  }, []);
+  return (
+    <form
+      className="mt-6 space-y-2"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        await accountApi("/api/v1/notifications/preferences", { method: "PATCH", body: JSON.stringify({ email, sms, inApp: true }) });
+        setSaved("Notification preferences saved.");
+      }}
+    >
+      <h2 className="text-[16px] font-bold">Notification preferences</h2>
+      <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} /> Email alerts</label>
+      <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} /> SMS for critical events</label>
+      <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Save</button>
+      {saved ? <p className="text-[13px] text-[#12a37e]">{saved}</p> : null}
+    </form>
+  );
+}
+
+function SellingOrders() {
+  const [rows, setRows] = useState<{ id: number; order_number: string; status: string; total_amount: number; product: string }[]>([]);
+  useEffect(() => {
+    accountApi<{ data: typeof rows }>("/api/v1/orders/selling").then((b) => setRows(b.data)).catch(() => undefined);
+  }, []);
+  return (
+    <div className="mt-8">
+      <h2 className="text-[16px] font-bold">Orders to fulfil</h2>
+      <ul className="mt-2 space-y-2 text-[13px]">
+        {rows.map((row) => (
+          <li key={row.id} className="rounded-xl border px-3 py-2">
+            <Link href={`/orders/${row.order_number}`} className="font-semibold text-[#2f6bff]">{row.order_number}</Link>
+            <span className="ml-2 capitalize text-[#6b7587]">{row.status.replace(/_/g, " ")}</span>
+            <span className="block">{row.product}</span>
+          </li>
+        ))}
+        {rows.length === 0 ? <li className="text-[#8a94a6]">No selling orders yet.</li> : null}
+      </ul>
+    </div>
+  );
+}
+
+function PendingOffers() {
+  const [rows, setRows] = useState<{ id: number; title: string; amount: number; status: string; buyer_id: number }[]>([]);
+  const [counter, setCounter] = useState("");
+  useEffect(() => {
+    accountApi<{ data: typeof rows }>("/api/v1/offers").then((b) => setRows(b.data)).catch(() => undefined);
+  }, []);
+  return (
+    <div className="mt-8">
+      <h2 className="text-[16px] font-bold">Best Offers</h2>
+      <ul className="mt-2 space-y-2 text-[13px]">
+        {rows.map((row) => (
+          <li key={row.id} className="rounded-xl border px-3 py-2">
+            <p>{row.title} · NPR {Number(row.amount).toLocaleString()} · {row.status}</p>
+            {row.status === "pending" ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className="rounded-full bg-[#12a37e] px-3 py-1 text-white" onClick={async () => {
+                  await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "accept" }) });
+                  const body = await accountApi<{ data: typeof rows }>("/api/v1/offers");
+                  setRows(body.data);
+                }}>Accept</button>
+                <button type="button" className="rounded-full border px-3 py-1" onClick={async () => {
+                  await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "decline" }) });
+                  const body = await accountApi<{ data: typeof rows }>("/api/v1/offers");
+                  setRows(body.data);
+                }}>Decline</button>
+                <input value={counter} onChange={(e) => setCounter(e.target.value)} placeholder="Counter" className="h-8 w-24 rounded-full border px-3" />
+                <button type="button" className="rounded-full border px-3 py-1" onClick={async () => {
+                  await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "counter", amount: Number(counter) }) });
+                  const body = await accountApi<{ data: typeof rows }>("/api/v1/offers");
+                  setRows(body.data);
+                }}>Counter</button>
+              </div>
+            ) : null}
+          </li>
+        ))}
+        {rows.length === 0 ? <li className="text-[#8a94a6]">No offers yet.</li> : null}
+      </ul>
+    </div>
+  );
+}
+
+function BiddingActivity() {
+  const [bids, setBids] = useState<{ id: number; title: string; amount: number; listing_id: number; listing_status: string }[]>([]);
+  const [chances, setChances] = useState<{ id: number; title: string; amount: number; listing_id: number }[]>([]);
+  useEffect(() => {
+    accountApi<{ bids: typeof bids; secondChance: typeof chances }>("/api/v1/auctions")
+      .then((b) => {
+        setBids(b.bids || []);
+        setChances(b.secondChance || []);
+      })
+      .catch(() => undefined);
+  }, []);
+  return (
+    <section className="mt-4 rounded-[24px] border border-[#e7eef6] bg-white p-6">
+      <h2 className="text-[16px] font-bold">Bids & second-chance offers</h2>
+      <ul className="mt-3 space-y-2 text-[13px]">
+        {chances.map((row) => (
+          <li key={`sc-${row.id}`} className="rounded-xl border px-3 py-2">
+            Second chance on {row.title} · NPR {Number(row.amount).toLocaleString()}
+            <button
+              type="button"
+              className="ml-2 text-[#2f6bff]"
+              onClick={async () => {
+                await accountApi("/api/v1/auctions/second-chance", { method: "POST", body: JSON.stringify({ offerId: row.id, accept: true }) });
+                window.location.href = "/orders";
+              }}
+            >
+              Accept
+            </button>
+          </li>
+        ))}
+        {bids.map((row) => (
+          <li key={row.id} className="rounded-xl border px-3 py-2">
+            <Link href={`/listing/${row.listing_id}`} className="font-semibold text-[#2f6bff]">{row.title}</Link>
+            <span className="ml-2">NPR {Number(row.amount).toLocaleString()} · {row.listing_status}</span>
+          </li>
+        ))}
+        {bids.length === 0 && chances.length === 0 ? <li className="text-[#8a94a6]">No bids yet.</li> : null}
+      </ul>
+    </section>
   );
 }
 

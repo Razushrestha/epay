@@ -139,7 +139,9 @@ async function validateToken(token) {
     [hash]
   );
 
-  return result.rows[0] || null;
+  const row = result.rows[0];
+  if (!row) return null;
+  return { ...row, userId: Number(row.user_id), user_id: Number(row.user_id) };
 }
 
 /**
@@ -258,7 +260,7 @@ async function getListingById(listingId, authHeader) {
       b.name as brand_name, b.slug as brand_slug,
       cond.name as condition_name, cond.description as condition_description,
       u.id as seller_id, u.username as seller_username, u.email as seller_email,
-      up.full_name as seller_full_name, up.avatar_url as seller_avatar,
+      up.display_name as seller_full_name, up.avatar_url as seller_avatar,
       fs.score_percentage as seller_feedback_score, fs.positive_count, fs.neutral_count, fs.negative_count,
       (SELECT json_agg(json_build_object(
         'id', p.id, 'url', p.url, 'thumbnail_url', p.thumbnail_url, 
@@ -276,7 +278,7 @@ async function getListingById(listingId, authHeader) {
     JOIN users u ON l.seller_id = u.id
     LEFT JOIN user_profiles up ON up.user_id = u.id
     LEFT JOIN feedback_scores fs ON fs.user_id = u.id
-    WHERE l.id = $1 AND l.status IN ('active', 'sold') AND l.moderation_status = 'approved'`,
+    WHERE l.id = $1 AND l.status IN ('active', 'sold', 'ended')`,
     [listingId]
   );
 
@@ -406,6 +408,8 @@ async function createListing(data, userId) {
 
   const status = publish_immediately ? 'active' : 'draft';
   const publishedAt = publish_immediately ? 'NOW()' : 'NULL';
+  const durationHours = Math.max(1, Math.min(720, Number(auction_duration) || 168));
+  const startPrice = auction_start_price || price || 0;
 
   const result = await query(
     `INSERT INTO listings (
@@ -414,8 +418,12 @@ async function createListing(data, userId) {
       auction_start_price, auction_reserve_price, auction_duration,
       allow_best_offer, auto_accept_price, auto_decline_price,
       shipping_free, shipping_cost, shipping_international, shipping_international_cost,
-      item_location, sku, upc, specifics, status, published_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, ${publishedAt})
+      item_location, sku, upc, specifics, status, published_at,
+      auction_starts_at, auction_ends_at, auction_current_price
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, ${publishedAt},
+      ${publish_immediately && (format === 'auction' || format === 'both') ? 'NOW()' : 'NULL'},
+      ${publish_immediately && (format === 'auction' || format === 'both') ? `NOW() + INTERVAL '${durationHours} hours'` : 'NULL'},
+      $27)
     RETURNING *`,
     [
       userId, category_id, brand_id, title, subtitle, description,
@@ -423,7 +431,7 @@ async function createListing(data, userId) {
       auction_start_price, auction_reserve_price, auction_duration,
       allow_best_offer, auto_accept_price, auto_decline_price,
       shipping_free, shipping_cost, shipping_international, shipping_international_cost,
-      item_location, sku, upc, JSON.stringify(specifics || {}), status
+      item_location, sku, upc, JSON.stringify(specifics || {}), status, startPrice
     ]
   );
 
@@ -509,7 +517,13 @@ async function publishListing(listingId, userId) {
   }
 
   await query(
-    `UPDATE listings SET status = 'active', published_at = NOW() WHERE id = $1`,
+    `UPDATE listings SET
+       status = 'active',
+       published_at = NOW(),
+       auction_starts_at = CASE WHEN format IN ('auction','both') THEN COALESCE(auction_starts_at, NOW()) ELSE auction_starts_at END,
+       auction_ends_at = CASE WHEN format IN ('auction','both') THEN COALESCE(auction_ends_at, NOW() + (COALESCE(auction_duration, 168) || ' hours')::interval) ELSE auction_ends_at END,
+       auction_current_price = CASE WHEN format IN ('auction','both') THEN COALESCE(auction_current_price, auction_start_price, price) ELSE auction_current_price END
+     WHERE id = $1`,
     [listingId]
   );
 
@@ -549,7 +563,10 @@ async function relistListing(listingId, userId) {
   await query(
     `UPDATE listings 
      SET status = 'active', published_at = NOW(), ended_at = NULL, 
-         auction_bid_count = 0, auction_winner_id = NULL
+         auction_bid_count = 0, auction_winner_id = NULL,
+         auction_starts_at = CASE WHEN format IN ('auction','both') THEN NOW() ELSE auction_starts_at END,
+         auction_ends_at = CASE WHEN format IN ('auction','both') THEN NOW() + (COALESCE(auction_duration, 168) || ' hours')::interval ELSE auction_ends_at END,
+         auction_current_price = CASE WHEN format IN ('auction','both') THEN COALESCE(auction_start_price, price, auction_current_price) ELSE auction_current_price END
      WHERE id = $1`,
     [listingId]
   );

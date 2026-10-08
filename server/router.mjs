@@ -4,9 +4,8 @@ import { handleCatalog } from "./catalog.mjs";
 import { handleListings } from "./listings.mjs";
 import { handleCart } from "./cart.mjs";
 import { handlePayments } from "./payments.mjs";
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { handlePhase3, isPhase3Path } from "./phase3.mjs";
+import { attachAuctionStream } from "./auctions.mjs";
 
 async function db() {
   if (!pool) await initDb();
@@ -26,7 +25,7 @@ function setCors(req, res) {
   ) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
@@ -102,6 +101,22 @@ export async function handleRequest(req, res) {
     
     const result = await handleCart(req, method, pathname, req.headers, body, ipAddress, userAgent);
     return json(req, res, result.status, result.body);
+  }
+
+  const streamMatch = pathname.match(/^\/api\/v1\/auctions\/([^/]+)\/stream$/);
+  if (method === "GET" && streamMatch) {
+    setCors(req, res);
+    attachAuctionStream(req, res, streamMatch[1]);
+    return;
+  }
+
+  if (pathname.startsWith(`${API_PREFIX}/`)) {
+    const pathParts = pathname.replace(`${API_PREFIX}/`, "").split("/").filter(Boolean);
+    if (isPhase3Path(pathParts)) {
+      const body = ["POST", "PATCH", "PUT", "DELETE"].includes(method) ? await readJson(req) : {};
+      const result = await handlePhase3(req, method, pathParts, body);
+      if (result) return json(req, res, result.status, result.body);
+    }
   }
 
   // Payments API (eSewa, Khalti integration, callbacks, webhooks)

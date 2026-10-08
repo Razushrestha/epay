@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 type ChromeUser = {
   displayName: string | null;
@@ -79,13 +80,7 @@ export function AccountChrome({
           </form>
 
           <div className="ml-auto flex items-center gap-3 sm:gap-4">
-            <button type="button" aria-label="Notifications" className="relative rounded-full p-2 text-[#3a4a66] hover:bg-[#f3f7fc]">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-                <path d="M6 9a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8Z" />
-                <path d="M10 20a2 2 0 0 0 4 0" />
-              </svg>
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#ff4d6d]" />
-            </button>
+            <NotificationBell />
             <button type="button" className="hidden items-center gap-1.5 text-[13px] text-[#3a4a66] sm:flex">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
                 <circle cx="12" cy="12" r="9" />

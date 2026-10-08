@@ -249,11 +249,11 @@ export default function CatalogAdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Catalog Management</h1>
-          <p className="mt-2 text-gray-600">Manage categories, brands, conditions, and item specifics</p>
+    <div>
+      <div>
+        <div className="mb-6">
+          <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Catalog Management</h1>
+          <p className="mt-1 text-[14px] text-[#6b7587]">Manage categories, brands, conditions, and item specifics</p>
         </div>
 
         {error && (

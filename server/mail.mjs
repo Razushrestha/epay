@@ -53,6 +53,23 @@ export async function sendCodeEmail({ to, code, purpose = "verify" }) {
   }
 }
 
+export async function sendTransactional({ to, subject, text }) {
+  const client = mailgunClient();
+  const domain = process.env.MAILGUN_DOMAIN;
+  if (!client || !domain || !to) {
+    console.warn("[mail] skip transactional to", to, subject);
+    return { skipped: true };
+  }
+  const from = process.env.MAILGUN_FROM || `Nexlo <postmaster@${domain}>`;
+  try {
+    const data = await client.messages.create(domain, { from, to: [to], subject, text });
+    return { skipped: false, id: data?.id };
+  } catch (err) {
+    console.error("[mail] transactional failed", err?.message || err);
+    return { skipped: true };
+  }
+}
+
 export async function deliverCode(channel, destination, code, purpose) {
   if (channel !== "email" || !destination) return;
   try {

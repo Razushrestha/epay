@@ -22,9 +22,8 @@ function OrdersContent() {
         return;
       }
 
-      // TODO: Create orders API endpoint
-      // For now, just show a placeholder
-      setOrders([]);
+      const body = await accountApi<{ data: any[] }>("/api/v1/orders");
+      setOrders(body.data || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -67,18 +66,18 @@ function OrdersContent() {
         ) : (
           <div className="space-y-4">
             {orders.map((order) => (
-              <div key={order.id} className="rounded-lg bg-white p-6 shadow">
+              <Link key={order.id} href={`/orders/${order.order_number}`} className="block rounded-lg bg-white p-6 shadow hover:ring-1 hover:ring-[#2f6bff]">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold">Order #{order.order_number}</h3>
                     <p className="text-sm text-gray-500">Placed on {new Date(order.created_at).toLocaleDateString()}</p>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold">NPR {order.total_amount.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">{order.status}</div>
+                    <div className="font-semibold">NPR {Number(order.total_amount).toLocaleString()}</div>
+                    <div className="text-sm capitalize text-gray-500">{String(order.status).replace(/_/g, " ")}</div>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

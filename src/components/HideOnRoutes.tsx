@@ -11,6 +11,6 @@ export function HideOnRoutes({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  if (routes.includes(pathname)) return null;
+  if (routes.some((route) => pathname === route || pathname.startsWith(`${route}/`))) return null;
   return <>{children}</>;
 }

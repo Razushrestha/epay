@@ -5,6 +5,27 @@
 
 import { query } from './db.mjs';
 import { createHash, createHmac } from 'node:crypto';
+import { onOrderPaid } from './ledger.mjs';
+
+const FRONTEND = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+
+async function markOrderPaid(orderNumber, notes) {
+  const current = await query(
+    `UPDATE orders SET status = 'paid', paid_at = COALESCE(paid_at, NOW())
+     WHERE order_number = $1 AND status = 'pending_payment'
+     RETURNING id`,
+    [orderNumber],
+  );
+  if (current.rows[0]) {
+    await query(
+      `INSERT INTO order_history (order_id, status_from, status_to, notes)
+       VALUES ($1, 'pending_payment', 'paid', $2)`,
+      [current.rows[0].id, notes],
+    );
+    await onOrderPaid(current.rows[0].id);
+  }
+  return current.rows[0] || null;
+}
 
 /**
  * Payment router
@@ -59,7 +80,9 @@ async function validateToken(token) {
      WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
     [hash]
   );
-  return result.rows[0] || null;
+  const row = result.rows[0];
+  if (!row) return null;
+  return { ...row, userId: Number(row.user_id), user_id: Number(row.user_id) };
 }
 
 /**
@@ -225,7 +248,7 @@ async function handleEsewaCallback(params) {
     return { 
       status: 400, 
       body: { error: 'Invalid callback parameters' },
-      redirect: 'http://localhost:3000/payment/failed'
+      redirect: `${FRONTEND}/payment/failed`
     };
   }
 
@@ -245,23 +268,11 @@ async function handleEsewaCallback(params) {
       [refId, JSON.stringify({ amt, refId, oid }), paymentId]
     );
 
-    // Update order status
-    await query(
-      `UPDATE orders SET status = 'paid', paid_at = NOW() 
-       WHERE order_number = $1`,
-      [orderNumber]
-    );
-
-    // Order history
-    await query(
-      `INSERT INTO order_history (order_id, status_from, status_to, notes)
-       VALUES ((SELECT id FROM orders WHERE order_number = $1), 'pending_payment', 'paid', 'Payment successful via eSewa')`,
-      [orderNumber]
-    );
+    await markOrderPaid(orderNumber, 'Payment successful via eSewa');
 
     return {
       status: 302,
-      headers: { Location: `http://localhost:3000/orders/${orderNumber}?success=true` },
+      headers: { Location: `${FRONTEND}/orders/${orderNumber}?success=true` },
       body: {}
     };
   } else {
@@ -276,7 +287,7 @@ async function handleEsewaCallback(params) {
 
     return {
       status: 302,
-      headers: { Location: 'http://localhost:3000/payment/failed' },
+      headers: { Location: `${FRONTEND}/payment/failed` },
       body: {}
     };
   }
@@ -320,7 +331,7 @@ async function handleKhaltiCallback(params) {
   if (!pidx) {
     return {
       status: 302,
-      headers: { Location: 'http://localhost:3000/payment/failed' },
+      headers: { Location: `${FRONTEND}/payment/failed` },
       body: {}
     };
   }
@@ -342,23 +353,11 @@ async function handleKhaltiCallback(params) {
         [txnId, JSON.stringify({ pidx, txnId, amount, status }), paymentId]
       );
 
-      // Update order status
-      await query(
-        `UPDATE orders SET status = 'paid', paid_at = NOW() 
-         WHERE order_number = $1`,
-        [orderNumber]
-      );
-
-      // Order history
-      await query(
-        `INSERT INTO order_history (order_id, status_from, status_to, notes)
-         VALUES ((SELECT id FROM orders WHERE order_number = $1), 'pending_payment', 'paid', 'Payment successful via Khalti')`,
-        [orderNumber]
-      );
+      await markOrderPaid(orderNumber, 'Payment successful via Khalti');
 
       return {
         status: 302,
-        headers: { Location: `http://localhost:3000/orders/${orderNumber}?success=true` },
+        headers: { Location: `${FRONTEND}/orders/${orderNumber}?success=true` },
         body: {}
       };
     }
@@ -375,7 +374,7 @@ async function handleKhaltiCallback(params) {
 
   return {
     status: 302,
-    headers: { Location: 'http://localhost:3000/payment/failed' },
+      headers: { Location: `${FRONTEND}/payment/failed` },
     body: {}
   };
 }
@@ -467,11 +466,7 @@ async function processKhaltiWebhook(payload) {
       [transaction_id, paymentId]
     );
 
-    await query(
-      `UPDATE orders SET status = 'paid', paid_at = NOW() 
-       WHERE order_number = $1 AND status = 'pending_payment'`,
-      [orderNumber]
-    );
+    await markOrderPaid(orderNumber, 'Payment successful via Khalti webhook');
   }
 
   // Mark webhook as processed

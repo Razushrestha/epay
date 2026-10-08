@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { pool, initDb } from "./db.mjs";
 import { rateLimit, RateLimitConfig, clearRateLimit } from "./security/rate-limit.mjs";
 import { deliverCode } from "./mail.mjs";
+import { handleStaffExtras } from "./staff.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
@@ -490,7 +491,7 @@ export async function handleIdentity(req, res, ctx) {
       return json(req, res, 403, { error: "This account is suspended. You can appeal from the sign-in page after a reset, or contact support." });
     }
     const must2fa = user.is_seller || user.is_staff;
-    if (must2fa && !user.two_factor_enabled) {
+    if (must2fa && !user.two_factor_enabled && !(body.adminPortal && user.is_staff)) {
       const challengeToken = await createChallenge(user, "enroll_2fa");
       return json(req, res, 200, { step: "enroll", challengeToken });
     }
@@ -870,7 +871,8 @@ export async function handleIdentity(req, res, ctx) {
   if (pathname === `${API}/account/feedback` && method === "GET") {
     const score = await feedbackFor(actor.id);
     const received = await (await db()).query(
-      `SELECT f.public_id, f.rating, f.comment, f.created_at,
+      `SELECT f.public_id, f.rating, f.comment, f.created_at, f.direction, f.reply,
+              f.item_as_described, f.communication, f.shipping_time, f.shipping_cost,
               COALESCE(p.display_name, u.email, u.phone) AS from_name
        FROM feedback f
        JOIN users u ON u.id = f.buyer_id
@@ -880,7 +882,7 @@ export async function handleIdentity(req, res, ctx) {
       [actor.id],
     );
     const left = await (await db()).query(
-      `SELECT f.public_id, f.rating, f.comment, f.created_at,
+      `SELECT f.public_id, f.rating, f.comment, f.created_at, f.direction, f.reply,
               COALESCE(p.display_name, u.email, u.phone) AS to_name
        FROM feedback f
        JOIN users u ON u.id = f.seller_id
@@ -962,14 +964,29 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/admin/status` && method === "GET") {
     const { rows } = await (await db()).query(`SELECT COUNT(*)::int AS count FROM users WHERE is_staff = TRUE`);
-    return json(req, res, 200, { staffExists: rows[0].count > 0, youAreStaff: actor.is_staff });
+    let unreadMessages = 0;
+    let pendingKyc = 0;
+    let pendingAppeals = 0;
+    try {
+      unreadMessages = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM listing_questions WHERE answer IS NULL`)).rows[0]?.c || 0);
+      pendingKyc = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM kyc_documents WHERE status = 'pending'`)).rows[0]?.c || 0);
+      pendingAppeals = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM appeals WHERE status = 'pending'`)).rows[0]?.c || 0);
+    } catch {
+      /* optional tables */
+    }
+    return json(req, res, 200, {
+      staffExists: rows[0].count > 0,
+      youAreStaff: actor.is_staff,
+      unreadMessages,
+      pendingKyc,
+      pendingAppeals,
+    });
   }
 
   if (pathname === `${API}/admin/claim` && method === "POST") {
-    if (process.env.NODE_ENV === "production") return json(req, res, 403, { error: "Not available" });
     const { rows } = await (await db()).query(`SELECT COUNT(*)::int AS count FROM users WHERE is_staff = TRUE`);
-    if (rows[0].count > 0) return json(req, res, 403, { error: "A staff account already exists" });
-    await (await db()).query(`UPDATE users SET is_staff = TRUE, updated_at = NOW() WHERE id = $1`, [actor.id]);
+    if (rows[0].count > 0 && !actor.is_staff) return json(req, res, 403, { error: "A staff account already exists" });
+    await (await db()).query(`UPDATE users SET is_staff = TRUE, status = 'active', updated_at = NOW() WHERE id = $1`, [actor.id]);
     return json(req, res, 200, { data: { isStaff: true } });
   }
 
@@ -1010,15 +1027,32 @@ export async function handleIdentity(req, res, ctx) {
   if (pathname === `${API}/admin/users` && method === "GET") {
     const q = `%${String(ctx.searchParams.get("q") ?? "").trim().toLowerCase()}%`;
     const { rows } = await (await db()).query(
-      `SELECT u.public_id, u.email, u.phone, u.status, u.seller_level, u.is_seller, u.is_staff,
-              p.display_name
+      `SELECT u.public_id, u.email, u.phone, u.username, u.status, u.seller_level, u.is_seller, u.is_staff,
+              u.created_at, u.account_type, p.display_name, p.first_name, p.last_name, p.avatar_url, p.country
        FROM users u
        LEFT JOIN user_profiles p ON p.user_id = u.id
-       WHERE u.deleted_at IS NULL AND ($1 = '%%' OR lower(u.email) LIKE $1 OR lower(p.display_name) LIKE $1)
-       ORDER BY u.created_at DESC LIMIT 30`,
+       WHERE u.deleted_at IS NULL AND ($1 = '%%' OR lower(u.email) LIKE $1 OR lower(COALESCE(p.display_name,'')) LIKE $1 OR lower(COALESCE(u.username,'')) LIKE $1)
+       ORDER BY u.created_at DESC LIMIT 80`,
       [q],
     );
     return json(req, res, 200, { data: rows });
+  }
+
+  const userPatch = pathname.match(new RegExp(`^${API}/admin/users/([^/]+)$`));
+  if (userPatch && method === "PATCH") {
+    const body = await readJson(req);
+    const target = await findUser(userPatch[1]);
+    if (!target) return json(req, res, 404, { error: "User not found" });
+    if (typeof body.staff === "boolean") {
+      await (await db()).query(`UPDATE users SET is_staff = $2, updated_at = NOW() WHERE id = $1`, [target.id, body.staff]);
+    }
+    if (typeof body.seller === "boolean") {
+      await (await db()).query(`UPDATE users SET is_seller = $2, updated_at = NOW() WHERE id = $1`, [target.id, body.seller]);
+    }
+    if (body.status && ["active", "restricted", "suspended", "pending"].includes(body.status)) {
+      await (await db()).query(`UPDATE users SET status = $2, updated_at = NOW() WHERE id = $1`, [target.id, body.status]);
+    }
+    return json(req, res, 200, { data: { id: target.public_id } });
   }
 
   if (pathname === `${API}/admin/actions` && method === "POST") {
@@ -1070,6 +1104,8 @@ export async function handleIdentity(req, res, ctx) {
     }
     return json(req, res, 200, { data: { status: decision } });
   }
+
+  if (await handleStaffExtras(req, res, ctx, actor)) return true;
 
   return false;
 }
