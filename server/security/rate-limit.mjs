@@ -25,27 +25,27 @@ setInterval(() => {
  */
 export const RateLimitConfig = {
   AUTH_LOGIN: {
-    window: 15 * 60 * 1000,    // 15 minutes
-    maxAttempts: 5,             // 5 attempts per window
-    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
-    message: 'Too many login attempts. Please try again in 30 minutes.'
+    window: 15 * 60 * 1000,
+    maxAttempts: 20,
+    blockDuration: 10 * 60 * 1000,
+    message: 'Too many login attempts. Please try again in 10 minutes.'
   },
   AUTH_REGISTER: {
-    window: 60 * 60 * 1000,    // 1 hour
-    maxAttempts: 3,             // 3 attempts per hour
-    blockDuration: 60 * 60 * 1000, // Block for 1 hour
+    window: 15 * 60 * 1000,
+    maxAttempts: 20,
+    blockDuration: 10 * 60 * 1000,
     message: 'Too many registration attempts. Please try again later.'
   },
   AUTH_FORGOT_PASSWORD: {
-    window: 60 * 60 * 1000,    // 1 hour
-    maxAttempts: 3,             // 3 attempts per hour
-    blockDuration: 60 * 60 * 1000, // Block for 1 hour
+    window: 15 * 60 * 1000,
+    maxAttempts: 10,
+    blockDuration: 10 * 60 * 1000,
     message: 'Too many password reset requests. Please try again later.'
   },
   AUTH_VERIFY: {
-    window: 60 * 60 * 1000,    // 1 hour
-    maxAttempts: 5,             // 5 attempts per hour
-    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
+    window: 15 * 60 * 1000,
+    maxAttempts: 20,
+    blockDuration: 10 * 60 * 1000,
     message: 'Too many verification attempts. Please try again later.'
   },
   AUTH_2FA: {
