@@ -120,7 +120,7 @@ export function RegisterForm() {
       sessionStorage.setItem("nexlo_verify_id", email.trim() || phone.trim());
       router.push("/verify");
     } catch (err) {
-      if (err.name === 'AbortError') {
+      if (err instanceof Error && err.name === 'AbortError') {
         setError("Server is waking up (takes ~30s on first request). Please try again.");
       } else {
         setError("We could not reach the server. Please try again in a moment.");
