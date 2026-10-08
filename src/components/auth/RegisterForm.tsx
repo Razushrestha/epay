@@ -85,6 +85,10 @@ export function RegisterForm() {
     }
     setLoading(true);
     try {
+      // Add 30-second timeout for cold start
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      
       const res = await fetch(`${apiBase}/api/v1/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,7 +106,11 @@ export function RegisterForm() {
           country: accountType === "business" ? country : undefined,
           buyerOnly: accountType === "business" ? buyerOnly : false,
         }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeout);
+      
       const body = await res.json();
       if (!res.ok) {
         setError(body.error ?? "We could not create your account.");
@@ -111,8 +119,12 @@ export function RegisterForm() {
       if (body.data?.devCode) sessionStorage.setItem("nexlo_dev_code", body.data.devCode);
       sessionStorage.setItem("nexlo_verify_id", email.trim() || phone.trim());
       router.push("/verify");
-    } catch {
-      setError("We could not reach the server. Please try again in a moment.");
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setError("Server is waking up (takes ~30s on first request). Please try again.");
+      } else {
+        setError("We could not reach the server. Please try again in a moment.");
+      }
     } finally {
       setLoading(false);
     }
