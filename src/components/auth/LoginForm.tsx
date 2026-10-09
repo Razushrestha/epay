@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiBase, setToken } from "@/lib/account-api";
 
 function MailIcon() {
@@ -76,9 +76,21 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<"password" | "challenge" | "google">("password");
+  const [step, setStep] = useState<"password" | "challenge" | "enroll">("password");
   const [challengeToken, setChallengeToken] = useState("");
   const [code, setCode] = useState("");
+  const [secret, setSecret] = useState("");
+  const [enrollMethod, setEnrollMethod] = useState<"" | "authenticator" | "otp">("");
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+
+  useEffect(() => {
+    if (!googleClientId || document.getElementById("nexlo-gis")) return;
+    const script = document.createElement("script");
+    script.id = "nexlo-gis";
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    document.body.appendChild(script);
+  }, [googleClientId]);
 
   function finish(token: string) {
     setToken(token);
@@ -109,9 +121,12 @@ export function LoginForm() {
         return;
       }
       if (body.step === "enroll") {
-        setToken("");
-        sessionStorage.setItem("nexlo_enroll", body.challengeToken);
-        router.push("/account?tab=security");
+        setStep("enroll");
+        setChallengeToken(body.challengeToken);
+        setEnrollMethod("");
+        setSecret("");
+        setCode("");
+        setNotice("Sellers must turn on two-factor before signing in. Choose a method below.");
         return;
       }
       finish(body.token);
@@ -145,19 +160,50 @@ export function LoginForm() {
     }
   }
 
-  async function googleSignIn(e: React.FormEvent) {
+  async function startEnroll(method: "authenticator" | "otp") {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/auth/2fa/enroll/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeToken, method }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? "Could not start two-factor setup.");
+        return;
+      }
+      setEnrollMethod(body.data.method);
+      setSecret(body.data.secret ?? "");
+      setCode("");
+      setNotice(
+        body.data.secret
+          ? "Add this key to an authenticator app, then enter the 6-digit code."
+          : body.data.devCode
+            ? `Your code is ${body.data.devCode}`
+            : "Enter the code we sent.",
+      );
+    } catch {
+      setError("We could not reach the server. Please try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirmEnroll(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/api/v1/auth/google`, {
+      const res = await fetch(`${apiBase}/api/v1/auth/2fa/enroll/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: identifier.trim() }),
+        body: JSON.stringify({ challengeToken, code, remember }),
       });
       const body = await res.json();
       if (!res.ok) {
-        setError(body.error ?? "Google sign-in did not complete.");
+        setError(body.error ?? "That code was not accepted.");
         return;
       }
       finish(body.token);
@@ -166,6 +212,56 @@ export function LoginForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function completeGoogle(idToken: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? "Google sign-in did not complete.");
+        return;
+      }
+      if (body.step === "enroll") {
+        setStep("enroll");
+        setChallengeToken(body.challengeToken);
+        setEnrollMethod("");
+        setSecret("");
+        setCode("");
+        setNotice("Sellers must turn on two-factor before signing in. Choose a method below.");
+        return;
+      }
+      finish(body.token);
+    } catch {
+      setError("We could not reach the server. Please try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function startGoogle() {
+    if (!googleClientId) {
+      setError("Google sign-in is not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID.");
+      return;
+    }
+    const g = (window as unknown as { google?: { accounts: { id: { initialize: (o: object) => void; prompt: () => void } } } }).google;
+    if (!g?.accounts?.id) {
+      setError("Google is still loading. Try again in a moment.");
+      return;
+    }
+    g.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: (resp: { credential: string }) => {
+        void completeGoogle(resp.credential);
+      },
+    });
+    g.accounts.id.prompt();
   }
 
   const fieldWrap =
@@ -180,8 +276,23 @@ export function LoginForm() {
         </span>
       </h1>
       <p className="mt-1.5 text-[13.5px] text-[#6b7587]">
-        Welcome back! Please enter your details to continue.
+        {step === "enroll"
+          ? "Turn on two-factor to finish signing in as a seller."
+          : "Welcome back! Please enter your details to continue."}
       </p>
+
+      <div className="mt-4" aria-live="polite">
+        {error && (
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
+            {error}
+          </p>
+        )}
+        {notice && !error && (
+          <p className="rounded-lg border border-[#cfe0ff] bg-[#f2f7ff] px-3 py-2 text-[12.5px] text-[#2a4fa8]">
+            {notice}
+          </p>
+        )}
+      </div>
 
       {step === "challenge" ? (
         <form onSubmit={confirmCode} className="mt-6 space-y-3">
@@ -200,7 +311,46 @@ export function LoginForm() {
         </form>
       ) : null}
 
-      <form onSubmit={step === "google" ? googleSignIn : onSubmit} className={`mt-6 space-y-3 ${step === "challenge" ? "hidden" : ""}`}>
+      {step === "enroll" ? (
+        <div className="mt-6 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void startEnroll("authenticator")}
+              className="h-10 rounded-full border border-[#dfe5ee] px-4 text-[13.5px] font-medium text-[#1a2338] disabled:opacity-60"
+            >
+              Use authenticator app
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void startEnroll("otp")}
+              className="h-10 rounded-full border border-[#dfe5ee] px-4 text-[13.5px] font-medium text-[#1a2338] disabled:opacity-60"
+            >
+              Use email or phone code
+            </button>
+          </div>
+          {secret ? <p className="break-all rounded-lg bg-[#f6f8fb] px-3 py-2 font-mono text-[13px]">{secret}</p> : null}
+          {enrollMethod ? (
+            <form onSubmit={confirmEnroll} className="space-y-3">
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                className="h-11 w-full rounded-full border border-[#dfe5ee] px-4 text-[15px] outline-none focus:border-[#3665f3]"
+              />
+              <button type="submit" disabled={loading} className="h-11 w-full rounded-full bg-[#3665f3] text-[15px] font-semibold text-white disabled:opacity-60">
+                {loading ? "Checking…" : "Confirm and sign in"}
+              </button>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
+
+      <form onSubmit={onSubmit} className={`mt-6 space-y-3 ${step === "password" ? "" : "hidden"}`}>
         <div>
           <label htmlFor="identifier" className="sr-only">
             Email or username
@@ -221,7 +371,7 @@ export function LoginForm() {
           </div>
         </div>
 
-        {step === "google" ? null : <div>
+        <div>
           <label htmlFor="password" className="sr-only">
             Password
           </label>
@@ -248,9 +398,9 @@ export function LoginForm() {
               <EyeIcon off={showPassword} />
             </button>
           </div>
-        </div>}
+        </div>
 
-        <div className={`flex items-center justify-between pt-0.5 ${step === "google" ? "hidden" : ""}`}>
+        <div className="flex items-center justify-between pt-0.5">
           <label className="flex cursor-pointer select-none items-center gap-2 text-[13.5px] text-[#3a4458]">
             <input
               type="checkbox"
@@ -273,19 +423,6 @@ export function LoginForm() {
           </Link>
         </div>
 
-        <div aria-live="polite">
-          {error && (
-            <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
-              {error}
-            </p>
-          )}
-          {notice && !error && (
-            <p className="rounded-lg border border-[#cfe0ff] bg-[#f2f7ff] px-3 py-2 text-[12.5px] text-[#2a4fa8]">
-              {notice}
-            </p>
-          )}
-        </div>
-
         <button
           type="submit"
           disabled={loading}
@@ -300,13 +437,13 @@ export function LoginForm() {
         </button>
       </form>
 
-      <div className="my-4 flex items-center gap-4 text-[13px] text-[#8a94a6]">
+      <div className={`my-4 flex items-center gap-4 text-[13px] text-[#8a94a6] ${step === "password" ? "" : "hidden"}`}>
         <span className="h-px flex-1 bg-[#e5eaf2]" />
         or
         <span className="h-px flex-1 bg-[#e5eaf2]" />
       </div>
 
-      <div className="space-y-2.5">
+      <div className={`space-y-2.5 ${step === "password" ? "" : "hidden"}`}>
         {socials.map((s) => (
           <button
             key={s.name}
@@ -314,8 +451,7 @@ export function LoginForm() {
             onClick={() => {
               setError(null);
               if (s.name === "Google") {
-                setStep("google");
-                setNotice("Enter the Google email for this account, then continue.");
+                startGoogle();
                 return;
               }
               setNotice(`${s.name} sign-in is not connected yet. Use Google or your email.`);

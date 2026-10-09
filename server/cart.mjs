@@ -5,6 +5,7 @@
 
 import { query } from './db.mjs';
 import { randomBytes } from 'node:crypto';
+import { taxAmount, vatRateForCategory, shippingRateForSeller } from './commerce-rules.mjs';
 
 /**
  * Main cart & checkout router
@@ -85,7 +86,7 @@ async function validateToken(token) {
   const result = await query(
     `SELECT u.id as user_id, u.email FROM auth_sessions s
      JOIN users u ON s.user_id = u.id
-     WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
+     WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > NOW()`,
     [hash]
   );
 
@@ -117,6 +118,16 @@ async function addToCart(data, userId, sessionId) {
 
   if (!listing_id) {
     return { status: 400, body: { error: 'listing_id is required' } };
+  }
+
+  if (!variation_sku_id) {
+    const hasSkus = await query(
+      `SELECT 1 FROM listing_variation_skus WHERE listing_id = $1 AND is_active = TRUE LIMIT 1`,
+      [listing_id],
+    );
+    if (hasSkus.rows[0]) {
+      return { status: 400, body: { error: 'Select a size or color before adding to cart' } };
+    }
   }
 
   // Get listing details and check stock
@@ -259,6 +270,9 @@ async function getCart(userId, sessionId) {
   }
 
   const sellersArray = Object.values(sellers);
+  for (const seller of sellersArray) {
+    seller.shipping_cost = await shippingRateForSeller(seller.seller_id, seller.subtotal, seller.shipping_cost);
+  }
   const totalShipping = sellersArray.reduce((sum, s) => sum + s.shipping_cost, 0);
 
   return {
@@ -476,9 +490,9 @@ async function calculateCheckoutTotals(data, userId, sessionId) {
     }
   }
 
-  // Calculate tax (13% VAT on subtotal - discount)
   const taxableAmount = subtotal - discount;
-  const tax = taxableAmount * 0.13;
+  const vatRate = await vatRateForCategory(null);
+  const tax = taxAmount(taxableAmount, vatRate);
 
   const total = subtotal - discount + shipping + tax;
 
@@ -529,10 +543,11 @@ async function createOrder(data, userId, sessionId, ipAddress, userAgent) {
 
   const totals = totalsResult.body;
 
-  // Get shipping address
   const addressResult = await query(
-    `SELECT * FROM addresses WHERE id = $1 AND user_id = $2`,
-    [shipping_address_id, userId]
+    `SELECT * FROM addresses
+     WHERE user_id = $2 AND (public_id::text = $1 OR id::text = $1)
+     LIMIT 1`,
+    [String(shipping_address_id), userId]
   );
 
   if (!addressResult.rows[0]) {
@@ -540,6 +555,10 @@ async function createOrder(data, userId, sessionId, ipAddress, userAgent) {
   }
 
   const address = addressResult.rows[0];
+  const shipName = address.full_name || address.recipient_name;
+  const shipLine1 = address.line1 || address.address_line1;
+  const shipLine2 = address.line2 || address.address_line2 || null;
+  const shipRegion = address.region || address.state || null;
 
   // Generate order number
   const orderNumber = await generateOrderNumber();
@@ -564,9 +583,9 @@ async function createOrder(data, userId, sessionId, ipAddress, userAgent) {
     [
       orderNumber, userId, totals.subtotal, totals.tax, totals.shipping,
       totals.discount, totals.total, couponId, coupon_code,
-      shipping_address_id, address.recipient_name, address.phone, address.address_line1,
-      address.address_line2, address.city, address.state, address.postal_code,
-      billing_address_id, buyer_notes
+      address.id, shipName, address.phone, shipLine1,
+      shipLine2, address.city, shipRegion, address.postal_code,
+      address.id, buyer_notes
     ]
   );
 

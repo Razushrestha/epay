@@ -73,6 +73,8 @@ export default function CreateListingPage() {
     item_location: "",
     sku: "",
     upc: "",
+    size_options: "",
+    color_options: "",
     publish_immediately: false,
   });
 
@@ -211,6 +213,14 @@ export default function CreateListingPage() {
         shipping_international_cost: formData.shipping_international_cost
           ? parseFloat(formData.shipping_international_cost)
           : null,
+        variations: [
+          formData.size_options
+            ? { name: "Size", options: formData.size_options.split(",").map((s) => s.trim()).filter(Boolean) }
+            : null,
+          formData.color_options
+            ? { name: "Color", options: formData.color_options.split(",").map((s) => s.trim()).filter(Boolean) }
+            : null,
+        ].filter(Boolean),
       };
 
       const res = await fetch(`${apiBase}/api/v1/listings`, {
@@ -465,6 +475,31 @@ export default function CreateListingPage() {
                   </div>
                 </div>
               )}
+
+              {formData.format === "fixed" ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-[#333]">Sizes (comma separated)</label>
+                    <input
+                      type="text"
+                      value={formData.size_options}
+                      onChange={(e) => updateField("size_options", e.target.value)}
+                      placeholder="S, M, L, XL"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-[#333]">Colors (comma separated)</label>
+                    <input
+                      type="text"
+                      value={formData.color_options}
+                      onChange={(e) => updateField("color_options", e.target.value)}
+                      placeholder="Black, White"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               {(formData.format === "auction" || formData.format === "both") && (
                 <div className="space-y-4">

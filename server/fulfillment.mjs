@@ -1,8 +1,37 @@
 import { query } from "./db.mjs";
 import { notify } from "./notify.mjs";
 import { releaseEscrow } from "./ledger.mjs";
+import { buildInvoicePdf } from "./pdf.mjs";
 
-const BUYER_FLOW = ["pending_payment", "paid", "processing", "shipped", "delivered", "completed"];
+function httpError(result) {
+  return Boolean(result && Number.isInteger(result.status) && Object.hasOwn(result, "body"));
+}
+
+async function hasOpenCase(orderId) {
+  const { rows } = await query(
+    `SELECT 1 FROM cases WHERE order_id = $1 AND status NOT IN ('resolved','closed') LIMIT 1`,
+    [orderId],
+  ).catch(() => ({ rows: [] }));
+  return Boolean(rows[0]);
+}
+
+async function completeAndRelease(order, actorId, note) {
+  if (await hasOpenCase(order.id)) return { skipped: true, reason: "open_case" };
+  const hold = await query(`SELECT status FROM escrow_holds WHERE order_id = $1`, [order.id]);
+  if (hold.rows[0]?.status === "frozen") return { skipped: true, reason: "frozen" };
+  await query(
+    `UPDATE orders SET status = 'completed', completed_at = NOW(), delivered_at = COALESCE(delivered_at, NOW())
+     WHERE id = $1 AND status IN ('delivered', 'shipped')`,
+    [order.id],
+  );
+  const released = await releaseEscrow(order.id);
+  await query(
+    `INSERT INTO order_history (order_id, status_from, status_to, changed_by, notes)
+     VALUES ($1,'delivered','completed',$2,$3)`,
+    [order.id, actorId || null, note || "Order completed; escrow released"],
+  );
+  return { completed: true, escrow: released };
+}
 
 export async function autoCompleteOrders() {
   const received = await query(
@@ -76,66 +105,104 @@ export async function handleFulfillment(method, pathParts, auth, body) {
 
   if (method === "GET" && pathParts[1] && pathParts[2] === "invoice") {
     const order = await loadOrder(pathParts[1], auth);
-    if (order.status) return order;
+    if (httpError(order)) return order;
     const fees = await query(`SELECT * FROM order_fees WHERE order_id = $1`, [order.id]);
-    return { status: 200, body: { order, fees: fees.rows[0] || null, invoiceNumber: `INV-${order.order_number}` } };
+    const invoiceNumber = `INV-${order.order_number}`;
+    const pdf = buildInvoicePdf({ invoiceNumber, order, fees: fees.rows[0] });
+    return { status: 200, body: { order, fees: fees.rows[0] || null, invoiceNumber, pdf_base64: pdf.toString("base64") } };
   }
 
   if (method === "GET" && pathParts[1]) {
     const order = await loadOrder(pathParts[1], auth);
-    if (order.status) return order;
+    if (httpError(order)) return order;
     const history = await query(`SELECT * FROM order_history WHERE order_id = $1 ORDER BY created_at`, [order.id]);
     const shipments = await query(`SELECT * FROM shipments WHERE order_id = $1`, [order.id]);
-    return { status: 200, body: { order, history: history.rows, shipments: shipments.rows } };
+    const escrow = await query(
+      `SELECT e.status, e.amount, e.held_at, e.released_at, of.net_to_seller
+       FROM escrow_holds e
+       LEFT JOIN order_fees of ON of.order_id = e.order_id
+       WHERE e.order_id = $1`,
+      [order.id],
+    );
+    return {
+      status: 200,
+      body: {
+        order,
+        history: history.rows,
+        shipments: shipments.rows,
+        you: order.you,
+        escrow: escrow.rows[0] || null,
+      },
+    };
   }
 
   if (method === "POST" && pathParts[1] && pathParts[2] === "ship") {
     const order = await loadOrder(pathParts[1], auth, "seller");
-    if (order.status) return order;
+    if (httpError(order)) return order;
+    if (!["paid", "processing"].includes(order.status)) {
+      return { status: 400, body: { error: "Only paid orders can be shipped" } };
+    }
     await query(
       `UPDATE order_items SET status = 'shipped', tracking_number = $2, carrier = $3, shipped_at = NOW()
        WHERE order_id = $1 AND seller_id = $4`,
       [order.id, body.trackingNumber || null, body.carrier || null, auth.user_id],
     );
     await query(`UPDATE orders SET status = 'shipped', shipped_at = NOW() WHERE id = $1`, [order.id]);
-    await query(
+    const shipment = await query(
       `INSERT INTO shipments (order_id, seller_id, carrier, tracking_number, status, shipped_at)
        VALUES ($1,$2,$3,$4,'shipped', NOW()) RETURNING id`,
       [order.id, auth.user_id, body.carrier || null, body.trackingNumber || null],
     );
-    await query(`INSERT INTO order_history (order_id, status_from, status_to, changed_by, notes) VALUES ($1,'paid','shipped',$2,$3)`, [
+    if (shipment.rows[0]?.id) {
+      await query(
+        `INSERT INTO tracking_events (shipment_id, status, note)
+         VALUES ($1,'shipped',$2)`,
+        [shipment.rows[0].id, body.trackingNumber ? `Handed to ${body.carrier || "courier"} · ${body.trackingNumber}` : "Seller marked shipped"],
+      ).catch(() => {});
+    }
+    await query(`INSERT INTO order_history (order_id, status_from, status_to, changed_by, notes) VALUES ($1,$2,'shipped',$3,$4)`, [
       order.id,
+      order.status,
       auth.user_id,
       body.trackingNumber ? `Tracking ${body.trackingNumber}` : "Marked shipped",
     ]);
-    await notify(order.buyer_id, "shipped", "Order shipped", `Tracking: ${body.trackingNumber || "not provided"}`, "/orders");
+    await notify(order.buyer_id, "shipped", "Order shipped", `Tracking: ${body.trackingNumber || "not provided"}`, `/orders/${order.order_number}`);
     return { status: 200, body: { data: { shipped: true } } };
   }
 
   if (method === "POST" && pathParts[1] && pathParts[2] === "deliver") {
     const order = await loadOrder(pathParts[1], auth, "buyer");
-    if (order.status) return order;
+    if (httpError(order)) return order;
+    if (order.status !== "shipped") {
+      return { status: 400, body: { error: "Confirm received after the seller ships" } };
+    }
     await query(`UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1`, [order.id]);
     await query(`UPDATE order_items SET status = 'delivered', delivered_at = NOW() WHERE order_id = $1`, [order.id]);
     await query(
-      `INSERT INTO order_history (order_id, status_from, status_to, changed_by, notes) VALUES ($1,'shipped','delivered',$2,'Buyer confirmed delivery')`,
+      `INSERT INTO order_history (order_id, status_from, status_to, changed_by, notes) VALUES ($1,'shipped','delivered',$2,'Buyer confirmed received')`,
       [order.id, auth.user_id],
     );
-    await notify(auth.user_id, "delivered", "Delivery confirmed", "Leave feedback when you are ready.", "/account?tab=feedback");
-    return { status: 200, body: { data: { delivered: true } } };
+    const finished = await completeAndRelease(order, auth.user_id, "Buyer confirmed received; escrow released");
+    await notify(auth.user_id, "delivered", "Delivery confirmed", "Escrow released to the seller. Leave feedback when you are ready.", "/account?tab=feedback");
+    return { status: 200, body: { data: { delivered: true, completed: !finished.skipped, escrow: finished.escrow || null, skipped: finished.skipped || false, reason: finished.reason } } };
   }
 
   if (method === "POST" && pathParts[1] && pathParts[2] === "complete") {
     const order = await loadOrder(pathParts[1], auth);
-    if (order.status) return order;
-    await query(`UPDATE orders SET status = 'completed', completed_at = NOW() WHERE id = $1`, [order.id]);
-    await releaseEscrow(order.id);
-    return { status: 200, body: { data: { completed: true } } };
+    if (httpError(order)) return order;
+    if (!["delivered", "shipped"].includes(order.status)) {
+      return { status: 400, body: { error: "Complete after the order is received" } };
+    }
+    const finished = await completeAndRelease(order, auth.user_id, "Order completed; escrow released");
+    if (finished.skipped) {
+      return { status: 409, body: { error: finished.reason === "frozen" ? "Escrow is frozen on a return or dispute" : "An open case is blocking completion" } };
+    }
+    return { status: 200, body: { data: { completed: true, escrow: finished.escrow || null } } };
   }
 
   if (method === "POST" && pathParts[1] && pathParts[2] === "cancel") {
     const order = await loadOrder(pathParts[1], auth);
-    if (order.status) return order;
+    if (httpError(order)) return order;
     if (!["pending_payment", "paid", "processing"].includes(order.status)) {
       return { status: 400, body: { error: "This order can no longer be cancelled" } };
     }
@@ -175,5 +242,6 @@ async function loadOrder(idOrNumber, auth, role) {
   if (!isBuyer && !isSeller && !auth.is_staff) return { status: 403, body: { error: "Not your order" } };
   if (role === "seller" && !isSeller && !auth.is_staff) return { status: 403, body: { error: "Seller only" } };
   if (role === "buyer" && !isBuyer && !auth.is_staff) return { status: 403, body: { error: "Buyer only" } };
+  order.you = { isBuyer, isSeller, isStaff: Boolean(auth.is_staff) };
   return order;
 }

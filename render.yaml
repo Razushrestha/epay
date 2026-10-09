@@ -25,7 +25,17 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: https://your-frontend.vercel.app
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: ESEWA_SUCCESS_URL
+        sync: false
+      - key: ESEWA_FAILURE_URL
+        sync: false
+      - key: KHALTI_RETURN_URL
+        sync: false
       - key: MAILGUN_API_KEY
         sync: false
       - key: MAILGUN_DOMAIN

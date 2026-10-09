@@ -10,6 +10,7 @@ import { MessagesInbox } from "@/components/account/MessagesInbox";
 import { SellerHub } from "@/components/account/SellerHub";
 import { ReturnsBoard } from "@/components/account/ReturnsBoard";
 import { TicketsBoard } from "@/components/account/TicketsBoard";
+import { RecentlyViewed } from "@/components/browse/RecentlyViewed";
 
 type User = {
   id: string;
@@ -904,6 +905,8 @@ function AccountScreen() {
         <>
           <Standing user={user} appeal={appeal} setAppeal={setAppeal} onDone={() => load()} />
           <BiddingActivity />
+          <SavedSearchList />
+          <RecentlyViewed compact />
         </>
       )}
     </AccountChrome>
@@ -913,12 +916,14 @@ function AccountScreen() {
 function NotificationPrefs() {
   const [email, setEmail] = useState(true);
   const [sms, setSms] = useState(false);
+  const [quiet, setQuiet] = useState("22:00-07:00");
   const [saved, setSaved] = useState<string | null>(null);
   useEffect(() => {
-    accountApi<{ data: { email_enabled: boolean; sms_enabled: boolean } }>("/api/v1/notifications/preferences")
+    accountApi<{ data: { email_enabled: boolean; sms_enabled: boolean; quiet_hours?: string | null } }>("/api/v1/notifications/preferences")
       .then((b) => {
         setEmail(b.data.email_enabled !== false);
         setSms(Boolean(b.data.sms_enabled));
+        if (b.data.quiet_hours) setQuiet(b.data.quiet_hours);
       })
       .catch(() => undefined);
   }, []);
@@ -927,13 +932,16 @@ function NotificationPrefs() {
       className="mt-6 space-y-2"
       onSubmit={async (e) => {
         e.preventDefault();
-        await accountApi("/api/v1/notifications/preferences", { method: "PATCH", body: JSON.stringify({ email, sms, inApp: true }) });
+        await accountApi("/api/v1/notifications/preferences", { method: "PATCH", body: JSON.stringify({ email, sms, inApp: true, quietHours: quiet }) });
         setSaved("Notification preferences saved.");
       }}
     >
       <h2 className="text-[16px] font-bold">Notification preferences</h2>
       <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} /> Email alerts</label>
       <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} /> SMS for critical events</label>
+      <label className="block text-[14px]">Quiet hours
+        <input value={quiet} onChange={(e) => setQuiet(e.target.value)} placeholder="22:00-07:00" className="mt-1 block h-10 w-full max-w-xs rounded-full border border-[#e7e7e7] px-4 text-[13px]" />
+      </label>
       <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save</button>
       {saved ? <p className="text-[13px] text-[#12a37e]">{saved}</p> : null}
     </form>
@@ -954,6 +962,15 @@ function SellingOrders() {
             <Link href={`/orders/${row.order_number}`} className="font-semibold text-[#3665f3]">{row.order_number}</Link>
             <span className="ml-2 capitalize text-[#6b7587]">{row.status.replace(/_/g, " ")}</span>
             <span className="block">{row.product}</span>
+            {["paid", "processing"].includes(row.status) ? (
+              <Link href={`/orders/${row.order_number}`} className="mt-1 block text-[12px] font-semibold text-[#12a37e]">Mark shipped →</Link>
+            ) : null}
+            {row.status === "shipped" ? (
+              <p className="mt-1 text-[12px] text-[#6b7587]">Waiting for the buyer to confirm received.</p>
+            ) : null}
+            {row.status === "completed" ? (
+              <p className="mt-1 text-[12px] text-[#12a37e]">Escrow released. Request payout from your wallet.</p>
+            ) : null}
             <button type="button" className="mt-1 text-[12px] text-[#3665f3]" onClick={async () => {
               const body = await accountApi<{ html: string }>(`/api/v1/seller/label/${row.order_number}`);
               const w = window.open("", "_blank");
@@ -1005,6 +1022,46 @@ function PendingOffers() {
         {rows.length === 0 ? <li className="text-[#8a94a6]">No offers yet.</li> : null}
       </ul>
     </div>
+  );
+}
+
+function SavedSearchList() {
+  const [rows, setRows] = useState<{ id: number; name: string; query_params: Record<string, string> }[]>([]);
+  async function loadSaved() {
+    const body = await accountApi<{ data: typeof rows }>("/api/v1/listings/saved-searches");
+    setRows(body.data || []);
+  }
+  useEffect(() => {
+    loadSaved().catch(() => undefined);
+  }, []);
+  return (
+    <section className="mt-4 nexlo-card p-6">
+      <h2 className="text-[16px] font-bold">Saved searches</h2>
+      <ul className="mt-3 space-y-2 text-[13px]">
+        {rows.map((row) => {
+          const params = new URLSearchParams();
+          Object.entries(row.query_params || {}).forEach(([key, value]) => {
+            if (value) params.set(key, String(value));
+          });
+          return (
+            <li key={row.id} className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
+              <Link href={`/search?${params}`} className="font-semibold text-[#3665f3]">{row.name}</Link>
+              <button
+                type="button"
+                className="text-red-600"
+                onClick={async () => {
+                  await accountApi(`/api/v1/listings/saved-searches/${row.id}`, { method: "DELETE" });
+                  await loadSaved();
+                }}
+              >
+                Remove
+              </button>
+            </li>
+          );
+        })}
+        {rows.length === 0 ? <li className="text-[#8a94a6]">Save a search from the results page to get alerts.</li> : null}
+      </ul>
+    </section>
   );
 }
 

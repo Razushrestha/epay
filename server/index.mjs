@@ -28,5 +28,9 @@ server.listen(PORT, () => {
   console.log(`  GET  /api/v1/categories`);
   console.log(`  POST /api/v1/auth/register`);
   console.log(`  POST /api/v1/auth/login`);
-  startJobs();
+  if (process.env.WORKER_SEPARATE === "1") {
+    console.log("  worker: external (WORKER_SEPARATE=1)");
+  } else {
+    startJobs();
+  }
 });

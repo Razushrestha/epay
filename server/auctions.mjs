@@ -1,20 +1,27 @@
 import { query, withTx } from "./db.mjs";
-import { incrementFor, nextOrderNumber } from "./commerce-auth.mjs";
+import { nextOrderNumber } from "./commerce-auth.mjs";
+import { incrementFor } from "./commerce-rules.mjs";
+import { applyProxyBid, softCloseEndsAt } from "./auctions-math.mjs";
 import { notify } from "./notify.mjs";
 import { enforceVerification, evaluateUser } from "./trust.mjs";
+import { redisPublish } from "./redis.mjs";
 
 const rooms = new Map();
 
-export function broadcastAuction(listingId, payload) {
+export function broadcastAuction(listingId, payload, { fromRedis = false } = {}) {
   const set = rooms.get(String(listingId));
-  if (!set) return;
-  const msg = `event: bid\ndata: ${JSON.stringify(payload)}\n\n`;
-  for (const res of set) {
-    try {
-      res.write(msg);
-    } catch {
-      set.delete(res);
+  if (set) {
+    const msg = `event: bid\ndata: ${JSON.stringify(payload)}\n\n`;
+    for (const res of set) {
+      try {
+        res.write(msg);
+      } catch {
+        set.delete(res);
+      }
     }
+  }
+  if (!fromRedis) {
+    redisPublish(`auction:${listingId}`, payload).catch(() => {});
   }
 }
 
@@ -57,7 +64,8 @@ async function snapshot(listingId) {
     [listingId],
   );
   const state = await query(`SELECT * FROM auction_states WHERE listing_id = $1`, [listingId]);
-  return { listing: listing.rows[0], bids: bids.rows, state: state.rows[0] || null, increment: incrementFor(listing.rows[0]?.auction_current_price || listing.rows[0]?.auction_start_price) };
+  const inc = await incrementFor(listing.rows[0]?.auction_current_price || listing.rows[0]?.auction_start_price);
+  return { listing: listing.rows[0], bids: bids.rows, state: state.rows[0] || null, increment: inc };
 }
 
 async function placeProxy(listingId, bidderId, maxAmount) {
@@ -71,46 +79,59 @@ async function placeProxy(listingId, bidderId, maxAmount) {
     if (!listing) throw new Error("This auction is not live");
     if (Number(listing.seller_id) === Number(bidderId)) throw new Error("Sellers cannot bid on their own item");
     if (listing.auction_ends_at && new Date(listing.auction_ends_at) < new Date()) throw new Error("This auction has ended");
+    try {
+      const blocked = await client.query(
+        `SELECT 1 FROM blocked_bidders WHERE seller_id = $1 AND blocked_user_id = $2`,
+        [listing.seller_id, bidderId],
+      );
+      if (blocked.rows[0]) throw new Error("This seller has blocked you from bidding");
+    } catch (err) {
+      if (String(err.message).includes("blocked you")) throw err;
+    }
+    const standing = await client.query(
+      `SELECT unpaid_strikes FROM users WHERE id = $1`,
+      [bidderId],
+    );
+    if (Number(standing.rows[0]?.unpaid_strikes || 0) >= 3) throw new Error("Pay outstanding auction wins before bidding again");
     const start = Number(listing.auction_start_price || listing.price || 0);
     const current = Number(listing.auction_current_price || start);
-    const inc = incrementFor(current);
+    const inc = await incrementFor(current);
     const minNext = listing.auction_bid_count > 0 ? current + inc : start;
     if (maxAmount < minNext) throw new Error(`Bid at least NPR ${minNext}`);
 
     const stateRes = await client.query(`SELECT * FROM auction_states WHERE listing_id = $1 FOR UPDATE`, [listingId]);
-    let highId = stateRes.rows[0]?.high_bidder_id || null;
-    let highMax = Number(stateRes.rows[0]?.high_max || 0);
-    let price = current;
-    let outbidUser = null;
-    let lostLead = false;
-
-    if (!highId) {
-      highId = bidderId;
-      highMax = maxAmount;
-      price = start;
-    } else if (Number(highId) === Number(bidderId)) {
-      highMax = Math.max(highMax, maxAmount);
-    } else if (maxAmount > highMax) {
-      price = Math.min(maxAmount, highMax + incrementFor(highMax || price));
-      outbidUser = highId;
-      highId = bidderId;
-      highMax = maxAmount;
-    } else {
-      price = Math.min(highMax, maxAmount + incrementFor(maxAmount));
-      lostLead = true;
-    }
+    const applied = applyProxyBid({
+      highId: stateRes.rows[0]?.high_bidder_id || null,
+      highMax: Number(stateRes.rows[0]?.high_max || 0),
+      price: current,
+      start,
+      bidderId,
+      maxAmount,
+      increment: inc,
+    });
+    let highId = applied.highId;
+    let highMax = applied.highMax;
+    let price = applied.price;
+    const outbidUser = applied.outbidUser;
+    const lostLead = applied.lostLead;
 
     const reserve = Number(listing.auction_reserve_price || 0);
+    const wasMet = Boolean(stateRes.rows[0]?.reserve_met);
     const reserveMet = !reserve || price >= reserve;
     await client.query(
       `INSERT INTO bids (listing_id, bidder_id, amount, max_amount, is_proxy) VALUES ($1,$2,$3,$4, TRUE)`,
       [listingId, bidderId, price, maxAmount],
     );
     const count = await client.query(`SELECT COUNT(*)::int AS c FROM bids WHERE listing_id = $1 AND retracted = FALSE`, [listingId]);
-    let endsAt = listing.auction_ends_at;
-    if (endsAt && new Date(endsAt).getTime() - Date.now() < 2 * 60 * 1000) {
-      endsAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-    }
+    const closed = softCloseEndsAt(
+      listing.auction_ends_at,
+      Date.now(),
+      2 * 60 * 1000,
+      5 * 60 * 1000,
+      Number(process.env.AUCTION_MAX_EXTENSIONS || 8),
+      Number(stateRes.rows[0]?.extension_count || listing.extension_count || 0),
+    );
+    const endsAt = closed.endsAt;
     await client.query(
       `UPDATE listings SET auction_current_price = $2, auction_bid_count = $3, auction_ends_at = COALESCE($4, auction_ends_at) WHERE id = $1`,
       [listingId, price, count.rows[0].c, endsAt],
@@ -121,7 +142,7 @@ async function placeProxy(listingId, bidderId, maxAmount) {
        ON CONFLICT (listing_id) DO UPDATE SET high_bidder_id = $2, high_max = $3, current_price = $4, bid_count = $5, reserve_met = $6, updated_at = NOW()`,
       [listingId, highId, highMax, price, count.rows[0].c, reserveMet],
     );
-    return { listing, highId, price, outbidUser, lostLead };
+    return { listing, highId, price, outbidUser, lostLead, reserveMet, wasMet };
   });
 
   const snap = await snapshot(listingId);
@@ -132,6 +153,9 @@ async function placeProxy(listingId, bidderId, maxAmount) {
   }
   if (placed.lostLead) {
     await notify(bidderId, "outbid", "Bid not high enough", `Another bidder still leads ${placed.listing.title}.`, `/listing/${listingId}`);
+  }
+  if (placed.reserveMet && !placed.wasMet) {
+    await notify(placed.listing.seller_id, "reserve_met", "Reserve met", `${placed.listing.title} has met the reserve.`, `/listing/${listingId}`);
   }
   return { ok: true, ...snap, youLead: Number(placed.highId) === Number(bidderId) };
 }
@@ -146,7 +170,43 @@ export async function retractBid(listingId, bidderId) {
     return { status: 400, body: { error: "Bids can only be retracted within one hour" } };
   }
   await query(`UPDATE bids SET retracted = TRUE WHERE id = $1`, [rows[0].id]);
-  return { status: 200, body: { data: { retracted: true } } };
+  const listing = (await query(`SELECT * FROM listings WHERE id = $1`, [listingId])).rows[0];
+  const remaining = await query(
+    `SELECT bidder_id, max_amount, created_at FROM bids WHERE listing_id = $1 AND retracted = FALSE ORDER BY created_at`,
+    [listingId],
+  );
+  let highId = null;
+  let highMax = 0;
+  let price = Number(listing.auction_start_price || listing.price || 0);
+  for (const bid of remaining.rows) {
+    const inc = await incrementFor(price);
+    const next = applyProxyBid({
+      highId,
+      highMax,
+      price,
+      start: listing.auction_start_price || listing.price || 0,
+      bidderId: bid.bidder_id,
+      maxAmount: Number(bid.max_amount),
+      increment: inc,
+    });
+    highId = next.highId;
+    highMax = next.highMax;
+    price = next.price;
+  }
+  const reserve = Number(listing.auction_reserve_price || 0);
+  await query(
+    `UPDATE listings SET auction_current_price = $2, auction_bid_count = $3 WHERE id = $1`,
+    [listingId, price, remaining.rows.length],
+  );
+  await query(
+    `INSERT INTO auction_states (listing_id, high_bidder_id, high_max, current_price, bid_count, reserve_met)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (listing_id) DO UPDATE SET high_bidder_id = $2, high_max = $3, current_price = $4, bid_count = $5, reserve_met = $6, updated_at = NOW()`,
+    [listingId, highId, highMax, price, remaining.rows.length, !reserve || price >= reserve],
+  );
+  const snap = await snapshot(listingId);
+  broadcastAuction(listingId, snap);
+  return { status: 200, body: { data: { retracted: true }, ...snap } };
 }
 
 export async function closeExpiredAuctions() {
@@ -261,7 +321,7 @@ export async function handleAuctions(method, pathParts, auth, body) {
     );
     return { status: 200, body: { data: rows } };
   }
-  if (pathParts[0] === "auctions" && pathParts[1] && method === "GET" && pathParts[2] !== "stream") {
+  if (pathParts[0] === "auctions" && pathParts[1] && /^\d+$/.test(pathParts[1]) && method === "GET" && pathParts[2] !== "stream") {
     try {
       const snap = await snapshot(pathParts[1]);
       if (!snap.listing) return { status: 404, body: { error: "Auction not found" } };
@@ -287,6 +347,33 @@ export async function handleAuctions(method, pathParts, auth, body) {
   if (pathParts[0] === "auctions" && pathParts[1] && pathParts[2] === "retract" && method === "POST") {
     if (!auth) return { status: 401, body: { error: "Sign in required" } };
     return retractBid(pathParts[1], auth.user_id);
+  }
+  if (pathParts[0] === "auctions" && pathParts[1] === "blocked" && method === "GET") {
+    if (!auth) return { status: 401, body: { error: "Sign in required" } };
+    const { rows } = await query(
+      `SELECT b.blocked_user_id, b.reason, b.created_at, COALESCE(p.display_name, u.email) AS name
+       FROM blocked_bidders b JOIN users u ON u.id = b.blocked_user_id
+       LEFT JOIN user_profiles p ON p.user_id = u.id
+       WHERE b.seller_id = $1`,
+      [auth.user_id],
+    );
+    return { status: 200, body: { data: rows } };
+  }
+  if (pathParts[0] === "auctions" && pathParts[1] === "blocked" && method === "POST") {
+    if (!auth) return { status: 401, body: { error: "Sign in required" } };
+    const blockedId = Number(body.userId);
+    if (!blockedId) return { status: 400, body: { error: "userId required" } };
+    await query(
+      `INSERT INTO blocked_bidders (seller_id, blocked_user_id, reason) VALUES ($1,$2,$3)
+       ON CONFLICT (seller_id, blocked_user_id) DO UPDATE SET reason = EXCLUDED.reason`,
+      [auth.user_id, blockedId, body.reason || "Blocked by seller"],
+    );
+    return { status: 200, body: { data: { blocked: blockedId } } };
+  }
+  if (pathParts[0] === "auctions" && pathParts[1] === "blocked" && pathParts[2] && method === "DELETE") {
+    if (!auth) return { status: 401, body: { error: "Sign in required" } };
+    await query(`DELETE FROM blocked_bidders WHERE seller_id = $1 AND blocked_user_id = $2`, [auth.user_id, pathParts[2]]);
+    return { status: 200, body: { data: { removed: true } } };
   }
   if (pathParts[0] === "auctions" && pathParts[1] === "second-chance" && method === "POST") {
     if (!auth) return { status: 401, body: { error: "Sign in required" } };

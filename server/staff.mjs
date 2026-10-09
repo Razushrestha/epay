@@ -1,4 +1,5 @@
-import { randomBytes, scryptSync, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { hashPassword } from "./passwords.mjs";
 import { pool, initDb } from "./db.mjs";
 
 const API = "/api/v1";
@@ -26,11 +27,6 @@ function pct(current, previous) {
   return Math.round(((current - previous) / previous) * 100);
 }
 
-function hashPassword(password) {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 64);
-  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
-}
 
 export async function handleStaffExtras(req, res, ctx, actor) {
   const { json, readJson, pathname, method, searchParams } = ctx;
@@ -380,7 +376,7 @@ export async function handleStaffExtras(req, res, ctx, actor) {
         `INSERT INTO users (public_id, email, password_hash, account_type, status, is_staff, is_seller, email_verified_at)
          VALUES ($1, $2, $3, 'individual', 'active', $4, $5, NOW())
          RETURNING id, public_id`,
-        [publicId, email, hashPassword(password), Boolean(body.staff), Boolean(body.seller)],
+        [publicId, email, await hashPassword(password), Boolean(body.staff), Boolean(body.seller)],
       );
       await (await db()).query(
         `INSERT INTO user_profiles (user_id, first_name, last_name, display_name, country)

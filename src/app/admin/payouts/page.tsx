@@ -67,6 +67,11 @@ export default function AdminPayoutsPage() {
                   {row.status === "pending" ? (
                     <>
                       <button type="button" className="text-[#12a37e]" onClick={async () => { await accountApi(`/api/v1/admin/payouts/${row.public_id}`, { method: "PATCH", body: JSON.stringify({ status: "approved" }) }); await load(); }}>Approve</button>
+                      <button type="button" className="text-[#3665f3]" onClick={async () => {
+                        await accountApi(`/api/v1/admin/payouts/${row.public_id}`, { method: "PATCH", body: JSON.stringify({ status: "approved" }) });
+                        await accountApi(`/api/v1/admin/payouts/${row.public_id}`, { method: "PATCH", body: JSON.stringify({ status: "paid", paidRef: "manual" }) });
+                        await load();
+                      }}>Mark paid</button>
                       <button type="button" className="text-[#e5484d]" onClick={async () => { await accountApi(`/api/v1/admin/payouts/${row.public_id}`, { method: "PATCH", body: JSON.stringify({ status: "rejected" }) }); await load(); }}>Reject</button>
                     </>
                   ) : row.status === "approved" ? (

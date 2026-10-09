@@ -6,8 +6,7 @@
 import { query } from './db.mjs';
 import { createHash, createHmac } from 'node:crypto';
 import { onOrderPaid } from './ledger.mjs';
-
-const FRONTEND = process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+import { parseGatewayPid, publicApi, publicFrontend } from './public-urls.mjs';
 
 async function markOrderPaid(orderNumber, notes) {
   const current = await query(
@@ -42,7 +41,7 @@ export async function handlePayments(req, method, urlPath, headers, body, ipAddr
       if (!auth) {
         return { status: 401, body: { error: 'Unauthorized' } };
       }
-      return await initiatePayment(body, auth.userId, ipAddress, userAgent);
+      return await initiatePayment(body, auth.userId, ipAddress, userAgent, headers);
     }
 
     // Payment callback (success/failure)
@@ -77,7 +76,7 @@ async function validateToken(token) {
   const result = await query(
     `SELECT u.id as user_id, u.email FROM auth_sessions s
      JOIN users u ON s.user_id = u.id
-     WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
+     WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > NOW()`,
     [hash]
   );
   const row = result.rows[0];
@@ -88,7 +87,7 @@ async function validateToken(token) {
 /**
  * Initiate payment with selected gateway
  */
-async function initiatePayment(data, userId, ipAddress, userAgent) {
+async function initiatePayment(data, userId, ipAddress, userAgent, headers = {}) {
   const { order_id, gateway } = data; // gateway: 'esewa' or 'khalti'
 
   if (!order_id || !gateway) {
@@ -120,9 +119,9 @@ async function initiatePayment(data, userId, ipAddress, userAgent) {
   // Generate payment URL based on gateway
   let paymentUrl;
   if (gateway === 'esewa') {
-    paymentUrl = await generateEsewaPaymentUrl(order, paymentId);
+    paymentUrl = await generateEsewaPaymentUrl(order, paymentId, headers);
   } else if (gateway === 'khalti') {
-    paymentUrl = await generateKhaltiPaymentUrl(order, paymentId);
+    paymentUrl = await generateKhaltiPaymentUrl(order, paymentId, headers);
   } else {
     return { status: 400, body: { error: 'Invalid gateway. Use "esewa" or "khalti"' } };
   }
@@ -141,11 +140,12 @@ async function initiatePayment(data, userId, ipAddress, userAgent) {
 /**
  * Generate eSewa payment URL
  */
-async function generateEsewaPaymentUrl(order, paymentId) {
-  // eSewa sandbox credentials (client should provide their own)
+async function generateEsewaPaymentUrl(order, paymentId, headers = {}) {
+  const frontend = publicFrontend(headers);
+  const apiPublic = publicApi(headers);
   const ESEWA_MERCHANT_CODE = process.env.ESEWA_MERCHANT_CODE || 'EPAYTEST';
-  const ESEWA_SUCCESS_URL = process.env.ESEWA_SUCCESS_URL || 'http://localhost:4000/api/v1/payments/callback/esewa';
-  const ESEWA_FAILURE_URL = process.env.ESEWA_FAILURE_URL || 'http://localhost:3000/payment/failed';
+  const ESEWA_SUCCESS_URL = process.env.ESEWA_SUCCESS_URL || `${apiPublic}/api/v1/payments/callback/esewa`;
+  const ESEWA_FAILURE_URL = process.env.ESEWA_FAILURE_URL || `${frontend}/payment/failed`;
 
   // eSewa payment parameters
   const params = new URLSearchParams({
@@ -169,25 +169,25 @@ async function generateEsewaPaymentUrl(order, paymentId) {
 /**
  * Generate Khalti payment URL
  */
-async function generateKhaltiPaymentUrl(order, paymentId) {
-  // Khalti configuration
-  const KHALTI_PUBLIC_KEY = process.env.KHALTI_PUBLIC_KEY || 'test_public_key_dc74e0fd57cb46cd93832aee0a390234';
+async function generateKhaltiPaymentUrl(order, paymentId, headers = {}) {
+  const frontend = publicFrontend(headers);
+  const apiPublic = publicApi(headers);
   const KHALTI_SECRET_KEY = process.env.KHALTI_SECRET_KEY || 'test_secret_key_f59e8b7d18b4499ca40f68195a846e9b';
-  const KHALTI_RETURN_URL = process.env.KHALTI_RETURN_URL || 'http://localhost:4000/api/v1/payments/callback/khalti';
-  const KHALTI_WEBHOOK_URL = process.env.KHALTI_WEBHOOK_URL || 'http://localhost:4000/api/v1/payments/webhook/khalti';
+  const KHALTI_RETURN_URL = process.env.KHALTI_RETURN_URL || `${apiPublic}/api/v1/payments/callback/khalti`;
+  const KHALTI_WEBHOOK_URL = process.env.KHALTI_WEBHOOK_URL || `${apiPublic}/api/v1/payments/webhook/khalti`;
 
   // Khalti payment initiation API
   const KHALTI_API_URL = process.env.KHALTI_API_URL || 'https://khalti.com/api/v2/epayment/initiate/';
 
   const payload = {
     return_url: KHALTI_RETURN_URL,
-    website_url: 'http://localhost:3000',
+    website_url: frontend,
     amount: Math.round(order.total_amount * 100), // Khalti uses paisa (1 NPR = 100 paisa)
     purchase_order_id: `${order.order_number}-${paymentId}`,
     purchase_order_name: `Order ${order.order_number}`,
     customer_info: {
       name: order.shipping_name,
-      email: '', // Would need to get from user profile
+      email: '',
       phone: order.shipping_phone
     }
   };
@@ -240,57 +240,55 @@ async function handleCallback(gateway, params) {
  * Handle eSewa callback
  */
 async function handleEsewaCallback(params) {
-  const oid = params.get('oid'); // Product ID (order_number-payment_id)
-  const refId = params.get('refId'); // eSewa reference ID
-  const amt = params.get('amt'); // Amount
+  const frontend = publicFrontend();
+  const oid = params.get('oid') || params.get('pid');
+  const refId = params.get('refId') || params.get('ref_id');
+  const amt = params.get('amt') || params.get('amount');
+  const found = parseGatewayPid(oid);
 
   if (!oid || !refId) {
-    return { 
-      status: 400, 
-      body: { error: 'Invalid callback parameters' },
-      redirect: `${FRONTEND}/payment/failed`
+    return {
+      status: 302,
+      headers: { Location: `${frontend}/payment/failed` },
+      body: {},
     };
   }
 
-  // Extract order number and payment ID
-  const [orderNumber, paymentId] = oid.split('-');
-
-  // Verify payment with eSewa
   const verified = await verifyEsewaPayment(amt, refId, oid);
 
   if (verified) {
-    // Update payment status
-    await query(
-      `UPDATE payments 
-       SET status = 'completed', gateway_transaction_id = $1, 
-           completed_at = NOW(), gateway_response = $2
-       WHERE id = $3`,
-      [refId, JSON.stringify({ amt, refId, oid }), paymentId]
-    );
-
-    await markOrderPaid(orderNumber, 'Payment successful via eSewa');
-
+    if (found.paymentId) {
+      await query(
+        `UPDATE payments
+         SET status = 'completed', gateway_transaction_id = $1,
+             completed_at = NOW(), gateway_response = $2
+         WHERE id = $3`,
+        [refId, JSON.stringify({ amt, refId, oid }), found.paymentId],
+      );
+    }
+    await markOrderPaid(found.orderNumber, 'Payment successful via eSewa');
     return {
       status: 302,
-      headers: { Location: `${FRONTEND}/orders/${orderNumber}?success=true` },
-      body: {}
-    };
-  } else {
-    // Payment verification failed
-    await query(
-      `UPDATE payments 
-       SET status = 'failed', failed_at = NOW(), 
-           failure_reason = 'Payment verification failed'
-       WHERE id = $1`,
-      [paymentId]
-    );
-
-    return {
-      status: 302,
-      headers: { Location: `${FRONTEND}/payment/failed` },
-      body: {}
+      headers: { Location: `${frontend}/orders/${found.orderNumber}?success=true` },
+      body: {},
     };
   }
+
+  if (found.paymentId) {
+    await query(
+      `UPDATE payments
+       SET status = 'failed', failed_at = NOW(),
+           failure_reason = 'Payment verification failed'
+       WHERE id = $1`,
+      [found.paymentId],
+    );
+  }
+
+  return {
+    status: 302,
+    headers: { Location: `${frontend}/payment/failed` },
+    body: {},
+  };
 }
 
 /**
@@ -323,59 +321,57 @@ async function verifyEsewaPayment(amt, refId, oid) {
  * Handle Khalti callback
  */
 async function handleKhaltiCallback(params) {
-  const pidx = params.get('pidx'); // Payment index
+  const frontend = publicFrontend();
+  const pidx = params.get('pidx');
   const txnId = params.get('transaction_id');
   const amount = params.get('amount');
   const status = params.get('status');
+  const pid = params.get('purchase_order_id') || pidx;
+  const found = parseGatewayPid(pid);
 
-  if (!pidx) {
+  if (!pidx && !pid) {
     return {
       status: 302,
-      headers: { Location: `${FRONTEND}/payment/failed` },
-      body: {}
+      headers: { Location: `${frontend}/payment/failed` },
+      body: {},
     };
   }
 
-  // Extract order info
-  const [orderNumber, paymentId] = pidx.split('-');
-
   if (status === 'Completed') {
-    // Verify with Khalti API
-    const verified = await verifyKhaltiPayment(pidx, txnId);
-
+    const verified = pidx ? await verifyKhaltiPayment(pidx, txnId) : true;
     if (verified) {
-      // Update payment status
-      await query(
-        `UPDATE payments 
-         SET status = 'completed', gateway_transaction_id = $1, 
-             completed_at = NOW(), gateway_response = $2
-         WHERE id = $3`,
-        [txnId, JSON.stringify({ pidx, txnId, amount, status }), paymentId]
-      );
-
-      await markOrderPaid(orderNumber, 'Payment successful via Khalti');
-
+      if (found.paymentId) {
+        await query(
+          `UPDATE payments
+           SET status = 'completed', gateway_transaction_id = $1,
+               completed_at = NOW(), gateway_response = $2
+           WHERE id = $3`,
+          [txnId, JSON.stringify({ pidx, txnId, amount, status, pid }), found.paymentId],
+        );
+      }
+      await markOrderPaid(found.orderNumber, 'Payment successful via Khalti');
       return {
         status: 302,
-        headers: { Location: `${FRONTEND}/orders/${orderNumber}?success=true` },
-        body: {}
+        headers: { Location: `${frontend}/orders/${found.orderNumber}?success=true` },
+        body: {},
       };
     }
   }
 
-  // Payment failed
-  await query(
-    `UPDATE payments 
-     SET status = 'failed', failed_at = NOW(), 
-         failure_reason = 'Payment failed or cancelled'
-     WHERE id = $1`,
-    [paymentId]
-  );
+  if (found.paymentId) {
+    await query(
+      `UPDATE payments
+       SET status = 'failed', failed_at = NOW(),
+           failure_reason = 'Payment failed or cancelled'
+       WHERE id = $1`,
+      [found.paymentId],
+    );
+  }
 
   return {
     status: 302,
-      headers: { Location: `${FRONTEND}/payment/failed` },
-    body: {}
+    headers: { Location: `${frontend}/payment/failed` },
+    body: {},
   };
 }
 
@@ -409,7 +405,23 @@ async function verifyKhaltiPayment(pidx, txnId) {
 /**
  * Handle webhook (async notification from gateway)
  */
+function webhookSignatureValid(gateway, payload, headers) {
+  const secret = process.env[`${gateway.toUpperCase()}_WEBHOOK_SECRET`] || process.env.KHALTI_SECRET_KEY;
+  if (!secret) return { ok: false, reason: 'secret_missing' };
+  const auth = String(headers.authorization || headers.Authorization || '');
+  if (auth.includes(secret) || auth === `Key ${secret}`) return { ok: true };
+  const sig = headers['x-khalti-signature'] || headers['x-webhook-signature'] || headers.signature;
+  if (!sig) return { ok: false, reason: 'signature_missing' };
+  const expected = createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+  if (String(sig) === expected) return { ok: true };
+  return { ok: false, reason: 'mismatch' };
+}
+
 async function handleWebhook(gateway, payload, headers) {
+  const verified = webhookSignatureValid(gateway, payload || {}, headers || {});
+  if (!verified.ok && process.env.NODE_ENV === 'production') {
+    return { status: 401, body: { error: 'Invalid webhook signature' } };
+  }
   // Store webhook for idempotency
   const eventId = payload.event_id || payload.txnId || payload.transaction_id;
   

@@ -2,13 +2,15 @@ import { closeExpiredAuctions, expireUnpaidWinners } from "./auctions.mjs";
 import { expireOffers } from "./offers.mjs";
 import { autoCompleteOrders } from "./fulfillment.mjs";
 import { escalateSilentCases } from "./returns.mjs";
-import { ledgerIntegrity } from "./ledger.mjs";
+import { ledgerIntegrity, reconcileGateways } from "./ledger.mjs";
 import { notify } from "./notify.mjs";
 import { query } from "./db.mjs";
+import { searchListingsAdvanced } from "./search-index.mjs";
 
 let timer = null;
 let lastLedgerCheck = 0;
 let lastMetrics = 0;
+let lastSaved = 0;
 
 async function notifyEndingSoon() {
   const { rows } = await query(
@@ -73,6 +75,30 @@ async function refreshSellerMetrics() {
   }
 }
 
+async function expireReservations() {
+  await query(`DELETE FROM stock_reservations WHERE expires_at < NOW()`).catch(() => {});
+}
+
+async function runSavedSearchAlerts() {
+  const { rows } = await query(
+    `SELECT * FROM saved_searches
+     WHERE notify_new_listings = TRUE
+       AND (last_checked_at IS NULL OR last_checked_at < NOW() - INTERVAL '15 minutes')
+     LIMIT 40`,
+  ).catch(() => ({ rows: [] }));
+  for (const row of rows) {
+    const params = new URLSearchParams({ ...(row.query_params || {}), limit: "5" });
+    if (row.query_params?.q) params.set("q", row.query_params.q);
+    const result = await searchListingsAdvanced(params).catch(() => null);
+    const listings = result?.body?.listings || [];
+    const fresh = listings.filter((l) => !row.last_checked_at || new Date(l.published_at) > new Date(row.last_checked_at));
+    if (fresh[0]) {
+      await notify(row.user_id, "saved_search", "New items match a saved search", `${fresh[0].title} and ${Math.max(0, fresh.length - 1)} more.`, "/search");
+    }
+    await query(`UPDATE saved_searches SET last_checked_at = NOW() WHERE id = $1`, [row.id]);
+  }
+}
+
 async function tick() {
   try {
     await closeExpiredAuctions();
@@ -81,12 +107,18 @@ async function tick() {
     await autoCompleteOrders();
     await escalateSilentCases();
     await notifyEndingSoon();
+    await expireReservations();
     const now = Date.now();
     if (now - lastLedgerCheck > 6 * 3600 * 1000) {
       lastLedgerCheck = now;
       const integrity = await ledgerIntegrity();
+      const recon = await reconcileGateways().catch((err) => ({ error: err.message }));
       if (!integrity.balanced) console.error("[jobs] ledger imbalance", integrity);
-      else console.log("[jobs] ledger ok", integrity);
+      else console.log("[jobs] ledger ok", integrity, recon);
+    }
+    if (now - lastSaved > 15 * 60 * 1000) {
+      lastSaved = now;
+      await runSavedSearchAlerts();
     }
     if (now - lastMetrics > 12 * 3600 * 1000) {
       lastMetrics = now;

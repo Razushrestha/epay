@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { apiBase } from "@/lib/account-api";
+import { accountApi, apiBase, getToken } from "@/lib/account-api";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PageHero } from "@/components/ui/PageHero";
 import { SaveButton } from "@/components/commerce/SaveButton";
@@ -50,7 +50,6 @@ interface Condition {
 function SearchContent() {
   const searchParams = useSearchParams();
   const query = searchParams?.get("q") || "";
-  const categoryParam = searchParams?.get("category") || "";
 
   const [listings, setListings] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -68,15 +67,41 @@ function SearchContent() {
     format: "",
     min_price: "",
     max_price: "",
-    sort: "newest",
+    sort: "best_match",
+    location: "",
+    free_shipping: "",
+    seller_rating: "",
+    exclude: "",
   });
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const limit = 24;
 
   useEffect(() => {
     loadFilterOptions();
   }, []);
+
+  useEffect(() => {
+    setFilters((current) => ({
+      ...current,
+      category_id: /^\d+$/.test(searchParams?.get("category_id") || "")
+        ? searchParams?.get("category_id") || ""
+        : /^\d+$/.test(searchParams?.get("category") || "")
+          ? searchParams?.get("category") || ""
+          : current.category_id,
+      brand_id: searchParams?.get("brand_id") || current.brand_id,
+      condition: searchParams?.get("condition") || current.condition,
+      format: searchParams?.get("format") || current.format,
+      min_price: searchParams?.get("min_price") || current.min_price,
+      max_price: searchParams?.get("max_price") || current.max_price,
+      sort: searchParams?.get("sort") || current.sort,
+      location: searchParams?.get("location") || current.location,
+      free_shipping: searchParams?.get("free_shipping") || current.free_shipping,
+      seller_rating: searchParams?.get("seller_rating") || current.seller_rating,
+      exclude: searchParams?.get("exclude") || current.exclude,
+    }));
+  }, [searchParams]);
 
   useEffect(() => {
     if (query || filters.category_id) {
@@ -119,6 +144,16 @@ function SearchContent() {
       });
 
       if (filters.category_id) params.set("category_id", filters.category_id);
+      if (filters.brand_id) params.set("brand_id", filters.brand_id);
+      if (filters.condition) params.set("condition", filters.condition);
+      if (filters.format) params.set("format", filters.format);
+      if (filters.min_price) params.set("min_price", filters.min_price);
+      if (filters.max_price) params.set("max_price", filters.max_price);
+      if (filters.location) params.set("location", filters.location);
+      if (filters.free_shipping) params.set("free_shipping", filters.free_shipping);
+      if (filters.seller_rating) params.set("seller_rating", filters.seller_rating);
+      if (filters.exclude) params.set("exclude", filters.exclude);
+      params.set("sort", filters.sort);
 
       const res = await fetch(`${apiBase}/api/v1/listings/search?${params}`);
       if (!res.ok) throw new Error("Search failed");
@@ -149,6 +184,9 @@ function SearchContent() {
       if (filters.format) params.set("format", filters.format);
       if (filters.min_price) params.set("min_price", filters.min_price);
       if (filters.max_price) params.set("max_price", filters.max_price);
+      if (filters.location) params.set("location", filters.location);
+      if (filters.free_shipping) params.set("free_shipping", filters.free_shipping);
+      if (filters.seller_rating) params.set("seller_rating", filters.seller_rating);
 
       const res = await fetch(`${apiBase}/api/v1/listings?${params}`);
       if (!res.ok) throw new Error("Failed to load listings");
@@ -176,7 +214,11 @@ function SearchContent() {
       format: "",
       min_price: "",
       max_price: "",
-      sort: "newest",
+      sort: "best_match",
+      location: "",
+      free_shipping: "",
+      seller_rating: "",
+      exclude: "",
     });
     setCurrentPage(1);
   }
@@ -208,8 +250,8 @@ function SearchContent() {
         eyebrow="Search"
         title={query ? `Results for “${query}”` : "Browse listings"}
         body={total > 0 ? `${total.toLocaleString()} items · Save with the heart or add to cart from here.` : "Filter by category, format, and price. Escrow covers every purchase."}
-        cta="Today's deals"
-        href="/deals"
+        cta="Advanced search"
+        href="/search/advanced"
       />
       <div className="page-shell py-8">
         <div className="mb-6">
@@ -299,6 +341,37 @@ function SearchContent() {
                   </select>
                 </div>
 
+                <div>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Location</label>
+                  <input
+                    type="text"
+                    placeholder="Kathmandu"
+                    value={filters.location}
+                    onChange={(e) => updateFilter("location", e.target.value)}
+                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-[13px] text-[#191919]">
+                  <input
+                    type="checkbox"
+                    checked={filters.free_shipping === "1"}
+                    onChange={(e) => updateFilter("free_shipping", e.target.checked ? "1" : "")}
+                  />
+                  Free shipping
+                </label>
+                <div>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Min seller rating</label>
+                  <select
+                    value={filters.seller_rating}
+                    onChange={(e) => updateFilter("seller_rating", e.target.value)}
+                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                  >
+                    <option value="">Any</option>
+                    <option value="80">80%+</option>
+                    <option value="90">90%+</option>
+                    <option value="98">98%+</option>
+                  </select>
+                </div>
                 {/* Price Range */}
                 <div>
                   <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Price (NPR)</label>
@@ -326,21 +399,49 @@ function SearchContent() {
           {/* Listings Grid */}
           <div className="flex-1">
             {/* Sort */}
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="text-[13px] text-[#707070]">
                 {loading ? "Loading…" : `${listings.length} of ${total.toLocaleString()} results`}
               </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="h-9 rounded-full border border-[#e7e7e7] px-3 text-[13px] text-[#3665f3]"
+                  onClick={async () => {
+                    if (!getToken()) {
+                      window.location.href = `/login?redirect=/search?q=${encodeURIComponent(query)}`;
+                      return;
+                    }
+                    await accountApi("/api/v1/listings/saved-searches", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        name: query || "Saved search",
+                        query_params: { q: query, ...filters },
+                        notify_new_listings: true,
+                      }),
+                    });
+                    setSaveNotice("Search saved. We will email you when new items match.");
+                  }}
+                >
+                  Save this search
+                </button>
+                <Link href="/search/advanced" className="h-9 rounded-full px-3 text-[13px] leading-9 text-[#3665f3] hover:underline">
+                  Advanced
+                </Link>
+                {saveNotice ? <span className="text-[12px] text-[#12a37e]">{saveNotice}</span> : null}
               <select
                 value={filters.sort}
                 onChange={(e) => updateFilter("sort", e.target.value)}
                 className="h-9 rounded-full border border-[#e7e7e7] px-3 text-[13px]"
               >
+                <option value="best_match">Best Match</option>
                 <option value="newest">Newest First</option>
                 <option value="price_low">Price: Low to High</option>
                 <option value="price_high">Price: High to Low</option>
                 <option value="ending_soon">Ending Soon</option>
                 <option value="popular">Most Popular</option>
               </select>
+              </div>
             </div>
 
             {loading ? (

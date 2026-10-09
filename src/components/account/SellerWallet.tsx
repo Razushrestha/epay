@@ -14,14 +14,19 @@ const money = (n: number) => `NPR ${Number(n || 0).toLocaleString("en-NP")}`;
 
 export function SellerWallet() {
   const [data, setData] = useState<Wallet | null>(null);
-  const [amount, setAmount] = useState("1000");
+  const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("esewa");
   const [label, setLabel] = useState("");
   const [details, setDetails] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
   async function load() {
-    setData(await accountApi<Wallet>("/api/v1/wallet"));
+    const next = await accountApi<Wallet>("/api/v1/wallet");
+    setData(next);
+    if (!amount) {
+      const available = Number(next.wallet?.available_balance || 0);
+      if (available > 0) setAmount(String(available));
+    }
   }
 
   useEffect(() => {
@@ -50,14 +55,18 @@ export function SellerWallet() {
         className="flex flex-wrap gap-2"
         onSubmit={async (e) => {
           e.preventDefault();
-          await accountApi("/api/v1/wallet/payouts", { method: "POST", body: JSON.stringify({ amount: Number(amount) }) });
-          setNotice("Payout requested. Staff will approve it.");
-          await load();
+          try {
+            await accountApi("/api/v1/wallet/payouts", { method: "POST", body: JSON.stringify({ amount: Number(amount) }) });
+            setNotice("Payout requested. Staff will approve it from Admin → Payouts.");
+            await load();
+          } catch (err) {
+            setNotice(err instanceof Error ? err.message : "Could not request payout");
+          }
         }}
       >
         <input value={amount} onChange={(e) => setAmount(e.target.value)} className="h-10 w-32 rounded-full border px-4" />
         <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Request payout</button>
-        <p className="self-center text-[12px] text-[#8a94a6]">Minimum NPR 1,000</p>
+        <p className="self-center text-[12px] text-[#8a94a6]">Uses your available balance. Save a payout account first.</p>
       </form>
 
       <form

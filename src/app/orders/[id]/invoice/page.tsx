@@ -12,6 +12,7 @@ export default function InvoicePage() {
     order: { order_number: string; total_amount: number; created_at: string; shipping_name: string | null; items: { title: string; quantity: number; price: number }[] };
     fees: { commission: number; final_value_fee: number; insertion_fee: number; processing_fee: number; net_to_seller: number } | null;
     invoiceNumber: string;
+    pdf_base64?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -31,7 +32,26 @@ export default function InvoicePage() {
           <h1 className="text-2xl font-bold text-[#191919]">Nexlo VAT invoice</h1>
           <p className="text-sm text-[#707070]">{data.invoiceNumber}</p>
         </div>
-        <button type="button" onClick={() => window.print()} className="nexlo-btn nexlo-btn-blue print:hidden">Print / PDF</button>
+          <div className="flex gap-2 print:hidden">
+            <button type="button" onClick={() => window.print()} className="nexlo-btn nexlo-btn-blue">Print</button>
+            {data.pdf_base64 ? (
+              <button
+                type="button"
+                className="nexlo-btn"
+                onClick={() => {
+                  const bytes = Uint8Array.from(atob(data.pdf_base64 || ""), (c) => c.charCodeAt(0));
+                  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${data.invoiceNumber}.pdf`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download PDF
+              </button>
+            ) : null}
+          </div>
       </div>
       <p className="mt-4 text-sm">Bill to: {data.order.shipping_name || "Customer"}</p>
       <p className="text-sm">Order {data.order.order_number} · {new Date(data.order.created_at).toLocaleDateString()}</p>

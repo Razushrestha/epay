@@ -7,6 +7,7 @@ import { TrendingRow } from "@/components/home/TrendingRow";
 import { TrustBar } from "@/components/home/TrustBar";
 import { SiteFooter } from "@/components/SiteFooter";
 import { CmsBanners } from "@/components/home/CmsBanners";
+import { RecentlyViewed } from "@/components/browse/RecentlyViewed";
 
 export default function HomePage() {
   return (
@@ -16,6 +17,7 @@ export default function HomePage() {
       <CategoryGrid />
       <PromoBanner />
       <DealsRow />
+      <RecentlyViewed />
       <TrendingRow />
       <PremiumBanner />
       <TrustBar />

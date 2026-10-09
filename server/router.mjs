@@ -80,7 +80,7 @@ export async function handleRequest(req, res) {
     const userAgent = req.headers['user-agent'];
     const body = ['POST', 'PATCH', 'PUT'].includes(method) ? await readJson(req) : null;
     
-    const result = await handleCatalog(req, method, pathname, req.headers, body, ipAddress, userAgent);
+    const result = await handleCatalog(req, method, req.url || pathname, req.headers, body, ipAddress, userAgent);
     return json(req, res, result.status, result.body);
   }
 
@@ -90,7 +90,7 @@ export async function handleRequest(req, res) {
     const userAgent = req.headers['user-agent'];
     const body = ['POST', 'PATCH', 'PUT'].includes(method) ? await readJson(req) : null;
     
-    const result = await handleListings(req, method, pathname, req.headers, body, ipAddress, userAgent);
+    const result = await handleListings(req, method, req.url || pathname, req.headers, body, ipAddress, userAgent);
     return json(req, res, result.status, result.body);
   }
 
@@ -100,7 +100,7 @@ export async function handleRequest(req, res) {
     const userAgent = req.headers['user-agent'];
     const body = ['POST', 'PATCH', 'PUT'].includes(method) ? await readJson(req) : null;
     
-    const result = await handleCart(req, method, pathname, req.headers, body, ipAddress, userAgent);
+    const result = await handleCart(req, method, req.url || pathname, req.headers, body, ipAddress, userAgent);
     return json(req, res, result.status, result.body);
   }
 
@@ -131,7 +131,7 @@ export async function handleRequest(req, res) {
     const userAgent = req.headers['user-agent'];
     const body = ['POST', 'PATCH', 'PUT'].includes(method) ? await readJson(req) : null;
     
-    const result = await handlePayments(req, method, pathname, req.headers, body, ipAddress, userAgent);
+    const result = await handlePayments(req, method, req.url || pathname, req.headers, body, ipAddress, userAgent);
     
     // Handle redirects
     if (result.status === 302 && result.headers?.Location) {

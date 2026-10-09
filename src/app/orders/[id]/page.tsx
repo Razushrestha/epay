@@ -23,6 +23,8 @@ type OrderDetail = {
   };
   history: { status_to: string; notes: string | null; created_at: string }[];
   shipments: { carrier: string | null; tracking_number: string | null; status: string }[];
+  you?: { isBuyer: boolean; isSeller: boolean; isStaff: boolean };
+  escrow?: { status: string; amount: number; released_at: string | null; net_to_seller: number | null } | null;
 };
 
 export default function OrderDetailPage() {
@@ -34,6 +36,7 @@ export default function OrderDetailPage() {
   const [stars, setStars] = useState(5);
   const [comment, setComment] = useState("");
   const [dsr, setDsr] = useState({ item: 5, comms: 5, ship: 5, cost: 5 });
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function load() {
     if (!getToken()) {
@@ -65,11 +68,12 @@ export default function OrderDetailPage() {
       <PageHero
         eyebrow={`Order ${order.order_number}`}
         title={order.status.replace(/_/g, " ")}
-        body={`${money(order.total_amount)} · Escrow holds payment until delivery. Return requests stay inside the 30-day protection window.`}
+        body={`${money(order.total_amount)} · Escrow holds payment until the buyer confirms received, then funds move to the seller wallet for payout.`}
         cta="All orders"
         href="/orders"
       />
       <main className="page-shell space-y-4 py-8">
+        {actionError ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{actionError}</p> : null}
         <section className="nexlo-card p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -113,16 +117,22 @@ export default function OrderDetailPage() {
           </section>
         ) : null}
 
-        {["paid", "processing"].includes(order.status) ? (
+        {["paid", "processing"].includes(order.status) && (data.you?.isSeller || data.you?.isStaff) ? (
           <form
             className="nexlo-card p-5 sm:p-6"
             onSubmit={async (e) => {
               e.preventDefault();
-              await accountApi(`/api/v1/orders/${order.id}/ship`, { method: "POST", body: JSON.stringify({ trackingNumber: tracking, carrier }) });
-              await load();
+              setActionError(null);
+              try {
+                await accountApi(`/api/v1/orders/${order.id}/ship`, { method: "POST", body: JSON.stringify({ trackingNumber: tracking, carrier }) });
+                await load();
+              } catch (err) {
+                setActionError(err instanceof Error ? err.message : "Could not mark shipped");
+              }
             }}
           >
             <h2 className="text-[19px] font-bold text-[#191919]">Mark shipped</h2>
+            <p className="mt-1 text-[13px] text-[#707070]">Buyer payment stays in escrow until they confirm received.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <input value={carrier} onChange={(e) => setCarrier(e.target.value)} className="h-10 rounded-full border border-[#e7e7e7] px-4 text-[14px]" />
               <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking number" className="h-10 rounded-full border border-[#e7e7e7] px-4 text-[14px]" />
@@ -131,17 +141,52 @@ export default function OrderDetailPage() {
           </form>
         ) : null}
 
-        {order.status === "shipped" ? (
-          <button
-            type="button"
-            className="nexlo-btn"
-            onClick={async () => {
-              await accountApi(`/api/v1/orders/${order.id}/deliver`, { method: "POST", body: "{}" });
-              await load();
-            }}
-          >
-            Confirm delivery
-          </button>
+        {["paid", "processing"].includes(order.status) && data.you?.isBuyer && !data.you?.isSeller ? (
+          <section className="nexlo-card p-5 sm:p-6">
+            <h2 className="text-[19px] font-bold text-[#191919]">Waiting on the seller</h2>
+            <p className="mt-1 text-[13px] text-[#707070]">Your payment is in escrow. You can confirm received after this order ships.</p>
+          </section>
+        ) : null}
+
+        {order.status === "shipped" && (data.you?.isBuyer || data.you?.isStaff) ? (
+          <section className="nexlo-card p-5 sm:p-6">
+            <h2 className="text-[19px] font-bold text-[#191919]">Confirm received</h2>
+            <p className="mt-1 text-[13px] text-[#707070]">This releases escrow to the seller wallet so they can request a payout.</p>
+            <button
+              type="button"
+              className="nexlo-btn mt-3"
+              onClick={async () => {
+                setActionError(null);
+                try {
+                  await accountApi(`/api/v1/orders/${order.id}/deliver`, { method: "POST", body: "{}" });
+                  await load();
+                } catch (err) {
+                  setActionError(err instanceof Error ? err.message : "Could not confirm received");
+                }
+              }}
+            >
+              Confirm received
+            </button>
+          </section>
+        ) : null}
+
+        {order.status === "shipped" && data.you?.isSeller && !data.you?.isBuyer ? (
+          <section className="nexlo-card p-5 sm:p-6">
+            <h2 className="text-[19px] font-bold text-[#191919]">In transit</h2>
+            <p className="mt-1 text-[13px] text-[#707070]">Escrow releases when the buyer confirms received.</p>
+          </section>
+        ) : null}
+
+        {order.status === "completed" && data.escrow?.status === "released" ? (
+          <section className="nexlo-card p-5 sm:p-6">
+            <h2 className="text-[19px] font-bold text-[#191919]">Escrow released</h2>
+            <p className="mt-1 text-[13px] text-[#707070]">
+              {money(data.escrow.net_to_seller ?? data.escrow.amount)} is in the seller wallet and ready for payout.
+            </p>
+            {data.you?.isSeller ? (
+              <Link href="/account?tab=selling" className="nexlo-link mt-3 inline-block text-[13px]">Open seller wallet →</Link>
+            ) : null}
+          </section>
         ) : null}
 
         {["delivered", "completed"].includes(order.status) ? (

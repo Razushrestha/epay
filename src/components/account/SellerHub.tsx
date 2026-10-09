@@ -19,6 +19,7 @@ type Dash = {
 
 type Listing = { id: number; title: string; price: number; quantity: number; status: string; photo?: string | null };
 type Reply = { public_id: string; title: string; body: string };
+type Blocked = { blocked_user_id: number; reason: string | null; name: string | null };
 
 function pct(n: number) {
   return `${Math.round(Number(n || 0) * 100)}%`;
@@ -30,18 +31,23 @@ export function SellerHub() {
   const [replies, setReplies] = useState<Reply[]>([]);
   const [vac, setVac] = useState({ active: false, message: "", hideListings: true, autoReply: true });
   const [reply, setReply] = useState({ title: "", body: "" });
+  const [blocked, setBlocked] = useState<Blocked[]>([]);
+  const [blockForm, setBlockForm] = useState({ userId: "", reason: "" });
+  const [csv, setCsv] = useState("title,description,category_id,format,price,quantity\n");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function load() {
-    const [d, inv, r] = await Promise.all([
+    const [d, inv, r, b] = await Promise.all([
       accountApi<Dash>("/api/v1/seller/dashboard"),
       accountApi<{ data: Listing[] }>("/api/v1/seller/inventory"),
       accountApi<{ data: Reply[] }>("/api/v1/seller/replies"),
+      accountApi<{ data: Blocked[] }>("/api/v1/auctions/blocked").catch(() => ({ data: [] as Blocked[] })),
     ]);
     setDash(d);
     setListings(inv.data);
     setReplies(r.data);
+    setBlocked(b.data || []);
     setVac({
       active: Boolean(d.vacation?.active),
       message: d.vacation?.message || "",
@@ -164,6 +170,63 @@ export function SellerHub() {
               <button type="button" className="text-red-600" onClick={async () => { await accountApi(`/api/v1/seller/replies/${item.public_id}`, { method: "DELETE" }); await load(); }}>Remove</button>
             </li>
           ))}
+        </ul>
+      </section>
+      <section className="nexlo-card p-5">
+        <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Bulk CSV listings</h2>
+        <p className="mt-1 text-[12px] text-[#8a94a6]">Header must include title, description, category_id, format. Rows are saved as drafts.</p>
+        <textarea value={csv} onChange={(e) => setCsv(e.target.value)} className="mt-3 min-h-28 w-full rounded-xl border px-3 py-2 font-mono text-[12px]" />
+        <button
+          type="button"
+          className="nexlo-btn mt-3 h-9"
+          onClick={async () => {
+            const body = await accountApi<{ success: number; errors: { row: number; error: string }[] }>("/api/v1/listings/bulk", {
+              method: "POST",
+              body: JSON.stringify({ csv }),
+            });
+            setNotice(`Imported ${body.success} listing${body.success === 1 ? "" : "s"}${body.errors?.length ? ` · ${body.errors.length} row error(s)` : ""}.`);
+            await load();
+          }}
+        >
+          Import CSV
+        </button>
+      </section>
+      <section className="nexlo-card p-5">
+        <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Blocked bidders</h2>
+        <form
+          className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await accountApi("/api/v1/auctions/blocked", {
+              method: "POST",
+              body: JSON.stringify({ userId: Number(blockForm.userId), reason: blockForm.reason }),
+            });
+            setBlockForm({ userId: "", reason: "" });
+            setNotice("Bidder blocked.");
+            await load();
+          }}
+        >
+          <input value={blockForm.userId} onChange={(e) => setBlockForm({ ...blockForm, userId: e.target.value })} placeholder="User id" className="h-10 rounded-full border px-4" />
+          <input value={blockForm.reason} onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })} placeholder="Reason" className="h-10 rounded-full border px-4" />
+          <button className="nexlo-btn h-10">Block</button>
+        </form>
+        <ul className="mt-3 space-y-2 text-[13px]">
+          {blocked.map((row) => (
+            <li key={row.blocked_user_id} className="flex justify-between gap-3 rounded-xl bg-[#f7f7f7] px-3 py-2">
+              <span>{row.name || row.blocked_user_id} — {row.reason || "Blocked"}</span>
+              <button
+                type="button"
+                className="text-red-600"
+                onClick={async () => {
+                  await accountApi(`/api/v1/auctions/blocked/${row.blocked_user_id}`, { method: "DELETE" });
+                  await load();
+                }}
+              >
+                Unblock
+              </button>
+            </li>
+          ))}
+          {blocked.length === 0 ? <li className="text-[#8a94a6]">No blocked bidders.</li> : null}
         </ul>
       </section>
       <section className="nexlo-card p-5">

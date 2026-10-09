@@ -4,9 +4,9 @@ import {
   randomBytes,
   randomInt,
   randomUUID,
-  scryptSync,
   timingSafeEqual,
 } from "node:crypto";
+import { hashPassword, verifyPassword } from "./passwords.mjs";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,21 +24,6 @@ const devCodes = process.env.NODE_ENV !== "production";
 async function db() {
   if (!pool) await initDb();
   return pool;
-}
-
-function hashPassword(password) {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 64);
-  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
-}
-
-function verifyPassword(password, stored) {
-  if (!stored) return false;
-  const [algo, saltHex, hashHex] = stored.split(":");
-  if (algo !== "scrypt" || !saltHex || !hashHex) return false;
-  const hash = scryptSync(password, Buffer.from(saltHex, "hex"), 64);
-  const expected = Buffer.from(hashHex, "hex");
-  return hash.length === expected.length && timingSafeEqual(hash, expected);
 }
 
 function sha256(value) {
@@ -285,12 +270,12 @@ async function refreshStanding(user) {
   return user;
 }
 
-async function createChallenge(user, purpose) {
+async function createChallenge(user, purpose, minutes = 10) {
   const token = randomBytes(24).toString("hex");
   await (await db()).query(
     `INSERT INTO auth_challenges (token_hash, user_id, purpose, expires_at)
-     VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes')`,
-    [sha256(token), user.id, purpose],
+     VALUES ($1, $2, $3, NOW() + ($4 * INTERVAL '1 minute'))`,
+    [sha256(token), user.id, purpose, minutes],
   );
   return token;
 }
@@ -303,6 +288,51 @@ async function readChallenge(token, purpose) {
     [sha256(token), purpose],
   );
   return rows[0] ?? null;
+}
+
+async function expireChallenge(token, purpose) {
+  await (await db()).query(
+    `UPDATE auth_challenges SET expires_at = NOW() WHERE token_hash = $1 AND purpose = $2`,
+    [sha256(String(token ?? "")), purpose],
+  );
+}
+
+async function startTwoFactorSetup(user, requestedMethod) {
+  const methodName = requestedMethod === "authenticator" ? "authenticator" : "otp";
+  if (methodName === "authenticator") {
+    const secret = base32Encode(randomBytes(20));
+    await (await db()).query(
+      `INSERT INTO two_factor (user_id, method, secret, enabled_at)
+       VALUES ($1, 'authenticator', $2, NULL)
+       ON CONFLICT (user_id) DO UPDATE SET method = 'authenticator', secret = $2, enabled_at = NULL, updated_at = NOW()`,
+      [user.id, secret],
+    );
+    const label = encodeURIComponent(user.email || user.phone || "nexlo");
+    return { ok: true, data: { method: "authenticator", secret, uri: `otpauth://totp/Nexlo:${label}?secret=${secret}&issuer=Nexlo` } };
+  }
+  const dest = user.email || user.phone;
+  if (!dest) return { ok: false, error: "This account has no email or phone for a code" };
+  const channel = user.email ? "email" : "phone";
+  const code = await issueCode(user, "enroll_2fa", dest, channel);
+  await (await db()).query(
+    `INSERT INTO two_factor (user_id, method, enabled_at)
+     VALUES ($1, 'otp', NULL)
+     ON CONFLICT (user_id) DO UPDATE SET method = 'otp', secret = NULL, enabled_at = NULL, updated_at = NOW()`,
+    [user.id],
+  );
+  return { ok: true, data: { method: "otp", devCode: devCodes ? code : undefined } };
+}
+
+async function confirmTwoFactorSetup(user, code) {
+  const { rows } = await (await db()).query(`SELECT method, secret FROM two_factor WHERE user_id = $1`, [user.id]);
+  const factor = rows[0];
+  if (!factor) return { ok: false, error: "Start two-factor setup first" };
+  const matched = factor.method === "authenticator"
+    ? verifyTotp(factor.secret, code)
+    : (await consumeCode(user.id, "enroll_2fa", code)) === "ok";
+  if (!matched) return { ok: false, error: "That code is not valid" };
+  await (await db()).query(`UPDATE two_factor SET enabled_at = NOW(), updated_at = NOW() WHERE user_id = $1`, [user.id]);
+  return { ok: true, method: factor.method };
 }
 
 async function recomputeLevel(sellerId) {
@@ -376,7 +406,7 @@ export async function handleIdentity(req, res, ctx) {
         `INSERT INTO users (public_id, email, phone, password_hash, status, account_type)
          VALUES ($1, $2, $3, $4, 'pending', $5)
          RETURNING id, public_id, email, phone`,
-        [randomUUID(), email, phone, hashPassword(password), accountType],
+        [randomUUID(), email, phone, await hashPassword(password), accountType],
       );
       const user = rows[0];
       await client.query(
@@ -486,7 +516,7 @@ export async function handleIdentity(req, res, ctx) {
 
     const body = await readJson(req);
     const user = await findUser(body.identifier ?? body.email);
-    if (!user || !verifyPassword(String(body.password ?? ""), user.password_hash)) {
+    if (!user || !(await verifyPassword(String(body.password ?? ""), user.password_hash))) {
       return json(req, res, 401, { error: "Invalid email, phone, or password" });
     }
     
@@ -500,7 +530,7 @@ export async function handleIdentity(req, res, ctx) {
     }
     const must2fa = user.is_seller || user.is_staff;
     if (must2fa && !user.two_factor_enabled && !(body.adminPortal && user.is_staff)) {
-      const challengeToken = await createChallenge(user, "enroll_2fa");
+      const challengeToken = await createChallenge(user, "enroll_2fa", 20);
       return json(req, res, 200, { step: "enroll", challengeToken });
     }
     if (user.two_factor_enabled) {
@@ -546,21 +576,69 @@ export async function handleIdentity(req, res, ctx) {
     return json(req, res, 200, { token, user: await loadPublic(full) });
   }
 
+  if (pathname === `${API}/auth/2fa/enroll/start` && method === "POST") {
+    const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_2FA);
+    if (rateLimitResult) {
+      if (rateLimitResult.headers) {
+        Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
+          res.setHeader(key, value);
+        });
+      }
+      return json(req, res, rateLimitResult.status, rateLimitResult.body);
+    }
+    const body = await readJson(req);
+    const challenge = await readChallenge(body.challengeToken, "enroll_2fa");
+    if (!challenge) return json(req, res, 400, { error: "That sign-in challenge expired. Sign in again." });
+    const user = await findUser(challenge.public_id);
+    if (!user) return json(req, res, 400, { error: "That sign-in challenge expired. Sign in again." });
+    if (user.two_factor_enabled) return json(req, res, 400, { error: "Two-factor is already on. Sign in again." });
+    const started = await startTwoFactorSetup(user, body.method);
+    if (!started.ok) return json(req, res, 400, { error: started.error });
+    return json(req, res, 200, { data: started.data });
+  }
+
+  if (pathname === `${API}/auth/2fa/enroll/confirm` && method === "POST") {
+    const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_2FA);
+    if (rateLimitResult) {
+      if (rateLimitResult.headers) {
+        Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
+          res.setHeader(key, value);
+        });
+      }
+      return json(req, res, rateLimitResult.status, rateLimitResult.body);
+    }
+    const body = await readJson(req);
+    const challenge = await readChallenge(body.challengeToken, "enroll_2fa");
+    if (!challenge) return json(req, res, 400, { error: "That sign-in challenge expired. Sign in again." });
+    const user = await findUser(challenge.public_id);
+    if (!user) return json(req, res, 400, { error: "That sign-in challenge expired. Sign in again." });
+    const confirmed = await confirmTwoFactorSetup(user, body.code);
+    if (!confirmed.ok) return json(req, res, 400, { error: confirmed.error });
+    await expireChallenge(body.challengeToken, "enroll_2fa");
+    const full = await findUser(user.email || user.phone || user.public_id);
+    const token = await openSession(full, req, body.remember !== false);
+    return json(req, res, 200, { token, user: await loadPublic(full), data: { enabled: confirmed.method } });
+  }
+
   if (pathname === `${API}/auth/google` && method === "POST") {
     const body = await readJson(req);
     let email = String(body.email ?? "").trim().toLowerCase();
     let name = String(body.name ?? "").trim();
     let sub = String(body.sub ?? "").trim();
-    if (body.idToken) {
-      const info = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(body.idToken)}`);
-      if (!info.ok) return json(req, res, 401, { error: "Google could not confirm that sign-in" });
-      const profile = await info.json();
-      email = String(profile.email ?? "").toLowerCase();
-      name = profile.name || email;
-      sub = profile.sub;
+    if (!body.idToken) {
+      return json(req, res, 400, { error: "Google sign-in requires a Google ID token" });
     }
-    if (!email || !email.includes("@")) return json(req, res, 400, { error: "A Google email is required" });
-    if (!sub) sub = `dev:${email}`;
+    const info = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(body.idToken)}`);
+    if (!info.ok) return json(req, res, 401, { error: "Google could not confirm that sign-in" });
+    const profile = await info.json();
+    const audience = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (audience && profile.aud !== audience) {
+      return json(req, res, 401, { error: "Google token audience did not match" });
+    }
+    email = String(profile.email ?? "").toLowerCase();
+    name = profile.name || email;
+    sub = profile.sub;
+    if (!email || !email.includes("@") || !sub) return json(req, res, 400, { error: "A Google email is required" });
     let user = await findUser(email);
     if (!user) {
       const { rows } = await (await db()).query(
@@ -582,6 +660,10 @@ export async function handleIdentity(req, res, ctx) {
       [user.id, sub, email],
     );
     if (user.status === "suspended") return json(req, res, 403, { error: "This account is suspended" });
+    if ((user.is_seller || user.is_staff) && !user.two_factor_enabled) {
+      const challengeToken = await createChallenge(user, "enroll_2fa", 20);
+      return json(req, res, 200, { step: "enroll", challengeToken });
+    }
     const token = await openSession(user, req, true);
     return json(req, res, 200, { token, user: await loadPublic(user) });
   }
@@ -617,7 +699,7 @@ export async function handleIdentity(req, res, ctx) {
     if (result !== "ok") return json(req, res, 400, { error: "That code is not valid" });
     await (await db()).query(`UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, [
       user.id,
-      hashPassword(String(body.password)),
+      await hashPassword(String(body.password)),
     ]);
     await (await db()).query(`UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, [user.id]);
     return json(req, res, 200, { data: { reset: true } });
@@ -693,7 +775,7 @@ export async function handleIdentity(req, res, ctx) {
        FROM addresses WHERE user_id = $1 ORDER BY created_at`,
       [actor.id],
     );
-    return json(req, res, 200, { data: rows });
+    return json(req, res, 200, { data: rows, addresses: rows });
   }
 
   if (pathname === `${API}/account/addresses` && method === "POST") {
@@ -780,7 +862,7 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/account/password` && method === "POST") {
     const body = await readJson(req);
-    if (!verifyPassword(String(body.currentPassword ?? ""), actor.password_hash)) {
+    if (!(await verifyPassword(String(body.currentPassword ?? ""), actor.password_hash))) {
       return json(req, res, 400, { error: "Current password is not correct" });
     }
     if (String(body.password ?? "").length < 8) {
@@ -788,7 +870,7 @@ export async function handleIdentity(req, res, ctx) {
     }
     await (await db()).query(`UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, [
       actor.id,
-      hashPassword(String(body.password)),
+      await hashPassword(String(body.password)),
     ]);
     return json(req, res, 200, { data: { updated: true } });
   }
@@ -816,42 +898,16 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/account/2fa/start` && method === "POST") {
     const body = await readJson(req);
-    const methodName = body.method === "authenticator" ? "authenticator" : "otp";
-    if (methodName === "authenticator") {
-      const secret = base32Encode(randomBytes(20));
-      await (await db()).query(
-        `INSERT INTO two_factor (user_id, method, secret, enabled_at)
-         VALUES ($1, 'authenticator', $2, NULL)
-         ON CONFLICT (user_id) DO UPDATE SET method = 'authenticator', secret = $2, enabled_at = NULL, updated_at = NOW()`,
-        [actor.id, secret],
-      );
-      const label = encodeURIComponent(actor.email || actor.phone || "nexlo");
-      return json(req, res, 200, {
-        data: { method: "authenticator", secret, uri: `otpauth://totp/Nexlo:${label}?secret=${secret}&issuer=Nexlo` },
-      });
-    }
-    const channel = actor.email ? "email" : "phone";
-    const code = await issueCode(actor, "enroll_2fa", actor.email || actor.phone, channel);
-    await (await db()).query(
-      `INSERT INTO two_factor (user_id, method, enabled_at)
-       VALUES ($1, 'otp', NULL)
-       ON CONFLICT (user_id) DO UPDATE SET method = 'otp', secret = NULL, enabled_at = NULL, updated_at = NOW()`,
-      [actor.id],
-    );
-    return json(req, res, 200, { data: { method: "otp", devCode: devCodes ? code : undefined } });
+    const started = await startTwoFactorSetup(actor, body.method);
+    if (!started.ok) return json(req, res, 400, { error: started.error });
+    return json(req, res, 200, { data: started.data });
   }
 
   if (pathname === `${API}/account/2fa/confirm` && method === "POST") {
     const body = await readJson(req);
-    const { rows } = await (await db()).query(`SELECT method, secret FROM two_factor WHERE user_id = $1`, [actor.id]);
-    const factor = rows[0];
-    if (!factor) return json(req, res, 400, { error: "Start two-factor setup first" });
-    const ok = factor.method === "authenticator"
-      ? verifyTotp(factor.secret, body.code)
-      : (await consumeCode(actor.id, "enroll_2fa", body.code)) === "ok";
-    if (!ok) return json(req, res, 400, { error: "That code is not valid" });
-    await (await db()).query(`UPDATE two_factor SET enabled_at = NOW(), updated_at = NOW() WHERE user_id = $1`, [actor.id]);
-    return json(req, res, 200, { data: { enabled: factor.method } });
+    const confirmed = await confirmTwoFactorSetup(actor, body.code);
+    if (!confirmed.ok) return json(req, res, 400, { error: confirmed.error });
+    return json(req, res, 200, { data: { enabled: confirmed.method } });
   }
 
   if (pathname === `${API}/account/seller` && method === "POST") {

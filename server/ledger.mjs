@@ -35,7 +35,7 @@ export async function feeBreakdown(orderId) {
     `SELECT o.total_amount, o.id, oi.seller_id, l.category_id, u.seller_level
      FROM orders o
      JOIN order_items oi ON oi.order_id = o.id
-     JOIN listings l ON l.id = oi.listing_id
+     LEFT JOIN listings l ON l.id = oi.listing_id
      JOIN users u ON u.id = oi.seller_id
      WHERE o.id = $1 LIMIT 1`,
     [orderId],
@@ -144,6 +144,38 @@ export async function ledgerIntegrity() {
   return { debit: Number(rows[0].d), credit: Number(rows[0].c), balanced };
 }
 
+export async function reconcileGateways() {
+  const payments = await query(
+    `SELECT gateway, COALESCE(SUM(amount),0) AS total, COUNT(*) FILTER (WHERE status = 'completed')::int AS paid
+     FROM payments GROUP BY gateway`,
+  );
+  const cash = await query(
+    `SELECT COALESCE(SUM(le.debit - le.credit),0) AS cash
+     FROM ledger_entries le JOIN ledger_accounts a ON a.id = le.account_id
+     WHERE a.code = 'PLATFORM_CASH'`,
+  );
+  const ledgerCash = Number(cash.rows[0]?.cash || 0);
+  const paymentTotal = payments.rows.reduce((s, r) => s + Number(r.total || 0), 0);
+  const unmatched = await query(
+    `SELECT COUNT(*)::int AS c FROM payments p
+     WHERE p.status = 'completed'
+       AND NOT EXISTS (SELECT 1 FROM ledger_transactions t WHERE t.ref_type = 'order' AND t.ref_id = p.order_id::text AND t.kind = 'payment')`,
+  );
+  const report = {
+    payments: payments.rows,
+    paymentTotal,
+    ledgerCash,
+    unmatched: Number(unmatched.rows[0]?.c || 0),
+    balanced: Math.abs(paymentTotal - Math.abs(ledgerCash)) < 1,
+  };
+  await query(
+    `INSERT INTO gateway_reconcile_runs (gateway, payments_total, ledger_cash, unmatched, balanced, details)
+     VALUES ('all', $1, $2, $3, $4, $5)`,
+    [paymentTotal, ledgerCash, report.unmatched, report.balanced, JSON.stringify(report)],
+  ).catch(() => {});
+  return report;
+}
+
 export async function handleLedger(method, pathParts, auth, body) {
   if (pathParts[0] === "wallet") {
     if (!auth) return { status: 401, body: { error: "Sign in required" } };
@@ -170,16 +202,21 @@ export async function handleLedger(method, pathParts, auth, body) {
     }
     if (method === "POST" && pathParts[1] === "payouts") {
       const amount = Number(body.amount);
-      if (!(amount >= 1000)) return { status: 400, body: { error: "Minimum payout is NPR 1,000" } };
+      if (!(amount >= 1)) return { status: 400, body: { error: "Enter a payout amount of at least NPR 1" } };
       const wallet = await query(`SELECT available_balance FROM seller_wallets WHERE user_id = $1`, [auth.user_id]);
       if (Number(wallet.rows[0]?.available_balance || 0) < amount) return { status: 400, body: { error: "Not enough available balance" } };
       const acc = await query(`SELECT * FROM payout_accounts WHERE user_id = $1 ORDER BY is_default DESC LIMIT 1`, [auth.user_id]);
+      if (!acc.rows[0]) return { status: 400, body: { error: "Save a payout account before requesting a payout" } };
       await query(`UPDATE seller_wallets SET available_balance = available_balance - $2, updated_at = NOW() WHERE user_id = $1`, [auth.user_id, amount]);
-      await query(
-        `INSERT INTO payouts (user_id, amount, method, account_snapshot) VALUES ($1,$2,$3,$4)`,
-        [auth.user_id, amount, acc.rows[0]?.method || body.method || "bank", JSON.stringify(acc.rows[0]?.details || {})],
+      const inserted = await query(
+        `INSERT INTO payouts (user_id, amount, method, account_snapshot) VALUES ($1,$2,$3,$4) RETURNING public_id`,
+        [auth.user_id, amount, acc.rows[0].method, JSON.stringify(acc.rows[0].details || {})],
       );
-      return { status: 201, body: { data: { requested: amount } } };
+      await postJournal("payout", "payout", inserted.rows[0].public_id, "Seller payout requested", [
+        { code: `SELLER_AVAILABLE_${auth.user_id}`, debit: amount },
+        { code: "PLATFORM_CASH", credit: amount },
+      ]);
+      return { status: 201, body: { data: { requested: amount, public_id: inserted.rows[0].public_id } } };
     }
   }
 
@@ -193,7 +230,8 @@ export async function handleLedger(method, pathParts, auth, body) {
          ORDER BY p.created_at DESC LIMIT 80`,
       );
       const integrity = await ledgerIntegrity();
-      return { status: 200, body: { data: rows, integrity } };
+      const recon = await reconcileGateways().catch(() => null);
+      return { status: 200, body: { data: rows, integrity, recon } };
     }
     if (method === "PATCH" && pathParts[2]) {
       const status = ["approved", "paid", "rejected"].includes(body.status) ? body.status : null;
@@ -206,8 +244,13 @@ export async function handleLedger(method, pathParts, auth, body) {
         body.note || null,
         body.paidRef || null,
       ]);
-      if (status === "rejected") {
-        await query(`UPDATE seller_wallets SET available_balance = available_balance + $2 WHERE user_id = $1`, [current.rows[0].user_id, current.rows[0].amount]);
+      if (status === "rejected" && ["pending", "approved"].includes(current.rows[0].status)) {
+        const row = current.rows[0];
+        await query(`UPDATE seller_wallets SET available_balance = available_balance + $2 WHERE user_id = $1`, [row.user_id, row.amount]);
+        await postJournal("payout", "payout", row.public_id, "Seller payout rejected", [
+          { code: "PLATFORM_CASH", debit: Number(row.amount) },
+          { code: `SELLER_AVAILABLE_${row.user_id}`, credit: Number(row.amount) },
+        ]).catch(() => {});
       }
       if (status === "paid") {
         await notify(current.rows[0].user_id, "payout_paid", "Payout sent", `NPR ${current.rows[0].amount} was paid out.`, "/account?tab=selling");

@@ -31,6 +31,8 @@ type Listing = {
   auction_bid_count?: number | null;
   auction_ends_at?: string | null;
   photos?: { url: string; thumbnail_url?: string | null; is_primary?: boolean }[] | null;
+  variations?: { id: number; name: string; options: { id: number; value: string }[] | null }[] | null;
+  skus?: { id: number; combination: Record<string, string>; price: number | null; quantity: number }[] | null;
 };
 
 type Bid = { amount: number; created_at: string; bidder: string };
@@ -64,12 +66,24 @@ export function LiveListing({ listing }: { listing: Listing }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [tick, setTick] = useState(0);
+  const [picked, setPicked] = useState<Record<string, string>>({});
   const isAuction = listing.format === "auction" || listing.format === "both";
   const isFixed = listing.format === "fixed" || listing.format === "both";
   const live = listing.status === "active";
+  const variations = (listing.variations || []).filter((v) => v.options?.length);
+  const selectedSku = (listing.skus || []).find((sku) =>
+    variations.every((v) => sku.combination?.[v.name] === picked[v.name]),
+  );
 
   useEffect(() => {
     loadWatchIds().then((ids) => setSaved(ids.has(listing.id)));
+  }, [listing.id]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    fetch(`${apiBase}/api/v1/listings/${listing.id}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    }).catch(() => undefined);
   }, [listing.id]);
 
   useEffect(() => {
@@ -183,6 +197,33 @@ export function LiveListing({ listing }: { listing: Listing }) {
                 {listing.condition_name || "Used"} · {listing.shipping_free ? "Free shipping" : money(Number(listing.shipping_cost || 0))}
               </p>
               {notice ? <p className="mt-3 rounded-xl bg-[#f7f7f7] px-3 py-2 text-[13px] text-[#3665f3]">{notice}</p> : null}
+              {variations.length ? (
+                <div className="mt-4 space-y-3">
+                  {variations.map((variation) => (
+                    <label key={variation.id} className="block text-[13px] font-semibold text-[#191919]">
+                      {variation.name}
+                      <select
+                        className="mt-1 h-10 w-full rounded-full border px-3 font-normal"
+                        value={picked[variation.name] || ""}
+                        onChange={(e) => setPicked((current) => ({ ...current, [variation.name]: e.target.value }))}
+                      >
+                        <option value="">Select {variation.name}</option>
+                        {(variation.options || []).map((opt) => (
+                          <option key={opt.id} value={opt.value}>{opt.value}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                  {selectedSku ? (
+                    <p className="text-[12px] text-[#6b7587]">
+                      {selectedSku.quantity} in stock
+                      {selectedSku.price != null ? ` · ${money(Number(selectedSku.price))}` : ""}
+                    </p>
+                  ) : (
+                    <p className="text-[12px] text-[#8a94a6]">Choose options to add this item.</p>
+                  )}
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="mt-3 text-[13px] font-semibold text-[#3665f3]"
@@ -229,13 +270,18 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   className="nexlo-btn mt-4 h-11 w-full"
                   onClick={async () => {
                     try {
+                      if (variations.length && !selectedSku) {
+                        setNotice("Select size and color first.");
+                        return;
+                      }
                       await addToCart({
                         listingId: listing.id,
                         quantity: 1,
                         title: listing.title,
                         photo: photos[0] ?? null,
-                        price: Number(listing.price || 0),
+                        price: Number(selectedSku?.price ?? listing.price ?? 0),
                         seller: listing.seller_username || listing.seller_full_name || "Seller",
+                        variationSkuId: selectedSku?.id ?? null,
                       });
                       window.location.href = "/cart";
                     } catch (err) {

@@ -5,13 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "dev:api": "node server/index.mjs",
-    "dev:all": "concurrently -n web,api -c blue,green \"npm run dev\" \"npm run dev:api\"",
+    "dev:worker": "node server/worker.mjs",
+    "dev:all": "concurrently -n web,api,worker -c blue,green,magenta \"npm run dev\" \"npm run dev:api\" \"npm run dev:worker\"",
     "db:migrate": "node --import dotenv/config scripts/migrate.mjs",
     "db:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test server/trust.test.mjs",
+    "test": "node --test server/*.test.mjs",
     "test:load": "node scripts/load-smoke.mjs"
   },
   "engines": {
@@ -27,6 +28,7 @@
     "dotenv": "^16.4.7",
     "files-sdk": "^2.6.2",
     "form-data": "^4.0.6",
+    "hash-wasm": "^4.12.0",
     "mailgun.js": "^14.1.0",
     "multer": "^2.4.0",
     "next": "16.3.8",

@@ -6,6 +6,7 @@
 import { query } from './db.mjs';
 import { uploadPhoto, deletePhoto, setPrimaryPhoto } from './upload.mjs';
 import { enforceVerification, evaluateUser } from './trust.mjs';
+import { indexListing, searchListingsAdvanced, suggestListings } from './search-index.mjs';
 
 /**
  * Main listings router
@@ -25,7 +26,11 @@ export async function handleListings(req, method, urlPath, headers, body, ipAddr
     }
 
     if (method === 'GET' && pathParts[0] === 'search') {
-      return await searchListings(url.searchParams);
+      return await searchListingsAdvanced(url.searchParams);
+    }
+
+    if (method === 'GET' && pathParts[0] === 'suggest') {
+      return { status: 200, body: { suggestions: await suggestListings(url.searchParams.get('q')) } };
     }
 
     if (method === 'GET' && pathParts[0] === 'featured') {
@@ -118,6 +123,25 @@ export async function handleListings(req, method, urlPath, headers, body, ipAddr
       return await getSellerAnalytics(auth.userId);
     }
 
+    if (method === 'GET' && pathParts[0] === 'recent') {
+      return await getRecentlyViewed(auth.userId);
+    }
+
+    if (method === 'GET' && pathParts[0] === 'saved-searches') {
+      return await listSavedSearches(auth.userId);
+    }
+    if (method === 'POST' && pathParts[0] === 'saved-searches') {
+      return await createSavedSearch(auth.userId, body);
+    }
+    if (method === 'DELETE' && pathParts[0] === 'saved-searches' && pathParts[1]) {
+      await query(`DELETE FROM saved_searches WHERE id = $1 AND user_id = $2`, [pathParts[1], auth.userId]);
+      return { status: 200, body: { data: { removed: true } } };
+    }
+
+    if (method === 'POST' && pathParts[0] === 'bulk') {
+      return await bulkImportCsv(auth.userId, body);
+    }
+
     return { status: 404, body: { error: 'Not found' } };
   } catch (error) {
     console.error('Listings API error:', error);
@@ -136,7 +160,7 @@ async function validateToken(token) {
     `SELECT u.id as user_id, u.email, u.is_seller, u.status
      FROM auth_sessions s
      JOIN users u ON s.user_id = u.id
-     WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
+     WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > NOW()`,
     [hash]
   );
 
@@ -170,7 +194,8 @@ async function getListings(params) {
       b.name as brand_name, b.slug as brand_slug,
       (SELECT url FROM listing_photos WHERE listing_id = l.id AND is_primary = true LIMIT 1) as primary_photo,
       u.username as seller_username,
-      fs.score_percentage as seller_feedback_score
+      CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0
+           ELSE 100.0 * COALESCE(fs.positive_count,0) / (COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0)) END as seller_feedback_score
     FROM listings l
     JOIN categories c ON l.category_id = c.id
     LEFT JOIN brands b ON l.brand_id = b.id
@@ -222,6 +247,21 @@ async function getListings(params) {
     values.push(maxPrice);
   }
 
+  const location = params.get('location');
+  const freeShipping = params.get('free_shipping');
+  const minSellerRating = params.get('seller_rating');
+  if (location) {
+    sql += ` AND l.item_location ILIKE $${paramCount++}`;
+    values.push(`%${location}%`);
+  }
+  if (freeShipping === '1' || freeShipping === 'true') {
+    sql += ` AND l.shipping_free = TRUE`;
+  }
+  if (minSellerRating) {
+    sql += ` AND CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0 ELSE 100.0 * COALESCE(fs.positive_count,0) / (COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0)) END >= $${paramCount++}`;
+    values.push(Number(minSellerRating));
+  }
+
   // Sorting
   switch (sort) {
     case 'price_low':
@@ -235,6 +275,9 @@ async function getListings(params) {
       break;
     case 'popular':
       sql += ` ORDER BY l.view_count DESC, l.watch_count DESC`;
+      break;
+    case 'best_match':
+      sql += ` ORDER BY COALESCE(fs.positive_count,0) DESC, l.published_at DESC`;
       break;
     default:
       sql += ` ORDER BY l.published_at DESC`;
@@ -273,7 +316,8 @@ async function getListingById(listingId, authHeader) {
       cond.name as condition_name, cond.description as condition_description,
       u.id as seller_id, u.username as seller_username, u.email as seller_email,
       up.display_name as seller_full_name, up.avatar_url as seller_avatar,
-      fs.score_percentage as seller_feedback_score, fs.positive_count, fs.neutral_count, fs.negative_count,
+      CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0
+           ELSE 100.0 * COALESCE(fs.positive_count,0) / (COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0)) END as seller_feedback_score, fs.positive_count, fs.neutral_count, fs.negative_count,
       (SELECT json_agg(json_build_object(
         'id', p.id, 'url', p.url, 'thumbnail_url', p.thumbnail_url, 
         'position', p.position, 'is_primary', p.is_primary
@@ -299,6 +343,28 @@ async function getListingById(listingId, authHeader) {
   }
 
   const listing = result.rows[0];
+  const [variationRows, skuRows] = await Promise.all([
+    query(
+      `SELECT v.id, v.name, v.position,
+              COALESCE((
+                SELECT json_agg(json_build_object('id', o.id, 'value', o.value) ORDER BY o.position)
+                FROM listing_variation_options o WHERE o.variation_id = v.id
+              ), '[]'::json) AS options
+       FROM listing_variations v
+       WHERE v.listing_id = $1
+       ORDER BY v.position`,
+      [listingId],
+    ),
+    query(
+      `SELECT id, sku, combination, price, quantity
+       FROM listing_variation_skus
+       WHERE listing_id = $1 AND is_active = TRUE
+       ORDER BY id`,
+      [listingId],
+    ),
+  ]);
+  listing.variations = variationRows.rows;
+  listing.skus = skuRows.rows;
 
   // Track view
   const token = authHeader?.replace('Bearer ', '');
@@ -318,6 +384,14 @@ async function getListingById(listingId, authHeader) {
     `UPDATE listings SET view_count = view_count + 1 WHERE id = $1`,
     [listingId]
   );
+
+  if (userId) {
+    await query(
+      `INSERT INTO recently_viewed (user_id, listing_id, viewed_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id, listing_id) DO UPDATE SET viewed_at = NOW()`,
+      [userId, listingId],
+    ).catch(() => {});
+  }
 
   return { status: 200, body: { listing } };
 }
@@ -469,7 +543,13 @@ async function createListing(data, userId) {
     ).catch(() => {});
   }
 
-  return { status: 201, body: { listing: result.rows[0] } };
+  const listing = result.rows[0];
+  if (Array.isArray(data.variations) && listing) {
+    await saveVariations(listing.id, data.variations, data.skus);
+  }
+  if (listing?.status === 'active') await indexListing(listing.id).catch(() => {});
+
+  return { status: 201, body: { listing } };
 }
 
 /**
@@ -562,6 +642,7 @@ async function publishListing(listingId, userId) {
      WHERE id = $1`,
     [listingId]
   );
+  await indexListing(listingId).catch(() => {});
 
   return { status: 200, body: { success: true } };
 }
@@ -831,4 +912,118 @@ async function getSellerAnalytics(userId) {
   );
 
   return { status: 200, body: { stats: statsResult.rows[0] } };
+}
+
+async function saveVariations(listingId, variations, skus) {
+  for (const [i, variation] of variations.entries()) {
+    const name = String(variation.name || "").trim();
+    if (!name) continue;
+    const created = await query(
+      `INSERT INTO listing_variations (listing_id, name, position) VALUES ($1,$2,$3) RETURNING id`,
+      [listingId, name, i],
+    );
+    for (const [j, opt] of (variation.options || []).entries()) {
+      const value = String(opt).trim();
+      if (!value) continue;
+      await query(
+        `INSERT INTO listing_variation_options (variation_id, value, position) VALUES ($1,$2,$3)`,
+        [created.rows[0].id, value, j],
+      );
+    }
+  }
+  const combos = Array.isArray(skus) && skus.length
+    ? skus
+    : cartesianSkus(variations);
+  for (const sku of combos) {
+    await query(
+      `INSERT INTO listing_variation_skus (listing_id, sku, combination, price, quantity)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [listingId, sku.sku || null, JSON.stringify(sku.combination || sku), sku.price || null, sku.quantity || 0],
+    );
+  }
+}
+
+function cartesianSkus(variations) {
+  const named = (variations || []).filter((v) => v.name && Array.isArray(v.options) && v.options.length);
+  if (!named.length) return [];
+  let combos = [{}];
+  for (const v of named) {
+    const next = [];
+    for (const combo of combos) {
+      for (const opt of v.options) {
+        next.push({ ...combo, [v.name]: opt });
+      }
+    }
+    combos = next;
+  }
+  return combos.map((combination) => ({ combination, quantity: 1 }));
+}
+
+async function getRecentlyViewed(userId) {
+  const { rows } = await query(
+    `SELECT l.id, l.title, l.price, l.format, r.viewed_at,
+            (SELECT url FROM listing_photos WHERE listing_id = l.id AND is_primary = true LIMIT 1) as primary_photo
+     FROM recently_viewed r JOIN listings l ON l.id = r.listing_id
+     WHERE r.user_id = $1 ORDER BY r.viewed_at DESC LIMIT 24`,
+    [userId],
+  );
+  return { status: 200, body: { listings: rows } };
+}
+
+async function listSavedSearches(userId) {
+  const { rows } = await query(`SELECT * FROM saved_searches WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+  return { status: 200, body: { data: rows } };
+}
+
+async function createSavedSearch(userId, body) {
+  const name = String(body.name || body.query || "Saved search").slice(0, 100);
+  const result = await query(
+    `INSERT INTO saved_searches (user_id, name, query_params, notify_new_listings, notify_price_drops)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [userId, name, JSON.stringify(body.query_params || body), body.notify_new_listings !== false, Boolean(body.notify_price_drops)],
+  );
+  return { status: 201, body: { data: result.rows[0] } };
+}
+
+async function bulkImportCsv(userId, body) {
+  const csv = String(body.csv || body.text || "");
+  if (!csv.includes(",")) return { status: 400, body: { error: "Paste a CSV with a header row" } };
+  const lines = csv.split(/\r?\n/).filter((l) => l.trim());
+  const header = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/"/g, ""));
+  const required = ["title", "description", "category_id", "format"];
+  const missing = required.filter((k) => !header.includes(k));
+  if (missing.length) return { status: 400, body: { error: `CSV needs columns: ${missing.join(", ")}` } };
+  const errors = [];
+  let success = 0;
+  const batch = await query(
+    `INSERT INTO bulk_upload_batches (seller_id, total_rows, status) VALUES ($1,$2,'processing') RETURNING id`,
+    [userId, lines.length - 1],
+  ).catch(() => ({ rows: [{ id: null }] }));
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    const row = Object.fromEntries(header.map((h, idx) => [h, cols[idx]]));
+    try {
+      const created = await createListing({
+        category_id: Number(row.category_id),
+        title: row.title,
+        description: row.description,
+        format: row.format || "fixed",
+        price: row.price ? Number(row.price) : null,
+        quantity: row.quantity ? Number(row.quantity) : 1,
+        condition_id: row.condition_id ? Number(row.condition_id) : null,
+        publish_immediately: false,
+      }, userId);
+      if (created.status >= 400) throw new Error(created.body?.error || "row failed");
+      success += 1;
+    } catch (err) {
+      errors.push({ row: i + 1, error: err.message });
+    }
+  }
+  if (batch.rows[0]?.id) {
+    await query(
+      `UPDATE bulk_upload_batches SET success_count = $2, error_count = $3, status = 'completed', processed_rows = $2, errors = $4, completed_at = NOW() WHERE id = $1`,
+      [batch.rows[0].id, success, errors.length, JSON.stringify(errors)],
+    ).catch(() => {});
+  }
+  return { status: 200, body: { success, errors, batch_id: batch.rows[0]?.id } };
 }

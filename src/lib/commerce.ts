@@ -108,6 +108,7 @@ export async function addToCart(input: {
   price?: string | number;
   seller?: string;
   localOnly?: boolean;
+  variationSkuId?: number | null;
 }) {
   const quantity = Math.max(1, input.quantity ?? 1);
   const snapshot: CartSnapshot = {
@@ -126,7 +127,7 @@ export async function addToCart(input: {
       const res = await fetch(`${apiBase}/api/v1/cart`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ listing_id: input.listingId, quantity }),
+        body: JSON.stringify({ listing_id: input.listingId, quantity, variation_sku_id: input.variationSkuId || null }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((body as { error?: string }).error || "Could not add to cart");

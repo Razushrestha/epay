@@ -8,23 +8,24 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { PageHero } from "@/components/ui/PageHero";
 
 interface Address {
-  id: number;
-  recipient_name: string;
-  phone: string;
-  address_line1: string;
-  address_line2: string | null;
+  public_id: string;
+  full_name: string;
+  phone?: string | null;
+  line1: string;
+  line2?: string | null;
   city: string;
-  state: string;
-  postal_code: string;
+  region?: string | null;
+  postal_code?: string | null;
   country: string;
-  is_default: boolean;
+  is_default_shipping: boolean;
+  is_default_billing?: boolean;
 }
 
 export default function CheckoutPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
   const [totals, setTotals] = useState({
@@ -40,8 +41,11 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     loadAddresses();
-    calculateTotals();
   }, []);
+
+  useEffect(() => {
+    calculateTotals();
+  }, [selectedAddressId]);
 
   async function loadAddresses() {
     try {
@@ -51,19 +55,11 @@ export default function CheckoutPage() {
         return;
       }
 
-      const res = await fetch(`${apiBase}/api/v1/account/addresses`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) throw new Error("Failed to load addresses");
-
-      const data = await res.json();
-      setAddresses(data.addresses || []);
-
-      const defaultAddr = data.addresses.find((a: Address) => a.is_default);
-      if (defaultAddr) {
-        setSelectedAddressId(defaultAddr.id);
-      }
+      const data = await accountApi<{ data?: Address[]; addresses?: Address[] }>("/api/v1/account/addresses");
+      const list = data.data || data.addresses || [];
+      setAddresses(list);
+      const defaultAddr = list.find((a) => a.is_default_shipping) ?? list[0];
+      if (defaultAddr) setSelectedAddressId(defaultAddr.public_id);
     } catch (err: any) {
       setError(err.message);
     }
@@ -200,7 +196,7 @@ export default function CheckoutPage() {
               {addresses.length === 0 ? (
                 <div className="mt-4 text-center">
                   <p className="mb-4 text-[13px] text-[#707070]">No addresses yet.</p>
-                  <button onClick={() => router.push("/account?tab=addresses")} className="nexlo-btn nexlo-btn-blue">
+                  <button onClick={() => router.push("/account?tab=preferences")} className="nexlo-btn nexlo-btn-blue">
                     Add address
                   </button>
                 </div>
@@ -208,30 +204,30 @@ export default function CheckoutPage() {
                 <div className="mt-4 space-y-3">
                   {addresses.map((addr) => (
                     <label
-                      key={addr.id}
+                      key={addr.public_id}
                       className={`block cursor-pointer rounded-xl border p-4 transition ${
-                        selectedAddressId === addr.id ? "border-[#3665f3] bg-[#eef3ff]" : "border-[#e7e7e7] hover:border-[#ccc]"
+                        selectedAddressId === addr.public_id ? "border-[#3665f3] bg-[#eef3ff]" : "border-[#e7e7e7] hover:border-[#ccc]"
                       }`}
                     >
                       <input
                         type="radio"
                         name="address"
-                        value={addr.id}
-                        checked={selectedAddressId === addr.id}
-                        onChange={() => setSelectedAddressId(addr.id)}
+                        value={addr.public_id}
+                        checked={selectedAddressId === addr.public_id}
+                        onChange={() => setSelectedAddressId(addr.public_id)}
                         className="mr-3 accent-[#3665f3]"
                       />
                       <div className="inline-block text-[13px]">
-                        <div className="font-semibold text-[#191919]">{addr.recipient_name}</div>
+                        <div className="font-semibold text-[#191919]">{addr.full_name}</div>
                         <div className="text-[#707070]">
-                          {addr.address_line1}
-                          {addr.address_line2 ? `, ${addr.address_line2}` : ""}
+                          {addr.line1}
+                          {addr.line2 ? `, ${addr.line2}` : ""}
                         </div>
                         <div className="text-[#707070]">
-                          {addr.city}, {addr.state} {addr.postal_code}
+                          {addr.city}{addr.region ? `, ${addr.region}` : ""} {addr.postal_code || ""}
                         </div>
-                        <div className="text-[#707070]">{addr.phone}</div>
-                        {addr.is_default ? (
+                        {addr.phone ? <div className="text-[#707070]">{addr.phone}</div> : null}
+                        {addr.is_default_shipping ? (
                           <span className="mt-1 inline-block rounded-full bg-[#d1fae5] px-2 py-0.5 text-[11px] font-semibold text-[#0d9488]">
                             Default
                           </span>
