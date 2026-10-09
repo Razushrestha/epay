@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   discount,
   npr,
   type ElecProduct,
 } from "@/lib/electronics-catalog";
+import { loadWatchIds, toggleWatch } from "@/lib/commerce";
 import type { CategoryBrowseConfig } from "@/lib/category-catalogs";
 
 const conditions = ["New", "Used", "Refurbished"] as const;
@@ -202,6 +203,10 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
   const [saved, setSaved] = useState<number[]>([]);
   const brands = [...new Set(config.products.map((item) => item.brand))];
   const cities = [...new Set(config.products.map((item) => item.city))];
+
+  useEffect(() => {
+    loadWatchIds().then((ids) => setSaved([...ids]));
+  }, []);
 
   const visible = useMemo(() => {
     const next = config.products.filter((item) => {
@@ -542,7 +547,18 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                   item={item}
                   layout={layout}
                   saved={saved.includes(item.id)}
-                  onSave={() => setSaved((current) => (current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]))}
+                  onSave={async () => {
+                    const currently = saved.includes(item.id);
+                    setSaved((current) => (currently ? current.filter((id) => id !== item.id) : [...current, item.id]));
+                    await toggleWatch({
+                      listingId: item.id,
+                      saved: currently,
+                      title: item.title,
+                      photo: item.img,
+                      price: item.price,
+                      localOnly: true,
+                    });
+                  }}
                 />
               ))}
             </div>

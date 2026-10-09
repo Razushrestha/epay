@@ -40,7 +40,7 @@ export default function AdminSettingsPage() {
       {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
       {notice ? <p className="rounded-xl bg-[#eaf1ff] px-4 py-3 text-[13px] text-[#2a4fa8]">{notice}</p> : null}
 
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Platform</h2>
         <form
           className="mt-4 grid gap-3 sm:grid-cols-2"
@@ -58,15 +58,15 @@ export default function AdminSettingsPage() {
             <input type="checkbox" checked={settings.maintenance} onChange={(e) => setSettings({ ...settings, maintenance: e.target.checked })} />
             Maintenance mode
           </label>
-          <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Save settings</button>
+          <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save settings</button>
         </form>
       </section>
 
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Staff</h2>
         <ul className="mt-3 space-y-2 text-[14px]">
           {staff.map((person) => (
-            <li key={person.public_id} className="flex justify-between rounded-xl bg-[#f5f8fc] px-3 py-2">
+            <li key={person.public_id} className="flex justify-between rounded-xl bg-[#f7f7f7] px-3 py-2">
               <span className="font-medium text-[#0f1c3f]">{person.name}</span>
               <span className="text-[#6b7587]">{person.email}</span>
             </li>
@@ -75,7 +75,7 @@ export default function AdminSettingsPage() {
         </ul>
       </section>
 
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Identity reviews</h2>
         <ul className="mt-3 space-y-2">
           {kyc.map((item) => (
@@ -97,7 +97,7 @@ export default function AdminSettingsPage() {
         </ul>
       </section>
 
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Appeals</h2>
         <ul className="mt-3 space-y-2">
           {appeals.map((item) => (

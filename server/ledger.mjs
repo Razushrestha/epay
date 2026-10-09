@@ -85,6 +85,14 @@ export async function onOrderPaid(orderId) {
   }
 }
 
+export async function freezeEscrow(orderId) {
+  await query(`UPDATE escrow_holds SET status = 'frozen' WHERE order_id = $1 AND status = 'held'`, [orderId]);
+}
+
+export async function unfreezeEscrow(orderId) {
+  await query(`UPDATE escrow_holds SET status = 'held' WHERE order_id = $1 AND status = 'frozen'`, [orderId]);
+}
+
 export async function releaseEscrow(orderId) {
   const hold = await query(`SELECT * FROM escrow_holds WHERE order_id = $1 AND status = 'held'`, [orderId]);
   if (!hold.rows[0]) return { skipped: true };

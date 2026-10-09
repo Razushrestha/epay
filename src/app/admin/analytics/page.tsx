@@ -54,24 +54,24 @@ export default function AdminAnalyticsPage() {
           ["Products", data?.stats.products.total ?? 0],
           ["Revenue", money(data?.stats.revenue.total ?? 0)],
         ].map(([label, value]) => (
-          <section key={String(label)} className="rounded-[22px] border border-[#e7eef6] bg-white p-4">
+          <section key={String(label)} className="nexlo-card p-4">
             <p className="text-[13px] text-[#8a94a6]">{label}</p>
             <p className="mt-1 text-[24px] font-extrabold text-[#0f1c3f]">{value}</p>
           </section>
         ))}
       </div>
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Revenue and orders</h2>
         <LineChart
           labels={labels}
           series={[
-            { name: "Revenue", color: "#2f6bff", values: series.map((s) => s.revenue) },
+            { name: "Revenue", color: "#3665f3", values: series.map((s) => s.revenue) },
             { name: "Orders", color: "#12a37e", values: series.map((s) => s.orders) },
             { name: "Users", color: "#7c5cfc", values: series.map((s) => s.users) },
           ]}
         />
       </section>
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <h2 className="mb-4 text-[16px] font-extrabold text-[#0f1c3f]">Order mix</h2>
         <Donut
           total={os.total}

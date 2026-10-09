@@ -8,6 +8,7 @@ export async function autoCompleteOrders() {
   const received = await query(
     `UPDATE orders SET status = 'delivered', delivered_at = COALESCE(delivered_at, NOW())
      WHERE status = 'shipped' AND shipped_at IS NOT NULL AND shipped_at < NOW() - INTERVAL '7 days'
+       AND NOT EXISTS (SELECT 1 FROM cases c WHERE c.order_id = orders.id AND c.status NOT IN ('resolved','closed'))
      RETURNING id, buyer_id`,
   );
   for (const row of received.rows) {
@@ -17,6 +18,8 @@ export async function autoCompleteOrders() {
   const done = await query(
     `UPDATE orders SET status = 'completed', completed_at = NOW()
      WHERE status = 'delivered' AND delivered_at IS NOT NULL AND delivered_at < NOW() - INTERVAL '14 days'
+       AND NOT EXISTS (SELECT 1 FROM cases c WHERE c.order_id = orders.id AND c.status NOT IN ('resolved','closed'))
+       AND NOT EXISTS (SELECT 1 FROM escrow_holds e WHERE e.order_id = orders.id AND e.status = 'frozen')
      RETURNING id, buyer_id`,
   );
   for (const row of done.rows) {

@@ -1,6 +1,7 @@
 import { query, withTx } from "./db.mjs";
 import { incrementFor, nextOrderNumber } from "./commerce-auth.mjs";
 import { notify } from "./notify.mjs";
+import { enforceVerification, evaluateUser } from "./trust.mjs";
 
 const rooms = new Map();
 
@@ -272,6 +273,10 @@ export async function handleAuctions(method, pathParts, auth, body) {
   if (pathParts[0] === "auctions" && pathParts[1] && pathParts[2] === "bid" && method === "POST") {
     if (!auth) return { status: 401, body: { error: "Sign in to bid" } };
     if (auth.status !== "active") return { status: 403, body: { error: "This account cannot bid" } };
+    const verified = await enforceVerification(auth.user_id);
+    if (verified) return verified;
+    const risk = await evaluateUser(auth.user_id, { kind: "bid" });
+    if (risk.blocked) return { status: 403, body: { error: "Bidding is blocked while this account is under review" } };
     try {
       const result = await placeProxy(pathParts[1], auth.user_id, Number(body.maxAmount || body.amount));
       return { status: 200, body: result };

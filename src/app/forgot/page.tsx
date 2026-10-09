@@ -64,7 +64,7 @@ export default function ForgotPage() {
               <h2 className="mt-2 text-[40px] font-extrabold leading-[1.05] tracking-tight text-[#0f1c3f] xl:text-[48px]">
                 Reset your
                 <br />
-                <span className="bg-gradient-to-r from-[#12c4b0] to-[#2f6bff] bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-[#12c4b0] to-[#3665f3] bg-clip-text text-transparent">
                   password
                 </span>
               </h2>
@@ -74,7 +74,7 @@ export default function ForgotPage() {
               <ul className="mt-7 flex max-w-[380px] items-start">
                 {features.map((f) => (
                   <li key={f.label} className="flex flex-1 flex-col items-center px-1 text-center">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#cfe4f4] bg-white/80 text-[#2f6bff] shadow-[0_8px_18px_-12px_rgba(47,107,255,0.7)]">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#cfe4f4] bg-white/80 text-[#3665f3] shadow-[0_8px_18px_-12px_rgba(54,101,243,0.7)]">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         {f.icon}
                       </svg>

@@ -15,7 +15,27 @@ export default async function ListingPage({
     const res = await fetch(`${api}/api/v1/listings/${id}`, { cache: "no-store" });
     if (res.ok) {
       const body = (await res.json()) as { listing?: Record<string, unknown> };
-      if (body.listing) return <LiveListing listing={body.listing as never} />;
+      if (body.listing) {
+        const listing = body.listing as { title?: string; description?: string; price?: number; auction_current_price?: number; format?: string };
+        const jsonLd = {
+          "@context": "https://schema.org",
+          "@type": listing.format === "auction" ? "Offer" : "Product",
+          name: listing.title,
+          description: listing.description,
+          offers: {
+            "@type": "Offer",
+            priceCurrency: "NPR",
+            price: listing.auction_current_price || listing.price || 0,
+            availability: "https://schema.org/InStock",
+          },
+        };
+        return (
+          <>
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <LiveListing listing={body.listing as never} />
+          </>
+        );
+      }
     }
   } catch {
     /* fall back to catalog mock */

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ListingGrid } from "@/components/browse/ListingGrid";
 import { SiteFooter } from "@/components/SiteFooter";
+import { PageHero } from "@/components/ui/PageHero";
 import { categoryNames, listings } from "@/lib/home-data";
 
 const formats = ["All", "Auction", "Buy It Now"];
@@ -19,7 +20,14 @@ export function BrowsePage({
 }) {
   return (
     <>
-      <main className="mx-auto max-w-[1280px] px-4 py-5">
+      <PageHero
+        eyebrow={crumb}
+        title={title}
+        body={subtitle ?? `${items.length.toLocaleString()} results · Same buyer protection as the rest of Nexlo.`}
+        cta="Live listings"
+        href="/search"
+      />
+      <main className="page-shell py-5">
         <p className="text-[12px] text-[#707070]">
           <Link href="/" className="hover:underline">Home</Link>
           <span className="mx-1.5">›</span>
@@ -27,10 +35,7 @@ export function BrowsePage({
         </p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-[22px] font-bold text-[#191919]">{title}</h1>
-            <p className="mt-1 text-[12.5px] text-[#707070]">
-              {subtitle ?? `${items.length.toLocaleString()} results`}
-            </p>
+            <p className="text-[13px] text-[#707070]">{items.length.toLocaleString()} listings</p>
           </div>
           <label className="flex items-center gap-2 text-[12.5px] text-[#333]">
             Sort

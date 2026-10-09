@@ -10,7 +10,9 @@
     "db:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test server/trust.test.mjs",
+    "test:load": "node scripts/load-smoke.mjs"
   },
   "engines": {
     "node": ">=18.18.0"

@@ -76,12 +76,13 @@ export default function ShopPage() {
   return (
     <main className="min-h-screen bg-white">
       <section className="page-shell pt-4">
-        <div className="flex flex-col justify-center gap-6 overflow-hidden rounded-[18px] bg-[#6846f5] px-6 py-6 text-white sm:px-8 lg:h-[300px] lg:flex-row lg:items-center lg:justify-between lg:px-12">
+        <div className="hero-bg flex flex-col justify-center gap-6 overflow-hidden rounded-[16px] px-6 py-8 sm:px-8 lg:h-[300px] lg:flex-row lg:items-center lg:justify-between lg:px-12">
           <div className="max-w-[420px] shrink-0">
-            <h1 className="text-[34px] font-extrabold leading-[1.05] tracking-tight sm:text-[40px]">
-              Direct to you—for free
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f1c3f]">Shop</p>
+            <h1 className="mt-2 text-[34px] font-bold leading-[1.05] tracking-tight text-[#0f1c3f] sm:text-[40px]">
+              Direct to you — for free
             </h1>
-            <p className="mt-3 text-[15px] text-white/85">Get free shipping on these fave items.</p>
+            <p className="mt-3 text-[15px] text-[#333]">Free shipping on these favourite items, with escrow on every order.</p>
           </div>
           <div className="grid w-full max-w-[560px] grid-cols-4 gap-2.5 lg:w-[560px]">
             {bannerTiles.map((tile) => (

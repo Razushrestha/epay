@@ -3,9 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { similarProducts, type ProductDetail } from "@/lib/product-detail";
+import { addToCart, loadWatchIds, toggleWatch } from "@/lib/commerce";
 
-const blue = "#2f6bff";
+const blue = "#3665f3";
 
 type RGB = { r: number; g: number; b: number };
 type Tone = { accent: string; panel: string; soft: string; line: string; deep: string; onAccent: string };
@@ -77,7 +79,7 @@ function pickColor(data: Uint8ClampedArray): RGB {
     if (best && best.n > 0) return { r: best.r / best.n, g: best.g / best.n, b: best.b / best.n };
   }
   if (gray.n > 0) return { r: gray.r / gray.n, g: gray.g / gray.n, b: gray.b / gray.n };
-  return { r: 47, g: 107, b: 255 };
+  return { r: 54, g: 101, b: 243 };
 }
 
 function shades(rgb: RGB): Tone {
@@ -379,10 +381,12 @@ function blurb(product: ProductDetail) {
 }
 
 export function ListingDetail({ product }: { product: ProductDetail }) {
+  const router = useRouter();
   const [index, setIndex] = useState(0);
   const [qty, setQty] = useState(1);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [tab, setTab] = useState<(typeof tabs)[number]>("Description");
   const [savedIds, setSavedIds] = useState<number[]>([]);
   const related = useMemo(() => similarProducts(product), [product]);
@@ -413,19 +417,44 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
 
   const checks = perks.map((perk) => perk.title);
 
+  useEffect(() => {
+    loadWatchIds().then((ids) => {
+      setSaved(ids.has(product.id));
+      setSavedIds([...ids]);
+    });
+  }, [product.id]);
+
+  async function addProductToCart(next: "/cart" | "/checkout") {
+    setAdding(true);
+    try {
+      await addToCart({
+        listingId: product.id,
+        quantity: qty,
+        title: product.title,
+        photo: product.img,
+        price: product.price,
+        seller: product.seller,
+        localOnly: true,
+      });
+      router.push(next);
+    } finally {
+      setAdding(false);
+    }
+  }
+
   return (
     <main className="bg-white">
       <div className="page-shell py-4">
         <nav className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#8b93a1]" aria-label="Breadcrumb">
-          <Link href="/" className="font-medium text-[#2f6bff] hover:underline">
+          <Link href="/" className="font-medium text-[#3665f3] hover:underline">
             Home
           </Link>
           <Icon name="chevron" size={14} />
-          <Link href={`/categories/${product.category}`} className="font-medium text-[#2f6bff] hover:underline">
+          <Link href={`/categories/${product.category}`} className="font-medium text-[#3665f3] hover:underline">
             {product.categoryLabel}
           </Link>
           <Icon name="chevron" size={14} />
-          <Link href={`/categories/${product.category}`} className="font-medium text-[#2f6bff] hover:underline">
+          <Link href={`/categories/${product.category}`} className="font-medium text-[#3665f3] hover:underline">
             {crumb}
           </Link>
           <Icon name="chevron" size={14} />
@@ -458,7 +487,7 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
                 />
                 <div className="relative grid min-h-[420px] md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                   <div className="flex flex-col justify-center px-6 py-8 md:px-8 md:py-10">
-                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#2f6bff] px-3 py-1 text-[12px] font-semibold text-white">
+                    <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#3665f3] px-3 py-1 text-[12px] font-semibold text-white">
                       <Icon name="check" size={13} />
                       Official Store
                     </span>
@@ -470,7 +499,7 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
                     <ul className="mt-6 space-y-3.5">
                       {points.map((point) => (
                         <li key={point.title} className="flex items-center gap-3">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#2f6bff] shadow-[0_6px_16px_-10px_rgba(30,70,160,0.7)]">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#3665f3] shadow-[0_6px_16px_-10px_rgba(30,70,160,0.7)]">
                             <Icon name={point.icon} />
                           </span>
                           <span>
@@ -631,28 +660,32 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
               <span className="text-[13px] font-medium" style={{ color: tone.accent }}>More than 10 available</span>
             </div>
 
-            <Link
-              href="/cart"
-              className="mt-4 flex h-12 items-center justify-center gap-2 rounded-full text-[15px] font-semibold hover:brightness-95"
+            <button
+              type="button"
+              disabled={adding}
+              onClick={() => addProductToCart(product.format === "auction" ? "/cart" : "/checkout")}
+              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full text-[15px] font-semibold hover:brightness-95 disabled:opacity-60"
               style={{ background: tone.accent, color: tone.onAccent }}
             >
               <Icon name="cart" size={18} />
               {product.format === "auction" ? "Place bid" : "Buy It Now"}
-            </Link>
-            <Link
-              href="/cart"
-              className="mt-2.5 flex h-12 items-center justify-center gap-2 rounded-full border bg-white text-[15px] font-semibold"
+            </button>
+            <button
+              type="button"
+              disabled={adding}
+              onClick={() => addProductToCart("/cart")}
+              className="mt-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-full border bg-white text-[15px] font-semibold disabled:opacity-60"
               style={{ borderColor: tone.accent, color: tone.accent }}
             >
               <Icon name="cart" size={18} />
-              Add to Cart
-            </Link>
+              {adding ? "Adding…" : "Add to Cart"}
+            </button>
           </aside>
 
           <div className="grid grid-cols-2 gap-3 pt-4 sm:grid-cols-4 lg:self-center">
             {perks.map((perk) => (
               <div key={perk.title} className="flex h-[72px] items-center gap-2.5 rounded-2xl border border-[#e7eef6] bg-white px-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef4ff] text-[#2f6bff]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef4ff] text-[#3665f3]">
                   <Icon name={perk.icon} />
                 </span>
                 <span className="min-w-0">
@@ -666,12 +699,23 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
           <div className="px-5 py-4" style={{ background: tone.panel }}>
             <button
               type="button"
-              onClick={() => setSaved((current) => !current)}
+              onClick={async () => {
+                const currently = saved;
+                setSaved(!currently);
+                await toggleWatch({
+                  listingId: product.id,
+                  saved: currently,
+                  title: product.title,
+                  photo: product.img,
+                  price: product.price,
+                  localOnly: true,
+                });
+              }}
               className="flex w-full items-center justify-center gap-2 text-[14px] font-medium"
               style={{ color: tone.accent }}
             >
               <Icon name="heart" size={16} />
-              {saved ? "Saved to Wishlist" : "Add to Wishlist"}
+              {saved ? "Saved to watchlist" : "Add to watchlist"}
             </button>
             <div className="mt-3 grid grid-cols-3 gap-2 rounded-2xl border bg-white/70 px-2 py-3" style={{ borderColor: tone.line }}>
               {[
@@ -693,7 +737,7 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
           <section className="pt-8">
             <div className="flex items-center justify-between">
               <h2 className="text-[18px] font-bold text-[#121826]">Similar Products</h2>
-              <Link href={`/categories/${product.category}`} className="text-[13px] font-semibold text-[#2f6bff] hover:underline">
+              <Link href={`/categories/${product.category}`} className="text-[13px] font-semibold text-[#3665f3] hover:underline">
                 See All →
               </Link>
             </div>
@@ -706,11 +750,20 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
                     <button
                       type="button"
                       aria-label={wished ? "Remove from wishlist" : "Save item"}
-                      onClick={() =>
+                      onClick={async () => {
+                        const currently = savedIds.includes(item.id);
                         setSavedIds((current) =>
-                          current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id],
-                        )
-                      }
+                          currently ? current.filter((id) => id !== item.id) : [...current, item.id],
+                        );
+                        await toggleWatch({
+                          listingId: item.id,
+                          saved: currently,
+                          title: item.title,
+                          photo: item.img,
+                          price: item.price,
+                          localOnly: true,
+                        });
+                      }}
                       className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#98a2b3]"
                       style={{ color: wished ? "#ef3b3b" : undefined }}
                     >
@@ -817,7 +870,7 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
                   </div>
                   <div>
                     <p className="font-semibold text-[#121826]">Can I save it for later?</p>
-                    <p className="mt-1">Add to Wishlist keeps it on this page until you leave.</p>
+                    <p className="mt-1">Add to watchlist saves the item so it shows under Saved.</p>
                   </div>
                 </div>
               )}

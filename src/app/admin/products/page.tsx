@@ -51,11 +51,11 @@ export default function AdminProductsPage() {
         </div>
         <div className="flex gap-2">
           <Link href="/admin/catalog" className="h-10 rounded-full border border-[#e2e8f0] bg-white px-4 text-[14px] font-semibold leading-10 text-[#0f1c3f]">Catalog</Link>
-          <Link href="/sell/create" className="h-10 rounded-full bg-[#2f6bff] px-4 text-[14px] font-semibold leading-10 text-white">Add Product</Link>
+          <Link href="/sell/create" className="h-10 rounded-full bg-[#3665f3] px-4 text-[14px] font-semibold leading-10 text-white">Add Product</Link>
         </div>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); load(); }}>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or seller" className="h-10 min-w-[220px] flex-1 rounded-lg border border-[#e2e8f0] px-3" />
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 rounded-lg border border-[#e2e8f0] px-3">
@@ -87,7 +87,7 @@ export default function AdminProductsPage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={row.thumbnail_url || row.photo_url || ""} alt="" className="h-10 w-10 rounded-lg object-cover" />
                       ) : (
-                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#f5f8fc] text-[#8a94a6]">▢</span>
+                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#f7f7f7] text-[#8a94a6]">▢</span>
                       )}
                       <span>
                         <span className="block font-semibold text-[#0f1c3f]">{row.title}</span>
@@ -103,7 +103,7 @@ export default function AdminProductsPage() {
                     <div className="flex flex-wrap gap-2">
                       <button type="button" className="text-[#12a37e] hover:underline" onClick={() => patch(row.id, { moderationStatus: "approved", status: "active" })}>Approve</button>
                       <button type="button" className="text-[#e5484d] hover:underline" onClick={() => patch(row.id, { moderationStatus: "rejected", status: "suspended", reason: "Does not meet listing policy" })}>Reject</button>
-                      <button type="button" className="text-[#2f6bff] hover:underline" onClick={() => patch(row.id, { featured: !row.is_featured })}>{row.is_featured ? "Unfeature" : "Feature"}</button>
+                      <button type="button" className="text-[#3665f3] hover:underline" onClick={() => patch(row.id, { featured: !row.is_featured })}>{row.is_featured ? "Unfeature" : "Feature"}</button>
                       <button type="button" className="text-[#6b7587] hover:underline" onClick={() => patch(row.id, { status: "removed" })}>Remove</button>
                     </div>
                   </td>

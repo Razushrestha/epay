@@ -42,7 +42,7 @@ export default function AdminPayoutsPage() {
           Ledger {integrity.balanced ? "balanced" : "imbalanced"} · debit {money(integrity.debit)} · credit {money(integrity.credit)}
         </div>
       ) : null}
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <table className="w-full text-left text-[13.5px]">
           <thead>
             <tr className="border-b text-[11px] font-semibold tracking-[0.06em] text-[#8a94a6]">
@@ -70,7 +70,7 @@ export default function AdminPayoutsPage() {
                       <button type="button" className="text-[#e5484d]" onClick={async () => { await accountApi(`/api/v1/admin/payouts/${row.public_id}`, { method: "PATCH", body: JSON.stringify({ status: "rejected" }) }); await load(); }}>Reject</button>
                     </>
                   ) : row.status === "approved" ? (
-                    <button type="button" className="text-[#2f6bff]" onClick={async () => { await accountApi(`/api/v1/admin/payouts/${row.public_id}`, { method: "PATCH", body: JSON.stringify({ status: "paid", paidRef: "manual" }) }); await load(); }}>Mark paid</button>
+                    <button type="button" className="text-[#3665f3]" onClick={async () => { await accountApi(`/api/v1/admin/payouts/${row.public_id}`, { method: "PATCH", body: JSON.stringify({ status: "paid", paidRef: "manual" }) }); await load(); }}>Mark paid</button>
                   ) : null}
                 </td>
               </tr>

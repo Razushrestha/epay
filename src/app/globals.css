@@ -76,3 +76,37 @@ body:has(.auth-lock) {
     radial-gradient(50% 90% at 62% 90%, rgba(96, 165, 250, 0.35), transparent 55%),
     linear-gradient(102deg, #4c1d95 0%, #5b21b6 28%, #6d28d9 52%, #a21caf 78%, #ec4899 100%);
 }
+
+.nexlo-card {
+  border: 1px solid #e7e7e7;
+  background: #fff;
+  border-radius: 12px;
+}
+
+.nexlo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 9999px;
+  background: #0f1c3f;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 10px 20px;
+}
+.nexlo-btn:hover {
+  background: #1d2f63;
+}
+.nexlo-btn-blue {
+  background: #3665f3;
+}
+.nexlo-btn-blue:hover {
+  background: #2953c6;
+}
+.nexlo-link {
+  color: #3665f3;
+}
+.nexlo-link:hover {
+  text-decoration: underline;
+}

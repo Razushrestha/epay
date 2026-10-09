@@ -67,6 +67,17 @@ export async function handleInbox(method, pathParts, auth, body) {
     await query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [convo.id]);
     const other = Number(convo.buyer_id) === Number(auth.user_id) ? convo.seller_id : convo.buyer_id;
     await notify(other, "message", "New message", text.slice(0, 120), `/account?tab=messages`);
+    if (Number(auth.user_id) === Number(convo.buyer_id)) {
+      const vac = await query(
+        `SELECT message FROM vacation_mode WHERE seller_id = $1 AND active = TRUE AND auto_reply = TRUE AND (ends_at IS NULL OR ends_at > NOW())`,
+        [convo.seller_id],
+      );
+      if (vac.rows[0]) {
+        const reply = vac.rows[0].message || "This seller is on vacation and will reply when they return.";
+        await query(`INSERT INTO messages (conversation_id, sender_id, body) VALUES ($1,$2,$3)`, [convo.id, convo.seller_id, reply]);
+        await query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [convo.id]);
+      }
+    }
     return { status: 201, body: { data: inserted.rows[0] } };
   }
 

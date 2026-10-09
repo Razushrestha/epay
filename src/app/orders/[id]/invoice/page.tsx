@@ -28,10 +28,10 @@ export default function InvoicePage() {
     <main className="mx-auto max-w-3xl bg-white p-10 print:p-0">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold">Nexlo VAT invoice</h1>
-          <p className="text-sm text-[#6b7587]">{data.invoiceNumber}</p>
+          <h1 className="text-2xl font-bold text-[#191919]">Nexlo VAT invoice</h1>
+          <p className="text-sm text-[#707070]">{data.invoiceNumber}</p>
         </div>
-        <button type="button" onClick={() => window.print()} className="rounded-full bg-[#2f6bff] px-4 py-2 text-sm text-white print:hidden">Print / PDF</button>
+        <button type="button" onClick={() => window.print()} className="nexlo-btn nexlo-btn-blue print:hidden">Print / PDF</button>
       </div>
       <p className="mt-4 text-sm">Bill to: {data.order.shipping_name || "Customer"}</p>
       <p className="text-sm">Order {data.order.order_number} · {new Date(data.order.created_at).toLocaleDateString()}</p>

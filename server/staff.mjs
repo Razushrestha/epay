@@ -201,6 +201,12 @@ export async function handleStaffExtras(req, res, ctx, actor) {
     }
     if (!fields.length) return json(req, res, 400, { error: "Nothing to update" });
     await (await db()).query(`UPDATE listings SET ${fields.join(", ")}, updated_at = NOW() WHERE id = $1`, [listingId, ...values]);
+    try {
+      const { audit } = await import("./rbac.mjs");
+      await audit(actor, "listing.moderate", "listing", listingId, body);
+    } catch {
+      /* ignore */
+    }
     return json(req, res, 200, { data: { id: listingId } });
   }
 
@@ -324,7 +330,7 @@ export async function handleStaffExtras(req, res, ctx, actor) {
     const { rows } = await safe(`SELECT value FROM platform_settings WHERE key = 'platform'`);
     const stored = rows[0]?.value || {};
     const staff = await safe(
-      `SELECT u.public_id, u.email, COALESCE(p.display_name, u.email) AS name
+      `SELECT u.public_id, u.email, u.staff_role, COALESCE(p.display_name, u.email) AS name
        FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id
        WHERE u.is_staff = TRUE AND u.deleted_at IS NULL`,
     );

@@ -17,6 +17,14 @@ export async function accountApi<T = unknown>(path: string, options: RequestInit
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (typeof window !== "undefined") {
+    let session = localStorage.getItem("nexlo_session");
+    if (!session) {
+      session = crypto.randomUUID().replaceAll("-", "");
+      localStorage.setItem("nexlo_session", session);
+    }
+    headers.set("x-session-id", session);
+  }
   const res = await fetch(`${apiBase}${path}`, { ...options, headers });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? "Request failed");

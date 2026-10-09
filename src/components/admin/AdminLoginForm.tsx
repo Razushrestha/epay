@@ -140,7 +140,7 @@ export function AdminLoginForm() {
   }
 
   const fieldWrap =
-    "flex h-[48px] items-center gap-3 rounded-full border border-[#e4ebf4] bg-[#f7faff] px-4 text-[#9aa6b8] transition focus-within:border-[#2f6bff] focus-within:bg-white focus-within:text-[#2f6bff] focus-within:shadow-[0_0_0_4px_rgba(47,107,255,0.1)]";
+    "flex h-[48px] items-center gap-3 rounded-full border border-[#e4ebf4] bg-[#f7faff] px-4 text-[#9aa6b8] transition focus-within:border-[#3665f3] focus-within:bg-white focus-within:text-[#3665f3] focus-within:shadow-[0_0_0_4px_rgba(54,101,243,0.1)]";
 
   return (
     <div className="w-full">
@@ -161,9 +161,9 @@ export function AdminLoginForm() {
             inputMode="numeric"
             autoComplete="one-time-code"
             placeholder="6-digit code"
-            className="h-[48px] w-full rounded-full border border-[#e4ebf4] bg-[#f7faff] px-4 text-[14.5px] outline-none focus:border-[#2f6bff] focus:bg-white"
+            className="h-[48px] w-full rounded-full border border-[#e4ebf4] bg-[#f7faff] px-4 text-[14.5px] outline-none focus:border-[#3665f3] focus:bg-white"
           />
-          <button type="submit" disabled={loading} className="flex h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#2f6bff] text-[15px] font-semibold text-white disabled:opacity-60">
+          <button type="submit" disabled={loading} className="flex h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white disabled:opacity-60">
             {loading ? "Checking…" : "Confirm"}
           </button>
         </form>
@@ -195,21 +195,21 @@ export function AdminLoginForm() {
               placeholder="Password"
               className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] text-[#0f1c3f] outline-none placeholder:text-[#9aa6b8]"
             />
-            <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"} className="text-[#9aa6b8] hover:text-[#2f6bff]">
+            <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"} className="text-[#9aa6b8] hover:text-[#3665f3]">
               <EyeIcon off={showPassword} />
             </button>
           </div>
           <div className="flex items-center justify-between px-0.5 pt-0.5">
             <label className="flex cursor-pointer select-none items-center gap-2 text-[13.5px] text-[#3a4458]">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="peer sr-only" />
-              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border border-[#c9d2e0] bg-white text-transparent transition peer-checked:border-[#2f6bff] peer-checked:bg-[#2f6bff] peer-checked:text-white">
+              <span className="flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border border-[#c9d2e0] bg-white text-transparent transition peer-checked:border-[#3665f3] peer-checked:bg-[#3665f3] peer-checked:text-white">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m5 12.5 4.5 4.5L19 7.5" />
                 </svg>
               </span>
               Remember me
             </label>
-            <Link href="/forgot" className="text-[13.5px] font-medium text-[#2f6bff] hover:underline">
+            <Link href="/forgot" className="text-[13.5px] font-medium text-[#3665f3] hover:underline">
               Forgot password?
             </Link>
           </div>
@@ -222,7 +222,7 @@ export function AdminLoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="flex h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#2f6bff] text-[15px] font-semibold text-white shadow-[0_10px_22px_-8px_rgba(47,107,255,0.85)] transition hover:bg-[#2459e0] disabled:opacity-60"
+            className="flex h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_10px_22px_-8px_rgba(54,101,243,0.85)] transition hover:bg-[#2953c6] disabled:opacity-60"
           >
             {loading ? "Signing in…" : "Sign In"}
             {!loading ? (
@@ -237,7 +237,7 @@ export function AdminLoginForm() {
       {canClaim ? (
         <button
           type="button"
-          className="mt-3 h-[48px] w-full rounded-full border border-[#2f6bff] text-[14px] font-semibold text-[#2f6bff]"
+          className="mt-3 h-[48px] w-full rounded-full border border-[#3665f3] text-[14px] font-semibold text-[#3665f3]"
           onClick={async () => {
             try {
               await accountApi("/api/v1/admin/claim", { method: "POST", body: "{}" });
@@ -258,7 +258,7 @@ export function AdminLoginForm() {
       </div>
 
       <div className="flex items-center gap-3 rounded-[18px] border border-[#eef2f7] bg-[#f7faff] px-4 py-3.5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#2f6bff] shadow-sm">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#3665f3] shadow-sm">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
             <path d="M12 3 5 6.2v5.3c0 4.2 2.7 8 7 9.5 4.3-1.5 7-5.3 7-9.5V6.2L12 3Z" />
             <path d="m9 12 2 2 4-4" />

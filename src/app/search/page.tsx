@@ -4,6 +4,10 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiBase } from "@/lib/account-api";
+import { SiteFooter } from "@/components/SiteFooter";
+import { PageHero } from "@/components/ui/PageHero";
+import { SaveButton } from "@/components/commerce/SaveButton";
+import { addToCart } from "@/lib/commerce";
 
 interface Listing {
   id: number;
@@ -199,28 +203,32 @@ function SearchContent() {
   const totalPages = Math.ceil(total / limit);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="min-h-screen bg-white">
+      <PageHero
+        eyebrow="Search"
+        title={query ? `Results for “${query}”` : "Browse listings"}
+        body={total > 0 ? `${total.toLocaleString()} items · Save with the heart or add to cart from here.` : "Filter by category, format, and price. Escrow covers every purchase."}
+        cta="Today's deals"
+        href="/deals"
+      />
+      <div className="page-shell py-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            {query ? `Search results for "${query}"` : "Browse Listings"}
-          </h1>
-          {total > 0 && <p className="mt-2 text-gray-600">{total.toLocaleString()} items found</p>}
+          {total > 0 && <p className="text-[14px] text-[#707070]">{total.toLocaleString()} items</p>}
         </div>
 
         {error && (
-          <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-800">
-            <strong>Error:</strong> {error}
+          <div className="mb-6 rounded-xl border border-[#f5c2c7] bg-[#fff5f5] p-4 text-[14px] text-[#e53238]">
+            {error}
           </div>
         )}
 
-        <div className="flex gap-6">
+        <div className="flex flex-col gap-6 lg:flex-row">
           {/* Filters Sidebar */}
-          <div className="w-64 flex-shrink-0">
-            <div className="sticky top-4 rounded-lg bg-white p-4 shadow">
+          <div className="w-full shrink-0 lg:w-64">
+            <div className="nexlo-card sticky top-4 p-4">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
-                <button onClick={clearFilters} className="text-sm text-blue-600 hover:text-blue-700">
+                <h2 className="text-[15px] font-bold text-[#191919]">Filters</h2>
+                <button onClick={clearFilters} className="nexlo-link text-[13px]">
                   Clear
                 </button>
               </div>
@@ -228,11 +236,11 @@ function SearchContent() {
               <div className="space-y-4">
                 {/* Category */}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">Category</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Category</label>
                   <select
                     value={filters.category_id}
                     onChange={(e) => updateFilter("category_id", e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
                   >
                     <option value="">All Categories</option>
                     {categories.map((cat) => (
@@ -245,11 +253,11 @@ function SearchContent() {
 
                 {/* Format */}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">Format</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Format</label>
                   <select
                     value={filters.format}
                     onChange={(e) => updateFilter("format", e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
                   >
                     <option value="">All Formats</option>
                     <option value="fixed">Buy It Now</option>
@@ -259,11 +267,11 @@ function SearchContent() {
 
                 {/* Brand */}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">Brand</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Brand</label>
                   <select
                     value={filters.brand_id}
                     onChange={(e) => updateFilter("brand_id", e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
                   >
                     <option value="">All Brands</option>
                     {brands.slice(0, 50).map((brand) => (
@@ -276,11 +284,11 @@ function SearchContent() {
 
                 {/* Condition */}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">Condition</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Condition</label>
                   <select
                     value={filters.condition}
                     onChange={(e) => updateFilter("condition", e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
                   >
                     <option value="">Any Condition</option>
                     {conditions.map((cond) => (
@@ -293,21 +301,21 @@ function SearchContent() {
 
                 {/* Price Range */}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">Price Range (NPR)</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Price (NPR)</label>
                   <div className="flex gap-2">
                     <input
                       type="number"
                       placeholder="Min"
                       value={filters.min_price}
                       onChange={(e) => updateFilter("min_price", e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
                     />
                     <input
                       type="number"
                       placeholder="Max"
                       value={filters.max_price}
                       onChange={(e) => updateFilter("max_price", e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
                     />
                   </div>
                 </div>
@@ -319,13 +327,13 @@ function SearchContent() {
           <div className="flex-1">
             {/* Sort */}
             <div className="mb-4 flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                {loading ? "Loading..." : `Showing ${listings.length} of ${total.toLocaleString()} results`}
+              <div className="text-[13px] text-[#707070]">
+                {loading ? "Loading…" : `${listings.length} of ${total.toLocaleString()} results`}
               </div>
               <select
                 value={filters.sort}
                 onChange={(e) => updateFilter("sort", e.target.value)}
-                className="rounded border border-gray-300 px-3 py-2 text-sm"
+                className="h-9 rounded-full border border-[#e7e7e7] px-3 text-[13px]"
               >
                 <option value="newest">Newest First</option>
                 <option value="price_low">Price: Low to High</option>
@@ -336,60 +344,86 @@ function SearchContent() {
             </div>
 
             {loading ? (
-              <div className="py-12 text-center text-gray-500">Loading...</div>
+              <div className="py-12 text-center text-[14px] text-[#707070]">Loading…</div>
             ) : listings.length === 0 ? (
-              <div className="rounded-lg bg-white p-12 text-center shadow">
-                <p className="text-gray-500">No listings found. Try adjusting your filters.</p>
+              <div className="nexlo-card p-12 text-center">
+                <p className="text-[14px] text-[#707070]">No listings found. Try adjusting your filters.</p>
               </div>
             ) : (
               <>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {listings.map((listing) => (
-                    <Link
+                    <article
                       key={listing.id}
-                      href={`/listing/${listing.id}`}
-                      className="group overflow-hidden rounded-lg bg-white shadow transition hover:shadow-lg"
+                      className="nexlo-card group relative overflow-hidden transition hover:shadow-[0_8px_24px_-16px_rgba(15,28,63,0.35)]"
                     >
-                      <div className="relative aspect-square overflow-hidden bg-gray-100">
-                        {listing.primary_photo ? (
-                          <img
-                            src={listing.primary_photo}
-                            alt={listing.title}
-                            className="h-full w-full object-cover transition group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-gray-400">
-                            No Image
-                          </div>
-                        )}
-                        {listing.shipping_free && (
-                          <div className="absolute top-2 left-2 rounded bg-green-500 px-2 py-1 text-xs font-semibold text-white">
-                            Free Shipping
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-3">
-                        <h3 className="line-clamp-2 text-sm font-medium text-gray-900 group-hover:text-blue-600">
-                          {listing.title}
-                        </h3>
-                        <div className="mt-2 flex items-baseline gap-2">
-                          <span className="text-lg font-bold text-gray-900">
-                            {listing.format === "auction" && listing.auction_current_price
-                              ? formatPrice(listing.auction_current_price)
-                              : formatPrice(listing.price)}
-                          </span>
-                          {listing.format === "auction" && (
-                            <span className="text-xs text-gray-500">{listing.auction_bid_count} bids</span>
+                      <Link href={`/listing/${listing.id}`} className="block">
+                        <div className="relative aspect-square overflow-hidden bg-[#f7f7f7]">
+                          {listing.primary_photo ? (
+                            <img
+                              src={listing.primary_photo}
+                              alt={listing.title}
+                              className="h-full w-full object-cover transition group-hover:scale-105"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-[12px] text-[#707070]">
+                              No image
+                            </div>
+                          )}
+                          {listing.shipping_free && (
+                            <div className="absolute top-2 left-2 rounded-full bg-[#0d9488] px-2 py-1 text-[11px] font-semibold text-white">
+                              Free shipping
+                            </div>
                           )}
                         </div>
-                        {listing.auction_ends_at && (
-                          <div className="mt-1 text-xs text-red-600">
-                            {formatTimeRemaining(listing.auction_ends_at)} left
+                        <div className="p-3 pb-12">
+                          <h3 className="line-clamp-2 text-[13px] font-medium text-[#191919] group-hover:text-[#3665f3]">
+                            {listing.title}
+                          </h3>
+                          <div className="mt-2 flex items-baseline gap-2">
+                            <span className="text-[16px] font-bold text-[#191919]">
+                              {listing.format === "auction" && listing.auction_current_price
+                                ? formatPrice(listing.auction_current_price)
+                                : formatPrice(listing.price)}
+                            </span>
+                            {listing.format === "auction" && (
+                              <span className="text-[11px] text-[#707070]">{listing.auction_bid_count} bids</span>
+                            )}
                           </div>
-                        )}
-                        <div className="mt-2 text-xs text-gray-500">{listing.category_name}</div>
-                      </div>
-                    </Link>
+                          {listing.auction_ends_at && (
+                            <div className="mt-1 text-[11px] text-[#e53238]">
+                              {formatTimeRemaining(listing.auction_ends_at)} left
+                            </div>
+                          )}
+                          <div className="mt-2 text-[11px] text-[#707070]">{listing.category_name}</div>
+                        </div>
+                      </Link>
+                      <SaveButton
+                        listingId={listing.id}
+                        title={listing.title}
+                        photo={listing.primary_photo}
+                        price={listing.auction_current_price || listing.price || 0}
+                        className="absolute right-2 top-2 z-10"
+                      />
+                      {listing.format !== "auction" ? (
+                        <button
+                          type="button"
+                          className="absolute bottom-3 left-3 right-3 h-8 rounded-full bg-[#0f1c3f] text-[12px] font-semibold text-white"
+                          onClick={async (event) => {
+                            event.preventDefault();
+                            await addToCart({
+                              listingId: listing.id,
+                              title: listing.title,
+                              photo: listing.primary_photo,
+                              price: listing.price || 0,
+                              seller: listing.seller_username,
+                            });
+                          }}
+                        >
+                          Add to cart
+                        </button>
+                      ) : null}
+                    </article>
                   ))}
                 </div>
 
@@ -399,17 +433,17 @@ function SearchContent() {
                     <button
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="rounded border border-gray-300 px-4 py-2 text-sm disabled:opacity-50"
+                      className="h-9 rounded-full border border-[#e7e7e7] px-4 text-[13px] disabled:opacity-50"
                     >
                       Previous
                     </button>
-                    <span className="flex items-center px-4 text-sm text-gray-700">
+                    <span className="flex items-center px-4 text-[13px] text-[#707070]">
                       Page {currentPage} of {totalPages}
                     </span>
                     <button
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="rounded border border-gray-300 px-4 py-2 text-sm disabled:opacity-50"
+                      className="h-9 rounded-full border border-[#e7e7e7] px-4 text-[13px] disabled:opacity-50"
                     >
                       Next
                     </button>
@@ -420,13 +454,14 @@ function SearchContent() {
           </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={<div className="py-12 text-center">Loading...</div>}>
+    <Suspense fallback={<div className="py-12 text-center text-[14px] text-[#707070]">Loading…</div>}>
       <SearchContent />
     </Suspense>
   );

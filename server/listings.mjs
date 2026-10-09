@@ -5,6 +5,7 @@
 
 import { query } from './db.mjs';
 import { uploadPhoto, deletePhoto, setPrimaryPhoto } from './upload.mjs';
+import { enforceVerification, evaluateUser } from './trust.mjs';
 
 /**
  * Main listings router
@@ -152,6 +153,7 @@ async function getListings(params) {
   const brandId = params.get('brand_id');
   const format = params.get('format'); // fixed, auction, both
   const condition = params.get('condition');
+  const seller = params.get('seller');
   const minPrice = params.get('min_price');
   const maxPrice = params.get('max_price');
   const sort = params.get('sort') || 'newest'; // newest, price_low, price_high, ending_soon
@@ -175,6 +177,11 @@ async function getListings(params) {
     JOIN users u ON l.seller_id = u.id
     LEFT JOIN feedback_scores fs ON fs.user_id = u.id
     WHERE l.status = 'active' AND l.moderation_status = 'approved'
+      AND NOT EXISTS (
+        SELECT 1 FROM vacation_mode v
+        WHERE v.seller_id = l.seller_id AND v.active = TRUE AND v.hide_listings = TRUE
+          AND (v.ends_at IS NULL OR v.ends_at > NOW())
+      )
   `;
 
   const values = [];
@@ -198,6 +205,11 @@ async function getListings(params) {
   if (condition) {
     sql += ` AND l.condition_id = $${paramCount++}`;
     values.push(condition);
+  }
+
+  if (seller) {
+    sql += ` AND u.username = $${paramCount++}`;
+    values.push(seller);
   }
 
   if (minPrice) {
@@ -336,6 +348,11 @@ async function searchListings(params) {
     JOIN categories c ON l.category_id = c.id
     JOIN users u ON l.seller_id = u.id
     WHERE l.status = 'active' AND l.moderation_status = 'approved'
+      AND NOT EXISTS (
+        SELECT 1 FROM vacation_mode v
+        WHERE v.seller_id = l.seller_id AND v.active = TRUE AND v.hide_listings = TRUE
+          AND (v.ends_at IS NULL OR v.ends_at > NOW())
+      )
       AND to_tsvector('english', l.title || ' ' || l.description) @@ plainto_tsquery('english', $1)
   `;
 
@@ -388,6 +405,8 @@ async function getFeaturedListings() {
  * Create listing (seller)
  */
 async function createListing(data, userId) {
+  const verified = await enforceVerification(userId);
+  if (verified) return verified;
   // Verify user is a seller
   const userCheck = await query('SELECT is_seller FROM users WHERE id = $1', [userId]);
   if (!userCheck.rows[0]?.is_seller) {
@@ -410,6 +429,15 @@ async function createListing(data, userId) {
   const publishedAt = publish_immediately ? 'NOW()' : 'NULL';
   const durationHours = Math.max(1, Math.min(720, Number(auction_duration) || 168));
   const startPrice = auction_start_price || price || 0;
+  const risk = await evaluateUser(userId, { kind: 'listing', title, description });
+  if (risk.blocked) return { status: 403, body: { error: 'This listing was blocked by trust and safety rules' } };
+  const moderation = risk.flagged ? 'flagged' : 'approved';
+  if (risk.flagged) {
+    await query(
+      `INSERT INTO moderation_queue (item_type, item_id, reason, score) VALUES ('listing','pending', $1, $2)`,
+      [risk.hits.map((h) => h.name).join(','), risk.score],
+    ).catch(() => {});
+  }
 
   const result = await query(
     `INSERT INTO listings (
@@ -419,11 +447,11 @@ async function createListing(data, userId) {
       allow_best_offer, auto_accept_price, auto_decline_price,
       shipping_free, shipping_cost, shipping_international, shipping_international_cost,
       item_location, sku, upc, specifics, status, published_at,
-      auction_starts_at, auction_ends_at, auction_current_price
+      auction_starts_at, auction_ends_at, auction_current_price, moderation_status
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, ${publishedAt},
       ${publish_immediately && (format === 'auction' || format === 'both') ? 'NOW()' : 'NULL'},
       ${publish_immediately && (format === 'auction' || format === 'both') ? `NOW() + INTERVAL '${durationHours} hours'` : 'NULL'},
-      $27)
+      $27, $28)
     RETURNING *`,
     [
       userId, category_id, brand_id, title, subtitle, description,
@@ -431,9 +459,15 @@ async function createListing(data, userId) {
       auction_start_price, auction_reserve_price, auction_duration,
       allow_best_offer, auto_accept_price, auto_decline_price,
       shipping_free, shipping_cost, shipping_international, shipping_international_cost,
-      item_location, sku, upc, JSON.stringify(specifics || {}), status, startPrice
+      item_location, sku, upc, JSON.stringify(specifics || {}), status, startPrice, moderation
     ]
   );
+  if (risk.flagged && result.rows[0]) {
+    await query(
+      `INSERT INTO moderation_queue (item_type, item_id, reason, score) VALUES ('listing', $1, $2, $3)`,
+      [String(result.rows[0].id), 'prohibited or velocity', risk.score],
+    ).catch(() => {});
+  }
 
   return { status: 201, body: { listing: result.rows[0] } };
 }
@@ -507,6 +541,8 @@ async function deleteListing(listingId, userId) {
  * Publish listing
  */
 async function publishListing(listingId, userId) {
+  const verified = await enforceVerification(userId);
+  if (verified) return verified;
   const ownerCheck = await query('SELECT seller_id, status FROM listings WHERE id = $1', [listingId]);
   if (!ownerCheck.rows[0] || ownerCheck.rows[0].seller_id !== userId) {
     return { status: 403, body: { error: 'Not authorized' } };

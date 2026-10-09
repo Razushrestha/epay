@@ -1,6 +1,7 @@
 import { closeExpiredAuctions, expireUnpaidWinners } from "./auctions.mjs";
 import { expireOffers } from "./offers.mjs";
 import { autoCompleteOrders } from "./fulfillment.mjs";
+import { escalateSilentCases } from "./returns.mjs";
 import { ledgerIntegrity } from "./ledger.mjs";
 import { notify } from "./notify.mjs";
 import { query } from "./db.mjs";
@@ -78,6 +79,7 @@ async function tick() {
     await expireUnpaidWinners();
     await expireOffers();
     await autoCompleteOrders();
+    await escalateSilentCases();
     await notifyEndingSoon();
     const now = Date.now();
     if (now - lastLedgerCheck > 6 * 3600 * 1000) {

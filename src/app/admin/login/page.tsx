@@ -21,26 +21,26 @@ const features = [
 function LaptopScene() {
   return (
     <div className="relative mx-auto mt-8 w-full max-w-[560px]">
-      <div className="relative z-10 origin-bottom -rotate-[8deg] rounded-[18px] border-[10px] border-[#d7e4f4] bg-white shadow-[0_30px_60px_-24px_rgba(47,107,255,0.45)]">
+      <div className="relative z-10 origin-bottom -rotate-[8deg] rounded-[18px] border-[10px] border-[#d7e4f4] bg-white shadow-[0_30px_60px_-24px_rgba(54,101,243,0.45)]">
         <div className="flex min-h-[220px] overflow-hidden rounded-[8px]">
-          <aside className="w-[108px] shrink-0 bg-[#f4f8ff] px-2.5 py-3">
+          <aside className="w-[108px] shrink-0 bg-[#eef3ff] px-2.5 py-3">
             <div className="mb-3 flex items-center gap-1 px-1">
               <Image src="/logo-transparent.png" alt="" width={80} height={24} className="h-5 w-auto" />
             </div>
             {["Dashboard", "Users", "Products", "Orders", "Analytics", "Settings"].map((item, i) => (
-              <p key={item} className={`rounded-md px-2 py-1 text-[8px] font-semibold ${i === 0 ? "bg-[#e8f0ff] text-[#2f6bff]" : "text-[#8a94a6]"}`}>
+              <p key={item} className={`rounded-md px-2 py-1 text-[8px] font-semibold ${i === 0 ? "bg-[#e8f0ff] text-[#3665f3]" : "text-[#8a94a6]"}`}>
                 {item}
               </p>
             ))}
           </aside>
           <div className="flex-1 bg-white p-3">
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-[#f4f8ff] p-2">
+              <div className="rounded-lg bg-[#eef3ff] p-2">
                 <p className="text-[7px] text-[#8a94a6]">Total Users</p>
                 <p className="text-[13px] font-extrabold text-[#0f1c3f]">2,548</p>
                 <p className="text-[7px] font-semibold text-[#16a34a]">↑ 12%</p>
               </div>
-              <div className="rounded-lg bg-[#f4f8ff] p-2">
+              <div className="rounded-lg bg-[#eef3ff] p-2">
                 <p className="text-[7px] text-[#8a94a6]">Total Orders</p>
                 <p className="text-[13px] font-extrabold text-[#0f1c3f]">1,248</p>
                 <p className="text-[7px] font-semibold text-[#16a34a]">↑ 8%</p>
@@ -48,12 +48,12 @@ function LaptopScene() {
             </div>
             <p className="mt-2 text-[8px] font-bold text-[#0f1c3f]">Sales Overview</p>
             <svg viewBox="0 0 180 48" className="mt-1 h-[48px] w-full" aria-hidden>
-              <path d="M2 38 C 22 36, 32 18, 52 22 S 82 40, 102 20 S 142 8, 178 14" fill="none" stroke="#2f6bff" strokeWidth="2.4" />
+              <path d="M2 38 C 22 36, 32 18, 52 22 S 82 40, 102 20 S 142 8, 178 14" fill="none" stroke="#3665f3" strokeWidth="2.4" />
               <path d="M2 38 C 22 36, 32 18, 52 22 S 82 40, 102 20 S 142 8, 178 14 L178 48 L2 48 Z" fill="url(#salesFill)" opacity=".35" />
               <defs>
                 <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#2f6bff" />
-                  <stop offset="1" stopColor="#2f6bff" stopOpacity="0" />
+                  <stop offset="0" stopColor="#3665f3" />
+                  <stop offset="1" stopColor="#3665f3" stopOpacity="0" />
                 </linearGradient>
               </defs>
             </svg>
@@ -73,7 +73,7 @@ function LaptopScene() {
 
       <div className="absolute -right-4 bottom-16 z-30 w-[168px] rounded-2xl bg-white px-3.5 py-3 shadow-[0_18px_40px_-18px_rgba(15,40,80,0.45)] ring-1 ring-[#e7eef6]">
         <p className="flex items-center gap-1.5 text-[13px] font-extrabold text-[#0f1c3f]">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#eaf1ff] text-[#2f6bff]">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#eaf1ff] text-[#3665f3]">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
               <path d="M12 3 5 6.2v5.3c0 4.2 2.7 8 7 9.5 4.3-1.5 7-5.3 7-9.5V6.2L12 3Z" />
             </svg>
@@ -97,7 +97,7 @@ export default function AdminLoginPage() {
         <Link href="/" className="w-fit" aria-label="Nexlo home">
           <Image src="/logo-transparent.png" alt="Nexlo — Find What Comes Next." width={808} height={256} priority className="h-12 w-auto" />
         </Link>
-        <p className="mt-10 text-[15px] font-semibold text-[#2f6bff]">Admin Portal —</p>
+        <p className="mt-10 text-[15px] font-semibold text-[#3665f3]">Admin Portal —</p>
         <h2 className="mt-1 text-[44px] font-extrabold leading-[1.05] tracking-tight text-[#0f1c3f] xl:text-[52px]">
           Welcome Back,
           <br />
@@ -109,7 +109,7 @@ export default function AdminLoginPage() {
         <ul className="mt-8 flex max-w-[460px] gap-2">
           {features.map((item) => (
             <li key={item.label} className="flex flex-1 flex-col items-center text-center">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#2f6bff] shadow-[0_10px_24px_-14px_rgba(47,107,255,0.8)]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#3665f3] shadow-[0_10px_24px_-14px_rgba(54,101,243,0.8)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d={item.d} />
                 </svg>
@@ -120,7 +120,7 @@ export default function AdminLoginPage() {
         </ul>
         <div className="mt-auto">
           <LaptopScene />
-          <p className={`${script.className} mt-2 text-[28px] leading-tight text-[#2f6bff]`}>
+          <p className={`${script.className} mt-2 text-[28px] leading-tight text-[#3665f3]`}>
             Better Insights.
             <br />
             <span className="text-[#12c2b0]">Bigger Growth.</span>
@@ -129,7 +129,7 @@ export default function AdminLoginPage() {
       </section>
 
       <section className="relative z-10 flex items-center justify-center px-4 py-8 sm:px-8">
-        <div className="w-full max-w-[460px] rounded-[28px] bg-white px-7 py-8 shadow-[0_24px_80px_-28px_rgba(47,107,255,0.35)] ring-1 ring-[#e7eef8] sm:px-10 sm:py-10">
+        <div className="w-full max-w-[460px] rounded-[28px] bg-white px-7 py-8 shadow-[0_24px_80px_-28px_rgba(54,101,243,0.35)] ring-1 ring-[#e7eef8] sm:px-10 sm:py-10">
           <AdminLoginForm />
         </div>
       </section>

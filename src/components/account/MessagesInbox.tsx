@@ -53,7 +53,7 @@ export function MessagesInbox() {
   const current = threads.find((t) => t.id === active);
 
   return (
-    <section className="overflow-hidden rounded-[24px] border border-[#e7eef6] bg-white">
+    <section className="overflow-hidden nexlo-card">
       <div className="border-b border-[#eef2f7] px-6 py-5">
         <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Messages</h1>
         <p className="mt-1 text-[14px] text-[#6b7587]">Buyer and seller conversations stay in one inbox.</p>
@@ -73,7 +73,7 @@ export function MessagesInbox() {
                 >
                   <p className="flex items-center justify-between text-[13px] font-semibold text-[#0f1c3f]">
                     <span>{t.counterpart_name || t.counterpart_email || "Member"}</span>
-                    {t.unread > 0 ? <span className="rounded-full bg-[#2f6bff] px-1.5 text-[10px] text-white">{t.unread}</span> : null}
+                    {t.unread > 0 ? <span className="rounded-full bg-[#3665f3] px-1.5 text-[10px] text-white">{t.unread}</span> : null}
                   </p>
                   <p className="mt-1 line-clamp-1 text-[12px] text-[#6b7587]">{t.last_message || t.subject || "No messages"}</p>
                 </button>
@@ -86,7 +86,7 @@ export function MessagesInbox() {
             </div>
             <div className="flex-1 space-y-2 overflow-auto p-4">
               {messages.map((m) => (
-                <div key={m.id} className="rounded-xl bg-[#f5f8fc] px-3 py-2 text-[13px] text-[#0f1c3f]">
+                <div key={m.id} className="rounded-xl bg-[#f7f7f7] px-3 py-2 text-[13px] text-[#0f1c3f]">
                   <p>{m.body}</p>
                   <p className="mt-1 text-[11px] text-[#8a94a6]">{new Date(m.created_at).toLocaleString()}</p>
                 </div>
@@ -105,7 +105,7 @@ export function MessagesInbox() {
                 placeholder="Write a message"
                 className="h-10 flex-1 rounded-full border border-[#e2e8f0] px-4 text-[14px]"
               />
-              <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Send</button>
+              <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Send</button>
             </form>
           </div>
         </div>

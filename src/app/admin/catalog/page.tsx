@@ -263,39 +263,18 @@ export default function CatalogAdminPage() {
         )}
 
         {/* Tab Navigation */}
-        <div className="mb-6 border-b border-gray-200">
-          <nav className="-mb-px flex gap-8">
+        <div className="mb-6 flex flex-wrap gap-2">
+          {(["categories", "brands", "conditions"] as const).map((id) => (
             <button
-              onClick={() => setView("categories")}
-              className={`border-b-2 px-1 py-4 text-sm font-medium ${
-                view === "categories"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+              key={id}
+              onClick={() => setView(id)}
+              className={`h-9 rounded-full px-4 text-[13px] font-semibold capitalize ${
+                view === id ? "bg-[#0f1c3f] text-white" : "border border-[#e7e7e7] text-[#191919] hover:bg-[#f7f7f7]"
               }`}
             >
-              Categories
+              {id}
             </button>
-            <button
-              onClick={() => setView("brands")}
-              className={`border-b-2 px-1 py-4 text-sm font-medium ${
-                view === "brands"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-              }`}
-            >
-              Brands
-            </button>
-            <button
-              onClick={() => setView("conditions")}
-              className={`border-b-2 px-1 py-4 text-sm font-medium ${
-                view === "conditions"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-              }`}
-            >
-              Conditions
-            </button>
-          </nav>
+          ))}
         </div>
 
         {/* Categories View */}
@@ -305,18 +284,18 @@ export default function CatalogAdminPage() {
               <h2 className="text-xl font-semibold text-gray-900">Categories ({categories.length})</h2>
               <button
                 onClick={() => setShowCategoryForm(!showCategoryForm)}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                className="nexlo-btn nexlo-btn-blue"
               >
                 {showCategoryForm ? "Cancel" : "Add Category"}
               </button>
             </div>
 
             {showCategoryForm && (
-              <form onSubmit={handleCreateCategory} className="mb-6 rounded-lg bg-white p-6 shadow">
+              <form onSubmit={handleCreateCategory} className="mb-6 nexlo-card p-6">
                 <h3 className="mb-4 text-lg font-semibold">New Category</h3>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Name *</label>
                     <input
                       type="text"
                       required
@@ -328,21 +307,21 @@ export default function CatalogAdminPage() {
                           slug: generateSlug(e.target.value),
                         });
                       }}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Slug *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Slug *</label>
                     <input
                       type="text"
                       required
                       value={categoryForm.slug}
                       onChange={(e) => setCategoryForm({ ...categoryForm, slug: e.target.value })}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Parent Category</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Parent Category</label>
                     <select
                       value={categoryForm.parent_id || ""}
                       onChange={(e) =>
@@ -352,7 +331,7 @@ export default function CatalogAdminPage() {
                           level: e.target.value ? 2 : 1,
                         })
                       }
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     >
                       <option value="">None (Root Category)</option>
                       {categories
@@ -365,21 +344,21 @@ export default function CatalogAdminPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Icon (emoji)</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Icon (emoji)</label>
                     <input
                       type="text"
                       value={categoryForm.icon}
                       onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                       placeholder="⚡"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Description</label>
                     <textarea
                       value={categoryForm.description}
                       onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                       rows={2}
                     />
                   </div>
@@ -406,7 +385,7 @@ export default function CatalogAdminPage() {
                 </div>
                 <button
                   type="submit"
-                  className="mt-4 rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700"
+                  className="nexlo-btn nexlo-btn-blue mt-4"
                 >
                   Create Category
                 </button>
@@ -416,9 +395,9 @@ export default function CatalogAdminPage() {
             {loading ? (
               <div className="py-12 text-center text-gray-500">Loading...</div>
             ) : (
-              <div className="overflow-hidden rounded-lg bg-white shadow">
+              <div className="nexlo-card overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-[#f7f7f7]">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                         Category
@@ -493,18 +472,18 @@ export default function CatalogAdminPage() {
               <h2 className="text-xl font-semibold text-gray-900">Brands ({brands.length})</h2>
               <button
                 onClick={() => setShowBrandForm(!showBrandForm)}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                className="nexlo-btn nexlo-btn-blue"
               >
                 {showBrandForm ? "Cancel" : "Add Brand"}
               </button>
             </div>
 
             {showBrandForm && (
-              <form onSubmit={handleCreateBrand} className="mb-6 rounded-lg bg-white p-6 shadow">
+              <form onSubmit={handleCreateBrand} className="mb-6 nexlo-card p-6">
                 <h3 className="mb-4 text-lg font-semibold">New Brand</h3>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Name *</label>
                     <input
                       type="text"
                       required
@@ -512,43 +491,43 @@ export default function CatalogAdminPage() {
                       onChange={(e) =>
                         setBrandForm({ ...brandForm, name: e.target.value, slug: generateSlug(e.target.value) })
                       }
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Slug *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Slug *</label>
                     <input
                       type="text"
                       required
                       value={brandForm.slug}
                       onChange={(e) => setBrandForm({ ...brandForm, slug: e.target.value })}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Logo URL</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Logo URL</label>
                     <input
                       type="url"
                       value={brandForm.logo_url}
                       onChange={(e) => setBrandForm({ ...brandForm, logo_url: e.target.value })}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Website</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Website</label>
                     <input
                       type="url"
                       value={brandForm.website}
                       onChange={(e) => setBrandForm({ ...brandForm, website: e.target.value })}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+                    <label className="mb-1 block text-sm font-medium text-[#191919]">Description</label>
                     <textarea
                       value={brandForm.description}
                       onChange={(e) => setBrandForm({ ...brandForm, description: e.target.value })}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                       rows={2}
                     />
                   </div>
@@ -566,7 +545,7 @@ export default function CatalogAdminPage() {
                 </div>
                 <button
                   type="submit"
-                  className="mt-4 rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700"
+                  className="nexlo-btn nexlo-btn-blue mt-4"
                 >
                   Create Brand
                 </button>
@@ -578,7 +557,7 @@ export default function CatalogAdminPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {brands.map((brand) => (
-                  <div key={brand.id} className="rounded-lg bg-white p-4 shadow">
+                  <div key={brand.id} className="nexlo-card p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
@@ -612,7 +591,7 @@ export default function CatalogAdminPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {conditions.map((condition) => (
-                  <div key={condition.id} className="rounded-lg bg-white p-4 shadow">
+                  <div key={condition.id} className="nexlo-card p-4">
                     <h3 className="font-semibold text-gray-900">{condition.name}</h3>
                     <p className="text-sm text-gray-500">{condition.slug}</p>
                     {condition.description && <p className="mt-2 text-sm text-gray-600">{condition.description}</p>}

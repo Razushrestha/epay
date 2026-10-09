@@ -61,7 +61,7 @@ export function RegisterForm() {
   const [loading, setLoading] = useState(false);
 
   const field =
-    "flex h-10 items-center gap-2.5 rounded-xl border border-[#e3e8f0] bg-white px-3.5 text-[#8a94a6] focus-within:border-[#2f6bff] focus-within:text-[#2f6bff]";
+    "flex h-10 items-center gap-2.5 rounded-xl border border-[#e3e8f0] bg-white px-3.5 text-[#8a94a6] focus-within:border-[#3665f3] focus-within:text-[#3665f3]";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -143,7 +143,7 @@ export function RegisterForm() {
           onClick={() => setAccountType("individual")}
           className={`flex h-10 items-center justify-center gap-2 rounded-full text-[13.5px] font-semibold ${
             accountType === "individual"
-              ? "bg-gradient-to-r from-[#12c4b0] to-[#2f6bff] text-white"
+              ? "bg-gradient-to-r from-[#12c4b0] to-[#3665f3] text-white"
               : "border border-[#c5cedb] bg-white text-[#1a2338]"
           }`}
         >
@@ -158,7 +158,7 @@ export function RegisterForm() {
           onClick={() => setAccountType("business")}
           className={`flex h-10 items-center justify-center gap-2 rounded-full text-[13.5px] font-semibold ${
             accountType === "business"
-              ? "bg-gradient-to-r from-[#12c4b0] to-[#2f6bff] text-white"
+              ? "bg-gradient-to-r from-[#12c4b0] to-[#3665f3] text-white"
               : "border border-[#c5cedb] bg-white text-[#1a2338]"
           }`}
         >
@@ -218,7 +218,7 @@ export function RegisterForm() {
             placeholder="Business name"
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
-            className="h-10 w-full rounded-xl border border-[#e3e8f0] bg-[#f7f8fa] px-3.5 text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6] focus:border-[#2f6bff] focus:bg-white"
+            className="h-10 w-full rounded-xl border border-[#e3e8f0] bg-[#f7f8fa] px-3.5 text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6] focus:border-[#3665f3] focus:bg-white"
           />
         )}
 
@@ -289,7 +289,7 @@ export function RegisterForm() {
                 required
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-                className="h-10 w-full appearance-none rounded-xl border border-[#e3e8f0] bg-[#f7f8fa] bg-[length:12px] bg-[right_14px_center] bg-no-repeat px-3.5 text-[13.5px] text-[#0f1c3f] outline-none focus:border-[#2f6bff] focus:bg-white"
+                className="h-10 w-full appearance-none rounded-xl border border-[#e3e8f0] bg-[#f7f8fa] bg-[length:12px] bg-[right_14px_center] bg-no-repeat px-3.5 text-[13.5px] text-[#0f1c3f] outline-none focus:border-[#3665f3] focus:bg-white"
                 style={{
                   backgroundImage:
                     "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7587' stroke-width='2.4'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
@@ -313,14 +313,14 @@ export function RegisterForm() {
                 type="checkbox"
                 checked={buyerOnly}
                 onChange={(e) => setBuyerOnly(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-[#c9d2e0] accent-[#2f6bff]"
+                className="mt-0.5 h-4 w-4 rounded border-[#c9d2e0] accent-[#3665f3]"
               />
               I&apos;m only interested in buying on Nexlo for now
             </label>
             <p className="text-[12.5px] leading-snug text-[#3a4458]">
               By selecting <span className="font-semibold">Create business account</span>, you agree to our{" "}
-              <span className="font-semibold text-[#2f6bff]">User Agreement</span> and acknowledge reading our{" "}
-              <span className="font-semibold text-[#2f6bff]">User Privacy Notice</span>.
+              <span className="font-semibold text-[#3665f3]">User Agreement</span> and acknowledge reading our{" "}
+              <span className="font-semibold text-[#3665f3]">User Privacy Notice</span>.
             </p>
           </>
         )}
@@ -335,15 +335,15 @@ export function RegisterForm() {
           />
           <span
             aria-hidden
-            className="mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[4px] border border-[#c9d2e0] text-transparent peer-checked:border-[#2f6bff] peer-checked:bg-[#2f6bff] peer-checked:text-white"
+            className="mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[4px] border border-[#c9d2e0] text-transparent peer-checked:border-[#3665f3] peer-checked:bg-[#3665f3] peer-checked:text-white"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4">
               <path d="m5 12.5 4.5 4.5L19 7.5" />
             </svg>
           </span>
           <span>
-            I agree to Nexlo&apos;s <span className="font-semibold text-[#2f6bff]">Terms of Service</span> and{" "}
-            <span className="font-semibold text-[#2f6bff]">Privacy Policy</span>.
+            I agree to Nexlo&apos;s <span className="font-semibold text-[#3665f3]">Terms of Service</span> and{" "}
+            <span className="font-semibold text-[#3665f3]">Privacy Policy</span>.
           </span>
         </label>
         )}
@@ -356,7 +356,7 @@ export function RegisterForm() {
         <button
           type="submit"
           disabled={loading}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#2f6bff] to-[#12c4b0] text-[15px] font-semibold text-white disabled:opacity-60"
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#3665f3] to-[#12c4b0] text-[15px] font-semibold text-white disabled:opacity-60"
         >
           {loading ? "Creating…" : accountType === "business" ? "Create business account" : "Create account"}
           {!loading && (
@@ -393,7 +393,7 @@ export function RegisterForm() {
       </div>
 
       <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-[#e8eef6] bg-[#f7fafc] px-3 py-2.5 text-[12px] leading-snug text-[#6b7587]">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f6bff" strokeWidth="1.7" className="mt-0.5 shrink-0" aria-hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3665f3" strokeWidth="1.7" className="mt-0.5 shrink-0" aria-hidden>
           <path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.4 7.5 9.5 4.4-1.1 7.5-4.9 7.5-9.5V6L12 3Z" />
           <path d="m9 12 2.2 2.2L15.2 10" />
         </svg>

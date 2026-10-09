@@ -38,7 +38,7 @@ export default function AdminMessagesPage() {
       {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
       <div className="space-y-3">
         {rows.map((row) => (
-          <section key={row.id} className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+          <section key={row.id} className="nexlo-card p-5">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="font-semibold text-[#0f1c3f]">{row.from_name}</p>
@@ -49,7 +49,7 @@ export default function AdminMessagesPage() {
               </span>
             </div>
             <p className="mt-3 text-[14px] text-[#0f1c3f]">{row.question}</p>
-            {row.answer ? <p className="mt-2 rounded-xl bg-[#f5f8fc] px-3 py-2 text-[13.5px] text-[#3a4a66]">{row.answer}</p> : (
+            {row.answer ? <p className="mt-2 rounded-xl bg-[#f7f7f7] px-3 py-2 text-[13.5px] text-[#3a4a66]">{row.answer}</p> : (
               <form
                 className="mt-3 flex gap-2"
                 onSubmit={async (e) => {
@@ -60,13 +60,13 @@ export default function AdminMessagesPage() {
                 }}
               >
                 <input value={reply[row.id] ?? ""} onChange={(e) => setReply((c) => ({ ...c, [row.id]: e.target.value }))} placeholder="Write a reply…" className="h-10 flex-1 rounded-lg border border-[#e2e8f0] px-3" />
-                <button className="h-10 rounded-full bg-[#2f6bff] px-4 text-[14px] font-semibold text-white">Send</button>
+                <button className="h-10 rounded-full bg-[#3665f3] px-4 text-[14px] font-semibold text-white">Send</button>
               </form>
             )}
           </section>
         ))}
         {!rows.length ? (
-          <section className="rounded-[22px] border border-[#e7eef6] bg-white">
+          <section className="nexlo-card">
             <Empty title="No messages yet" sub="Questions buyers ask on listings will land here." />
           </section>
         ) : null}

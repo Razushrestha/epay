@@ -40,10 +40,10 @@ function Change({ value }: { value: number }) {
 }
 
 const activityMeta: Record<string, { bg: string; color: string; d: string }> = {
-  user: { bg: "bg-[#eaf1ff]", color: "text-[#2f6bff]", d: "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 9c.6-3.5 3.2-5 7-5s6.4 1.5 7 5" },
+  user: { bg: "bg-[#eaf1ff]", color: "text-[#3665f3]", d: "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 9c.6-3.5 3.2-5 7-5s6.4 1.5 7 5" },
   order: { bg: "bg-[#e7fbf4]", color: "text-[#12a37e]", d: "M6 6h15l-1.5 9h-12L5 3H2M7 20a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0Zm9 0a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0Z" },
   product: { bg: "bg-[#fff6e5]", color: "text-[#d97706]", d: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
-  message: { bg: "bg-[#eaf1ff]", color: "text-[#2f6bff]", d: "M4 6h16v10H8l-4 4V6Z" },
+  message: { bg: "bg-[#eaf1ff]", color: "text-[#3665f3]", d: "M4 6h16v10H8l-4 4V6Z" },
   refund: { bg: "bg-[#fdecec]", color: "text-[#e5484d]", d: "M3 12a9 9 0 1 0 3-6.7M3 4v5h5" },
 };
 
@@ -60,7 +60,7 @@ function Banner() {
           <path d="M86 22l22-14 8 6" fill="none" stroke="#16a34a" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
           <rect x="86" y="42" width="14" height="34" rx="4" fill="#9ec4ff" />
           <rect x="104" y="30" width="14" height="46" rx="4" fill="#5b93ff" />
-          <rect x="122" y="18" width="14" height="58" rx="4" fill="#2f6bff" />
+          <rect x="122" y="18" width="14" height="58" rx="4" fill="#3665f3" />
         </svg>
         <p className={`${script.className} text-right text-[28px] leading-[1.05] text-[#1d4ed8]`}>
           Better Insights
@@ -95,10 +95,10 @@ export default function AdminDashboardPage() {
     return `${d.toLocaleString("en-GB", { month: "short" })} ${String(d.getDate()).padStart(2, "0")}`;
   });
   const stats = [
-    { label: "Total Users", value: data?.stats.users.total ?? 0, change: data?.stats.users.change ?? 0, color: "#2f6bff", bg: "bg-[#eef4ff]", iconBg: "bg-[#d9e6ff] text-[#2f6bff]", spark: series.map((s) => s.users), icon: "M16 19c0-2.8-2.2-5-6-5s-6 2.2-6 5M10 11a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" },
+    { label: "Total Users", value: data?.stats.users.total ?? 0, change: data?.stats.users.change ?? 0, color: "#3665f3", bg: "bg-[#eef4ff]", iconBg: "bg-[#d9e6ff] text-[#3665f3]", spark: series.map((s) => s.users), icon: "M16 19c0-2.8-2.2-5-6-5s-6 2.2-6 5M10 11a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" },
     { label: "Total Orders", value: data?.stats.orders.total ?? 0, change: data?.stats.orders.change ?? 0, color: "#12a37e", bg: "bg-[#eafaf3]", iconBg: "bg-[#d6f5e8] text-[#0f9f76]", spark: series.map((s) => s.orders), icon: "M6 7h12l1.2 12H4.8L6 7Zm3-3h6l1 3H8l1-3Z" },
     { label: "Total Products", value: data?.stats.products.total ?? 0, change: data?.stats.products.change ?? 0, color: "#7c5cfc", bg: "bg-[#f4f0ff]", iconBg: "bg-[#e8e0ff] text-[#7c5cfc]", spark: series.map((s) => s.products), icon: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
-    { label: "Total Revenue", value: data?.stats.revenue.total ?? 0, change: data?.stats.revenue.change ?? 0, color: "#2f6bff", bg: "bg-[#eef6ff]", iconBg: "bg-[#d9e6ff] text-[#2f6bff]", spark: series.map((s) => s.revenue), money: true, icon: "M12 3v18M8 8h5.2a2.8 2.8 0 0 1 0 5.6H9.2A2.8 2.8 0 0 0 9.2 19H16" },
+    { label: "Total Revenue", value: data?.stats.revenue.total ?? 0, change: data?.stats.revenue.change ?? 0, color: "#3665f3", bg: "bg-[#eef6ff]", iconBg: "bg-[#d9e6ff] text-[#3665f3]", spark: series.map((s) => s.revenue), money: true, icon: "M12 3v18M8 8h5.2a2.8 2.8 0 0 1 0 5.6H9.2A2.8 2.8 0 0 0 9.2 19H16" },
   ];
   const os = data?.orderStatus ?? { completed: 0, processing: 0, pending: 0, cancelled: 0, total: 0 };
   const actions = [
@@ -159,7 +159,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="flex items-center gap-4">
                 <span className="hidden items-center gap-4 text-[12px] text-[#5b6780] sm:flex">
-                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#2f6bff]" /> Revenue</span>
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#3665f3]" /> Revenue</span>
                   <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#12a37e]" /> Orders</span>
                 </span>
                 <button type="button" className="inline-flex items-center gap-1 rounded-full border border-[#e7eef6] px-3 py-1 text-[12px] text-[#5b6780]">
@@ -171,7 +171,7 @@ export default function AdminDashboardPage() {
             <LineChart
               labels={labels}
               series={[
-                { name: "Revenue", color: "#2f6bff", values: series.map((s) => s.revenue), fill: true },
+                { name: "Revenue", color: "#3665f3", values: series.map((s) => s.revenue), fill: true },
                 { name: "Orders", color: "#12a37e", values: series.map((s) => s.orders) },
               ]}
             />
@@ -196,7 +196,7 @@ export default function AdminDashboardPage() {
         <section className="rounded-[22px] bg-white p-5 shadow-[0_8px_30px_rgba(15,28,63,0.04)]">
           <div className="flex items-center justify-between">
             <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Recent Orders</h2>
-            <Link href="/admin/orders" className="text-[13px] font-medium text-[#2f6bff] hover:underline">View all →</Link>
+            <Link href="/admin/orders" className="text-[13px] font-medium text-[#3665f3] hover:underline">View all →</Link>
           </div>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-[13.5px]">
@@ -213,7 +213,7 @@ export default function AdminDashboardPage() {
               <tbody>
                 {(data?.recentOrders ?? []).map((row) => (
                   <tr key={row.order_number} className="border-b border-[#f3f6fa] last:border-b-0">
-                    <td className="py-3.5 font-semibold text-[#2f6bff]">#{row.order_number}</td>
+                    <td className="py-3.5 font-semibold text-[#3665f3]">#{row.order_number}</td>
                     <td className="py-3.5 text-[#0f1c3f]">{row.customer}</td>
                     <td className="py-3.5">
                       <span className="flex items-center gap-2.5">
@@ -221,7 +221,7 @@ export default function AdminDashboardPage() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={row.thumbnail_url || row.photo_url || ""} alt="" className="h-8 w-8 rounded-lg object-cover" />
                         ) : (
-                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f5f8fc] text-[#9aa3b2]">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f7f7f7] text-[#9aa3b2]">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m8 14 2.5-3 2.5 3 3-4 3 4" /></svg>
                           </span>
                         )}

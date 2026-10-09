@@ -38,6 +38,7 @@ const NAV = [
   { id: "dashboard", label: "Dashboard", href: "/account?tab=dashboard", icon: <Icon d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" /> },
   { id: "messages", label: "Messages", href: "/account?tab=messages", icon: <Icon d="M4 6h16v12H7l-3 3V6Z" /> },
   { id: "activity", label: "Activity", href: "/account?tab=activity", icon: <Icon d="M8 4h8v4H8V4Zm-3 6h14v10H5V10Zm5 3h4" /> },
+  { id: "tickets", label: "Support", href: "/account?tab=tickets", icon: <Icon d="M4 7h16v3l-1.5 1.5L20 13v4H4v-4l1.5-1.5L4 10V7Z" /> },
   { id: "payment", label: "Payment Information", href: "/account?tab=payment", icon: <Icon d="M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9ZM3 10h18" /> },
 ];
 
@@ -57,7 +58,7 @@ export function AccountChrome({
   const [menuOpen, setMenuOpen] = useState(false);
   const [personalOpen, setPersonalOpen] = useState(PERSONAL_TABS.has(tab));
   const [prefsOpen, setPrefsOpen] = useState(tab === "preferences");
-  const [sellingOpen, setSellingOpen] = useState(tab === "selling");
+  const [sellingOpen, setSellingOpen] = useState(tab === "selling" || tab === "returns");
   const [donateOpen, setDonateOpen] = useState(tab === "donations");
   const name = fullName(user);
 
@@ -98,7 +99,7 @@ export function AccountChrome({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                 ) : (
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#dbe7ff] text-[12px] font-bold text-[#2f6bff]">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#dbe7ff] text-[12px] font-bold text-[#3665f3]">
                     {initials(user)}
                   </span>
                 )}
@@ -109,10 +110,10 @@ export function AccountChrome({
               </button>
               {menuOpen ? (
                 <div className="absolute right-0 mt-2 w-44 rounded-xl border border-[#e7eef6] bg-white py-1 shadow-lg">
-                  <Link href="/account" className="block px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f5f8fc]" onClick={() => setMenuOpen(false)}>
+                  <Link href="/account" className="block px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f7f7f7]" onClick={() => setMenuOpen(false)}>
                     Account
                   </Link>
-                  <button type="button" onClick={onSignOut} className="block w-full px-3 py-2 text-left text-[13px] text-[#0f1c3f] hover:bg-[#f5f8fc]">
+                  <button type="button" onClick={onSignOut} className="block w-full px-3 py-2 text-left text-[13px] text-[#0f1c3f] hover:bg-[#f7f7f7]">
                     Sign out
                   </button>
                 </div>
@@ -130,7 +131,7 @@ export function AccountChrome({
                 key={item.id}
                 href={item.href}
                 className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] ${
-                  tab === item.id ? "bg-[#eaf1ff] font-semibold text-[#2f6bff]" : "font-medium text-[#3a4a66] hover:bg-white"
+                  tab === item.id ? "bg-[#eaf1ff] font-semibold text-[#3665f3]" : "font-medium text-[#3a4a66] hover:bg-white"
                 }`}
               >
                 {item.icon}
@@ -153,7 +154,7 @@ export function AccountChrome({
                   key={id}
                   href={`/account?tab=${id}`}
                   className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${
-                    tab === id ? "bg-[#edf1f5] font-semibold text-[#0f1c3f]" : "text-[#5b6780] hover:text-[#2f6bff]"
+                    tab === id ? "bg-[#edf1f5] font-semibold text-[#0f1c3f]" : "text-[#5b6780] hover:text-[#3665f3]"
                   }`}
                 >
                   {label}
@@ -166,7 +167,7 @@ export function AccountChrome({
                 key={item.id}
                 href={item.href}
                 className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] ${
-                  tab === item.id ? "bg-[#eaf1ff] font-semibold text-[#2f6bff]" : "font-medium text-[#3a4a66] hover:bg-white"
+                  tab === item.id ? "bg-[#eaf1ff] font-semibold text-[#3665f3]" : "font-medium text-[#3a4a66] hover:bg-white"
                 }`}
               >
                 {item.icon}
@@ -180,7 +181,7 @@ export function AccountChrome({
                 <span className="flex-1">Account Preferences</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" className={`transition ${prefsOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2"><path d="m6 9 6 6 6-6" /></svg>
               </summary>
-              <Link href="/account?tab=preferences" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "preferences" ? "font-semibold text-[#2f6bff]" : "text-[#5b6780] hover:text-[#2f6bff]"}`}>
+              <Link href="/account?tab=preferences" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "preferences" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
                 Addresses
               </Link>
             </details>
@@ -191,10 +192,13 @@ export function AccountChrome({
                 <span className="flex-1">Selling</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" className={`transition ${sellingOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2"><path d="m6 9 6 6 6-6" /></svg>
               </summary>
-              <Link href="/account?tab=selling" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "selling" ? "font-semibold text-[#2f6bff]" : "text-[#5b6780] hover:text-[#2f6bff]"}`}>
+              <Link href="/account?tab=selling" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "selling" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
                 Seller tools
               </Link>
-              <Link href="/sell/listings" className="ml-9 block rounded-lg px-3 py-2 text-[13px] text-[#5b6780] hover:text-[#2f6bff]">
+              <Link href="/account?tab=returns" className={`ml-9 block rounded-lg px-3 py-2 text-[13px] ${tab === "returns" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
+                Returns and cases
+              </Link>
+              <Link href="/sell/listings" className="ml-9 block rounded-lg px-3 py-2 text-[13px] text-[#5b6780] hover:text-[#3665f3]">
                 Your listings
               </Link>
             </details>
@@ -202,7 +206,7 @@ export function AccountChrome({
             <Link
               href="/account?tab=feedback"
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] ${
-                tab === "feedback" ? "bg-[#eaf1ff] font-semibold text-[#2f6bff]" : "font-medium text-[#3a4a66] hover:bg-white"
+                tab === "feedback" ? "bg-[#eaf1ff] font-semibold text-[#3665f3]" : "font-medium text-[#3a4a66] hover:bg-white"
               }`}
             >
               <Icon d="M5 6h14v9H9l-4 3V6Z" />
@@ -215,7 +219,7 @@ export function AccountChrome({
                 <span className="flex-1">Donation Preferences</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" className={`transition ${donateOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2"><path d="m6 9 6 6 6-6" /></svg>
               </summary>
-              <Link href="/account?tab=donations" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "donations" ? "font-semibold text-[#2f6bff]" : "text-[#5b6780] hover:text-[#2f6bff]"}`}>
+              <Link href="/account?tab=donations" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "donations" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
                 Charity settings
               </Link>
             </details>
@@ -223,7 +227,7 @@ export function AccountChrome({
 
           <div className="relative mt-8 overflow-hidden rounded-2xl bg-[#eaf6ff] p-4">
             {tab === "feedback" ? (
-              <span className="relative z-10 mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#2f6bff] shadow-sm">
+              <span className="relative z-10 mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#3665f3] shadow-sm">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
                   <path d="M12 3 5 6.2v5.3c0 4.2 2.7 8 7 9.5 4.3-1.5 7-5.3 7-9.5V6.2L12 3Z" />
                   <path d="m9 12 2 2 4-4" />
@@ -254,7 +258,7 @@ export function AccountChrome({
               <defs>
                 <linearGradient id="acctWave" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0" stopColor="#7ee7d6" />
-                  <stop offset="1" stopColor="#2f6bff" />
+                  <stop offset="1" stopColor="#3665f3" />
                 </linearGradient>
               </defs>
               <path d="M0 40 C 50 10, 90 70, 140 40 S 200 10, 240 38 L240 80 L0 80 Z" fill="url(#acctWave)" opacity="0.55" />

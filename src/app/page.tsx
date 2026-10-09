@@ -6,11 +6,13 @@ import { PromoBanner } from "@/components/home/PromoBanner";
 import { TrendingRow } from "@/components/home/TrendingRow";
 import { TrustBar } from "@/components/home/TrustBar";
 import { SiteFooter } from "@/components/SiteFooter";
+import { CmsBanners } from "@/components/home/CmsBanners";
 
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-white pb-2">
       <HeroSection />
+      <CmsBanners />
       <CategoryGrid />
       <PromoBanner />
       <DealsRow />

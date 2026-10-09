@@ -25,7 +25,7 @@ const slides = [
     title: "Shop with confidence, every order",
     body: "Escrow payments, easy returns and 24/7 support across Nepal.",
     cta: "How it works",
-    href: "/deals",
+    href: "/help/buyer-protection",
   },
 ];
 

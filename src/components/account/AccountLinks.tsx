@@ -26,11 +26,11 @@ export function AccountLinks() {
 
   return (
     <>
+      <Link href="/orders" className="hover:text-[#3665f3] hover:underline">
+        Orders
+      </Link>
       <Link href="/account" className="hover:text-[#3665f3] hover:underline">
         Account
-      </Link>
-      <Link href="/admin" className="hover:text-[#3665f3] hover:underline">
-        Staff
       </Link>
     </>
   );

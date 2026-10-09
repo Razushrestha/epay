@@ -4,91 +4,85 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { accountApi } from "@/lib/account-api";
+import { SiteFooter } from "@/components/SiteFooter";
+import { PageHero } from "@/components/ui/PageHero";
+
+function money(n: number) {
+  return `NPR ${Number(n || 0).toLocaleString("en-NP")}`;
+}
 
 function OrdersContent() {
   const searchParams = useSearchParams();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<{ id: number; order_number: string; created_at: string; total_amount: number; status: string }[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadOrders();
-  }, []);
-
-  async function loadOrders() {
-    try {
-      const token = accountApi.getToken();
-      if (!token) {
-        window.location.href = "/login?redirect=/orders";
-        return;
-      }
-
-      const body = await accountApi<{ data: any[] }>("/api/v1/orders");
-      setOrders(body.data || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Check for success parameter
   const success = searchParams?.get("success");
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="mx-auto max-w-7xl px-4">
-        {success && (
-          <div className="mb-8 rounded-lg bg-green-50 p-6">
-            <div className="text-center">
-              <div className="mb-4 text-6xl">✅</div>
-              <h2 className="text-2xl font-bold text-green-900">Payment Successful!</h2>
-              <p className="mt-2 text-green-700">Your order has been confirmed and is being processed.</p>
-            </div>
-          </div>
-        )}
+  useEffect(() => {
+    const token = accountApi.getToken();
+    if (!token) {
+      window.location.href = "/login?redirect=/orders";
+      return;
+    }
+    accountApi<{ data: typeof orders }>("/api/v1/orders")
+      .then((body) => setOrders(body.data || []))
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
 
-        <h1 className="mb-8 text-3xl font-bold text-gray-900">My Orders</h1>
+  return (
+    <>
+      <PageHero
+        eyebrow="Your orders"
+        title={success ? "Payment received. You're protected." : "Track every order in one place"}
+        body={success
+          ? "Funds are held in escrow until delivery. You can request a return within 30 days."
+          : "Shipping, returns, invoices, and feedback — with the same buyer protection as the rest of Nexlo."}
+        cta="Continue shopping"
+        href="/shop"
+      />
+      <main className="page-shell py-8">
+        <div className="flex items-end justify-between">
+          <div>
+            <h2 className="text-[19px] font-bold text-[#191919]">Order history</h2>
+            <p className="mt-[2px] text-[12px] text-[#707070]">Paid orders stay in escrow until you confirm delivery.</p>
+          </div>
+        </div>
 
         {loading ? (
-          <div className="text-center text-gray-500">Loading orders...</div>
+          <p className="mt-8 text-[14px] text-[#707070]">Loading orders…</p>
         ) : orders.length === 0 ? (
-          <div className="rounded-lg bg-white p-12 text-center shadow">
-            <div className="mb-4 text-6xl">📦</div>
-            <h2 className="text-2xl font-bold text-gray-900">No orders yet</h2>
-            <p className="mt-2 text-gray-600">Start shopping to see your orders here!</p>
-            <Link
-              href="/search"
-              className="mt-6 inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700"
-            >
-              Start Shopping
-            </Link>
+          <div className="nexlo-card mt-6 px-6 py-12 text-center">
+            <h3 className="text-[20px] font-bold text-[#191919]">No orders yet</h3>
+            <p className="mt-2 text-[14px] text-[#707070]">When you win an auction or check out, it will show up here.</p>
+            <Link href="/shop" className="nexlo-btn mt-5">Start shopping</Link>
           </div>
         ) : (
-          <div className="space-y-4">
+          <ul className="mt-4 space-y-3">
             {orders.map((order) => (
-              <Link key={order.id} href={`/orders/${order.order_number}`} className="block rounded-lg bg-white p-6 shadow hover:ring-1 hover:ring-[#2f6bff]">
-                <div className="flex items-center justify-between">
+              <li key={order.id}>
+                <Link href={`/orders/${order.order_number}`} className="nexlo-card flex flex-wrap items-center justify-between gap-3 p-4 hover:shadow-md">
                   <div>
-                    <h3 className="font-semibold">Order #{order.order_number}</h3>
-                    <p className="text-sm text-gray-500">Placed on {new Date(order.created_at).toLocaleDateString()}</p>
+                    <p className="text-[14px] font-bold text-[#191919]">Order {order.order_number}</p>
+                    <p className="mt-0.5 text-[12.5px] text-[#707070]">Placed {new Date(order.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold">NPR {Number(order.total_amount).toLocaleString()}</div>
-                    <div className="text-sm capitalize text-gray-500">{String(order.status).replace(/_/g, " ")}</div>
+                    <p className="text-[15px] font-bold text-[#191919]">{money(order.total_amount)}</p>
+                    <p className="mt-0.5 text-[12px] font-semibold capitalize text-[#3665f3]">{String(order.status).replace(/_/g, " ")}</p>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
-    </div>
+      </main>
+      <SiteFooter />
+    </>
   );
 }
 
 export default function OrdersPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 py-8"><div className="text-center">Loading...</div></div>}>
+    <Suspense fallback={<main className="page-shell py-16 text-[14px] text-[#707070]">Loading orders…</main>}>
       <OrdersContent />
     </Suspense>
   );

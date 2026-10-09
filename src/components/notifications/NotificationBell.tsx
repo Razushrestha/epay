@@ -65,7 +65,7 @@ export function NotificationBell() {
         <div className="absolute right-0 z-40 mt-2 w-[320px] overflow-hidden rounded-2xl border border-[#e7eef6] bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-[#eef2f7] px-4 py-3">
             <p className="text-[14px] font-bold text-[#0f1c3f]">Notifications</p>
-            <Link href="/account?tab=preferences" className="text-[12px] text-[#2f6bff]" onClick={() => setOpen(false)}>
+            <Link href="/account?tab=preferences" className="text-[12px] text-[#3665f3]" onClick={() => setOpen(false)}>
               Preferences
             </Link>
           </div>

@@ -7,7 +7,9 @@ import { accountApi, setToken } from "@/lib/account-api";
 import { AccountChrome, fullName, initials } from "@/components/account/AccountChrome";
 import { FeedbackBoard } from "@/components/account/FeedbackBoard";
 import { MessagesInbox } from "@/components/account/MessagesInbox";
-import { SellerWallet } from "@/components/account/SellerWallet";
+import { SellerHub } from "@/components/account/SellerHub";
+import { ReturnsBoard } from "@/components/account/ReturnsBoard";
+import { TicketsBoard } from "@/components/account/TicketsBoard";
 
 type User = {
   id: string;
@@ -140,7 +142,7 @@ function Verified() {
 
 function EditBtn({ onClick }: { onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 text-[13px] font-medium text-[#2f6bff] hover:underline">
+    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 text-[13px] font-medium text-[#3665f3] hover:underline">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
         <path d="M12 20h9" />
         <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
@@ -166,7 +168,7 @@ function InfoRow({
   return (
     <div className="grid gap-3 border-b border-[#eef2f7] px-5 py-5 last:border-b-0 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] sm:items-start">
       <div className="flex gap-3">
-        <span className="mt-0.5 text-[#2f6bff]">{icon}</span>
+        <span className="mt-0.5 text-[#3665f3]">{icon}</span>
         <div>
           <p className="text-[14.5px] font-semibold text-[#0f1c3f]">{title}</p>
           <p className="mt-0.5 text-[12.5px] text-[#7a8496]">{hint}</p>
@@ -198,7 +200,7 @@ function SecurityField({
       <div className="grid gap-3 sm:grid-cols-[200px_minmax(0,1fr)_auto] sm:items-start">
         <p className="text-[15px] font-semibold text-[#0f1c3f]">{title}</p>
         <p className="text-[14px] leading-relaxed text-[#5b6780]">{description}</p>
-        <button type="button" onClick={onToggle} className="justify-self-start text-[14px] font-medium text-[#2f6bff] hover:underline sm:justify-self-end">
+        <button type="button" onClick={onToggle} className="justify-self-start text-[14px] font-medium text-[#3665f3] hover:underline sm:justify-self-end">
           {action}
         </button>
       </div>
@@ -249,6 +251,43 @@ function PersonIcon() {
       <circle cx="12" cy="8" r="3.2" />
       <path d="M5 20c.5-3.6 3.2-5.5 7-5.5s6.5 1.9 7 5.5" />
     </svg>
+  );
+}
+
+function AccountDashboard({ user, levelLabel }: { user: User; levelLabel: Record<string, string> }) {
+  const [counts, setCounts] = useState({ orders: 0, returns: 0, tickets: 0 });
+  useEffect(() => {
+    Promise.all([
+      accountApi<{ data: unknown[] }>("/api/v1/orders").then((b) => b.data.length).catch(() => 0),
+      accountApi<{ data: unknown[] }>("/api/v1/returns").then((b) => b.data.length).catch(() => 0),
+      accountApi<{ data: unknown[] }>("/api/v1/tickets").then((b) => b.data.length).catch(() => 0),
+    ]).then(([orders, returns, tickets]) => setCounts({ orders, returns, tickets }));
+  }, []);
+  return (
+    <section className="nexlo-card p-6">
+      <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Dashboard</h1>
+      <p className="mt-1 text-[14px] text-[#6b7587]">Orders, returns, and support on this account.</p>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {[
+          ["Status", user.status],
+          ["Seller level", levelLabel[user.sellerLevel] ?? user.sellerLevel],
+          ["Two-factor", user.twoFactor ? "On" : "Off"],
+          ["Orders", counts.orders],
+          ["Returns", counts.returns],
+          ["Tickets", counts.tickets],
+        ].map(([label, value]) => (
+          <div key={String(label)} className="rounded-2xl bg-[#f7f7f7] p-4">
+            <p className="text-[12px] text-[#7a8496]">{label}</p>
+            <p className="mt-1 text-[18px] font-extrabold capitalize text-[#0f1c3f]">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
+        <Link href="/orders" className="h-9 rounded-full border px-4 leading-9">Orders</Link>
+        <Link href="/account?tab=returns" className="h-9 rounded-full border px-4 leading-9">Returns</Link>
+        <Link href="/account?tab=tickets" className="h-9 rounded-full border px-4 leading-9">Support</Link>
+      </div>
+    </section>
   );
 }
 
@@ -358,13 +397,13 @@ function AccountScreen() {
 
       {tab === "account" && (
         <>
-          <section className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#eaf4ff_0%,#f7fbff_100%)] px-5 py-6 sm:px-7">
+          <section className="hero-bg relative overflow-hidden rounded-[16px] px-5 py-6 sm:px-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
               {user.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={user.avatarUrl} alt="" className="h-[84px] w-[84px] rounded-full object-cover ring-4 ring-white" />
               ) : (
-                <span className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-white text-[22px] font-extrabold text-[#2f6bff] ring-4 ring-white">
+                <span className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-white text-[22px] font-extrabold text-[#3665f3] ring-4 ring-white">
                   {initials(user)}
                 </span>
               )}
@@ -373,7 +412,7 @@ function AccountScreen() {
                 <h1 className="mt-0.5 flex flex-wrap items-center gap-2 text-[28px] font-extrabold tracking-tight text-[#0f1c3f]">
                   {name}
                   {user.emailVerified ? (
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#2f6bff] text-white" title="Verified">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#3665f3] text-white" title="Verified">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden>
                         <path d="m5 12.5 4.5 4.5L19 7.5" />
                       </svg>
@@ -385,7 +424,7 @@ function AccountScreen() {
               <button
                 type="button"
                 onClick={() => setEditing(editing === "profile" ? null : "profile")}
-                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-[#d7e3f4] bg-white px-4 text-[13.5px] font-semibold text-[#2f6bff] shadow-sm hover:bg-[#f7fbff]"
+                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-[#d7e3f4] bg-white px-4 text-[13.5px] font-semibold text-[#3665f3] shadow-sm hover:bg-[#f7fbff]"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path d="M12 20h9" />
@@ -406,14 +445,14 @@ function AccountScreen() {
                 <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} placeholder="Last name" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
                 <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} placeholder="Display name" className="h-10 rounded-full border border-[#e5e7eb] px-4 sm:col-span-2" />
                 <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
-                <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Save profile</button>
+                <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save profile</button>
               </form>
             ) : null}
           </section>
 
-          <section className="mt-5 overflow-hidden rounded-[24px] border border-[#e7eef6] bg-white">
+          <section className="mt-5 overflow-hidden nexlo-card">
             <div className="flex items-start gap-3 px-5 pt-5">
-              <span className="text-[#2f6bff]"><PersonIcon /></span>
+              <span className="text-[#3665f3]"><PersonIcon /></span>
               <div>
                 <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Personal info</h2>
                 <p className="text-[13px] text-[#7a8496]">Your basic information and contact details.</p>
@@ -424,7 +463,7 @@ function AccountScreen() {
               {editing === "username" ? (
                 <form className="flex max-w-sm gap-2" onSubmit={(e) => { e.preventDefault(); saveProfile({ username: form.username }); }}>
                   <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="h-9 flex-1 rounded-full border px-3" />
-                  <button className="h-9 rounded-full bg-[#2f6bff] px-3 text-[13px] font-semibold text-white">Save</button>
+                  <button className="h-9 rounded-full bg-[#3665f3] px-3 text-[13px] font-semibold text-white">Save</button>
                 </form>
               ) : (
                 fallbackUsername(user)
@@ -449,7 +488,7 @@ function AccountScreen() {
               action={
                 <span className="flex items-center gap-3">
                   {!user.emailVerified || !user.phoneVerified ? (
-                    <Link href="/verify" className="text-[13px] font-medium text-[#2f6bff] hover:underline">Verify</Link>
+                    <Link href="/verify" className="text-[13px] font-medium text-[#3665f3] hover:underline">Verify</Link>
                   ) : null}
                   <EditBtn onClick={() => setEditing(editing === "contact" ? null : "contact")} />
                 </span>
@@ -499,7 +538,7 @@ function AccountScreen() {
                   <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} placeholder="First name" className="h-9 w-full rounded-full border px-3" />
                   <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} placeholder="Last name" className="h-9 w-full rounded-full border px-3" />
                   <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="h-9 w-full rounded-full border px-3" />
-                  <button className="h-9 rounded-full bg-[#2f6bff] px-4 text-[13px] font-semibold text-white">Save</button>
+                  <button className="h-9 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white">Save</button>
                 </form>
               ) : (
                 <div>
@@ -520,29 +559,14 @@ function AccountScreen() {
         </>
       )}
 
-      {tab === "dashboard" && (
-        <section className="rounded-[24px] border border-[#e7eef6] bg-white p-6">
-          <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Dashboard</h1>
-          <p className="mt-1 text-[14px] text-[#6b7587]">A snapshot of your Nexlo account.</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {[
-              ["Status", user.status],
-              ["Seller level", levelLabel[user.sellerLevel] ?? user.sellerLevel],
-              ["Two-factor", user.twoFactor ? "On" : "Off"],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-2xl bg-[#f5f8fc] p-4">
-                <p className="text-[12px] text-[#7a8496]">{label}</p>
-                <p className="mt-1 text-[18px] font-extrabold capitalize text-[#0f1c3f]">{value}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {tab === "dashboard" && <AccountDashboard user={user} levelLabel={levelLabel} />}
+
+      {tab === "tickets" && <TicketsBoard />}
 
       {tab === "messages" && <MessagesInbox />}
 
       {tab === "payment" && (
-        <section className="rounded-[24px] border border-[#e7eef6] bg-white p-8">
+        <section className="nexlo-card p-8">
           <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Payment information</h1>
           <p className="mt-2 text-[14px] text-[#6b7587]">Checkout uses eSewa and Khalti. Seller payout accounts live under Selling.</p>
           <NotificationPrefs />
@@ -550,14 +574,14 @@ function AccountScreen() {
       )}
 
       {tab === "donations" && (
-        <section className="rounded-[24px] border border-[#e7eef6] bg-white p-8">
+        <section className="nexlo-card p-8">
           <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Donation preferences</h1>
           <p className="mt-2 text-[14px] text-[#6b7587]">Choose whether rounding up at checkout supports a charity. This setting is coming next.</p>
         </section>
       )}
 
       {tab === "preferences" && (
-        <section className="rounded-[24px] bg-white px-6 py-6 sm:px-8">
+        <section className="nexlo-card px-6 py-6 sm:px-8">
           <h1 className="text-[28px] font-bold tracking-tight text-[#0f1c3f]">Addresses</h1>
           <div className="mt-2">
             {ADDRESS_SLOTS.map((slot) => {
@@ -597,7 +621,7 @@ function AccountScreen() {
                           country: saved?.country || user.country || "Nepal",
                         });
                       }}
-                      className="h-9 shrink-0 rounded-full border border-[#2f6bff] px-5 text-[14px] font-semibold text-[#2f6bff] hover:bg-[#f5f8ff]"
+                      className="h-9 shrink-0 rounded-full border border-[#3665f3] px-5 text-[14px] font-semibold text-[#3665f3] hover:bg-[#f5f8ff]"
                     >
                       {saved ? "Edit" : "Add"}
                     </button>
@@ -644,7 +668,7 @@ function AccountScreen() {
                       <input value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value })} placeholder="Postal code" className="h-10 rounded-full border px-4" />
                       <input value={address.country} onChange={(e) => setAddress({ ...address, country: e.target.value })} placeholder="Country" className="h-10 rounded-full border px-4" />
                       <div className="flex gap-2 sm:col-span-2">
-                        <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Save</button>
+                        <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save</button>
                         {saved ? (
                           <button
                             type="button"
@@ -669,7 +693,7 @@ function AccountScreen() {
       )}
 
       {tab === "security" && (
-        <section className="rounded-[24px] bg-white px-6 py-6 sm:px-8">
+        <section className="nexlo-card px-6 py-6 sm:px-8">
           <h1 className="text-[26px] font-bold tracking-tight text-[#0f1c3f]">Sign in and security</h1>
           <div className="mt-4">
             <SecurityField
@@ -710,7 +734,7 @@ function AccountScreen() {
               >
                 <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" className="h-10 w-full rounded-full border px-4" required />
                 <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" minLength={8} className="h-10 w-full rounded-full border px-4" required />
-                <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Save password</button>
+                <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save password</button>
               </form>
             </SecurityField>
 
@@ -741,7 +765,7 @@ function AccountScreen() {
                 await load();
               }}>
                 <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6-digit code" className="h-10 flex-1 rounded-full border px-4" />
-                <button className="h-10 rounded-full bg-[#2f6bff] px-4 text-[14px] font-semibold text-white">Confirm</button>
+                <button className="h-10 rounded-full bg-[#3665f3] px-4 text-[14px] font-semibold text-white">Confirm</button>
               </form>
             </SecurityField>
 
@@ -786,7 +810,7 @@ function AccountScreen() {
                     <li key={provider} className="flex items-center justify-between gap-4 text-[14px]">
                       <span className="w-28 text-[#0f1c3f]">{provider}</span>
                       <span className="flex-1 text-[#5b6780]">{linked ? "Linked" : "Unlinked"}</span>
-                      <Link href="/login" className="text-[14px] text-[#2f6bff] hover:underline">{linked ? "Manage" : "Edit"}</Link>
+                      <Link href="/login" className="text-[14px] text-[#3665f3] hover:underline">{linked ? "Manage" : "Edit"}</Link>
                     </li>
                   );
                 })}
@@ -818,19 +842,18 @@ function AccountScreen() {
 
       {tab === "feedback" && <FeedbackBoard user={user} />}
 
+      {tab === "returns" && <ReturnsBoard userId={user.id} />}
+
       {tab === "selling" && (
-        <section className="rounded-[24px] border border-[#e7eef6] bg-white p-6">
+        <section className="nexlo-card p-6">
           <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Selling</h1>
           <p className="mt-1 text-[14px]">Seller level: <strong>{levelLabel[user.sellerLevel] ?? user.sellerLevel}</strong></p>
           <p className="mt-1 text-[13px] text-[#667085]">Positive {user.feedback.positive} · Neutral {user.feedback.neutral} · Negative {user.feedback.negative}</p>
-          <div className="mt-6">
-            <h2 className="text-[16px] font-bold">Wallet & payouts</h2>
-            <div className="mt-3"><SellerWallet /></div>
-          </div>
+          <div className="mt-6"><SellerHub /></div>
           <SellingOrders />
           <PendingOffers />
           {!user.isSeller ? (
-            <button type="button" className="mt-4 h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white" onClick={async () => {
+            <button type="button" className="mt-4 h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white" onClick={async () => {
               const body = await accountApi<{ data: { twoFactorRequired: boolean } }>("/api/v1/account/seller", { method: "POST", body: "{}" });
               setNotice(body.data.twoFactorRequired ? "You can sell after two-factor is turned on." : "Seller tools are on.");
               await load();
@@ -911,7 +934,7 @@ function NotificationPrefs() {
       <h2 className="text-[16px] font-bold">Notification preferences</h2>
       <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} /> Email alerts</label>
       <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} /> SMS for critical events</label>
-      <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Save</button>
+      <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save</button>
       {saved ? <p className="text-[13px] text-[#12a37e]">{saved}</p> : null}
     </form>
   );
@@ -928,9 +951,14 @@ function SellingOrders() {
       <ul className="mt-2 space-y-2 text-[13px]">
         {rows.map((row) => (
           <li key={row.id} className="rounded-xl border px-3 py-2">
-            <Link href={`/orders/${row.order_number}`} className="font-semibold text-[#2f6bff]">{row.order_number}</Link>
+            <Link href={`/orders/${row.order_number}`} className="font-semibold text-[#3665f3]">{row.order_number}</Link>
             <span className="ml-2 capitalize text-[#6b7587]">{row.status.replace(/_/g, " ")}</span>
             <span className="block">{row.product}</span>
+            <button type="button" className="mt-1 text-[12px] text-[#3665f3]" onClick={async () => {
+              const body = await accountApi<{ html: string }>(`/api/v1/seller/label/${row.order_number}`);
+              const w = window.open("", "_blank");
+              if (w) { w.document.write(body.html); w.document.close(); }
+            }}>Print packing slip</button>
           </li>
         ))}
         {rows.length === 0 ? <li className="text-[#8a94a6]">No selling orders yet.</li> : null}
@@ -992,7 +1020,7 @@ function BiddingActivity() {
       .catch(() => undefined);
   }, []);
   return (
-    <section className="mt-4 rounded-[24px] border border-[#e7eef6] bg-white p-6">
+    <section className="mt-4 nexlo-card p-6">
       <h2 className="text-[16px] font-bold">Bids & second-chance offers</h2>
       <ul className="mt-3 space-y-2 text-[13px]">
         {chances.map((row) => (
@@ -1000,7 +1028,7 @@ function BiddingActivity() {
             Second chance on {row.title} · NPR {Number(row.amount).toLocaleString()}
             <button
               type="button"
-              className="ml-2 text-[#2f6bff]"
+              className="ml-2 text-[#3665f3]"
               onClick={async () => {
                 await accountApi("/api/v1/auctions/second-chance", { method: "POST", body: JSON.stringify({ offerId: row.id, accept: true }) });
                 window.location.href = "/orders";
@@ -1012,7 +1040,7 @@ function BiddingActivity() {
         ))}
         {bids.map((row) => (
           <li key={row.id} className="rounded-xl border px-3 py-2">
-            <Link href={`/listing/${row.listing_id}`} className="font-semibold text-[#2f6bff]">{row.title}</Link>
+            <Link href={`/listing/${row.listing_id}`} className="font-semibold text-[#3665f3]">{row.title}</Link>
             <span className="ml-2">NPR {Number(row.amount).toLocaleString()} · {row.listing_status}</span>
           </li>
         ))}
@@ -1028,7 +1056,7 @@ function Standing({ user, appeal, setAppeal, onDone }: { user: User; appeal: str
     accountApi<{ data: { public_id: string; message: string; status: string; reason: string | null }[] }>("/api/v1/account/appeals").then((b) => setRows(b.data)).catch(() => undefined);
   }, []);
   return (
-    <section className="rounded-[24px] border border-[#e7eef6] bg-white p-6">
+    <section className="nexlo-card p-6">
       <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Activity</h1>
       <p className="mt-1 text-[14px]">Current status: <strong className="capitalize">{user.status}</strong></p>
       <p className="mt-1 text-[13px] text-[#667085]">If staff restrict or suspend the account, you can appeal.</p>
@@ -1042,7 +1070,7 @@ function Standing({ user, appeal, setAppeal, onDone }: { user: User; appeal: str
           onDone();
         }}>
           <textarea value={appeal} onChange={(e) => setAppeal(e.target.value)} placeholder="Why should this be reviewed?" className="min-h-24 w-full rounded-xl border px-3 py-2" />
-          <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Submit appeal</button>
+          <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Submit appeal</button>
         </form>
       ) : null}
       <ul className="mt-4 space-y-2 text-[13px]">

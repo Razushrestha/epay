@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { accountApi, getToken } from "@/lib/account-api";
+import { SiteFooter } from "@/components/SiteFooter";
+import { PageHero } from "@/components/ui/PageHero";
 
 const money = (n: number) => `NPR ${Number(n || 0).toLocaleString("en-NP")}`;
 
@@ -45,42 +47,57 @@ export default function OrderDetailPage() {
     load().catch((err) => setError(err instanceof Error ? err.message : "Could not load order"));
   }, [params.id]);
 
-  if (error) return <main className="page-shell py-10 text-red-700">{error}</main>;
-  if (!data) return <main className="page-shell py-10">Loading order…</main>;
+  if (error) {
+    return (
+      <>
+        <main className="page-shell py-16 text-[14px] text-[#e53238]">{error}</main>
+        <SiteFooter />
+      </>
+    );
+  }
+  if (!data) {
+    return <main className="page-shell py-16 text-[14px] text-[#707070]">Loading order…</main>;
+  }
   const order = data.order;
 
   return (
-    <main className="min-h-screen bg-[#f5f8fc] py-8">
-      <div className="page-shell space-y-4">
-        <Link href="/orders" className="text-[13px] text-[#2f6bff]">← All orders</Link>
-        <section className="rounded-2xl bg-white p-6">
+    <>
+      <PageHero
+        eyebrow={`Order ${order.order_number}`}
+        title={order.status.replace(/_/g, " ")}
+        body={`${money(order.total_amount)} · Escrow holds payment until delivery. Return requests stay inside the 30-day protection window.`}
+        cta="All orders"
+        href="/orders"
+      />
+      <main className="page-shell space-y-4 py-8">
+        <section className="nexlo-card p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-[24px] font-extrabold text-[#0f1c3f]">Order {order.order_number}</h1>
-              <p className="mt-1 capitalize text-[14px] text-[#6b7587]">{order.status.replace(/_/g, " ")} · {money(order.total_amount)}</p>
+              <h2 className="text-[19px] font-bold text-[#191919]">Items</h2>
+              <p className="mt-1 text-[13px] text-[#707070]">{order.shipping_name} {order.shipping_address_line1 ? `· ${order.shipping_address_line1}` : ""}</p>
             </div>
-            <Link href={`/orders/${order.order_number}/invoice`} className="h-10 rounded-full border px-4 text-[14px] leading-10">VAT invoice</Link>
+            <Link href={`/orders/${order.order_number}/invoice`} className="nexlo-link text-[13px]">VAT invoice →</Link>
           </div>
-          <ul className="mt-4 space-y-2 text-[14px]">
+          <ul className="mt-4 space-y-2">
             {(order.items || []).filter(Boolean).map((item) => (
-              <li key={item.id} className="rounded-xl bg-[#f5f8fc] px-4 py-3">
+              <li key={item.id} className="rounded-xl bg-[#f7f7f7] px-4 py-3 text-[14px] text-[#191919]">
                 {item.title} × {item.quantity} · {money(item.price)}
-                {item.tracking_number ? <span className="block text-[12px] text-[#6b7587]">{item.carrier} {item.tracking_number}</span> : null}
+                {item.tracking_number ? <span className="mt-1 block text-[12px] text-[#707070]">{item.carrier} {item.tracking_number}</span> : null}
               </li>
             ))}
           </ul>
         </section>
 
         {order.status === "pending_payment" ? (
-          <section className="rounded-2xl bg-white p-6">
-            <h2 className="font-bold">Pay now</h2>
-            <p className="mt-1 text-[13px] text-[#6b7587]">Auction and Best Offer winners have 48 hours to pay. Funds are held in escrow until delivery.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+          <section className="nexlo-card p-5 sm:p-6">
+            <h2 className="text-[19px] font-bold text-[#191919]">Pay now</h2>
+            <p className="mt-1 text-[13px] text-[#707070]">Auction and Best Offer winners have 48 hours. Funds are held in escrow until delivery.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
               {(["esewa", "khalti"] as const).map((gateway) => (
                 <button
                   key={gateway}
                   type="button"
-                  className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold capitalize text-white"
+                  className="nexlo-btn nexlo-btn-blue capitalize"
                   onClick={async () => {
                     const body = await accountApi<{ payment_url: string }>("/api/v1/payments/initiate", {
                       method: "POST",
@@ -98,18 +115,18 @@ export default function OrderDetailPage() {
 
         {["paid", "processing"].includes(order.status) ? (
           <form
-            className="rounded-2xl bg-white p-6"
+            className="nexlo-card p-5 sm:p-6"
             onSubmit={async (e) => {
               e.preventDefault();
               await accountApi(`/api/v1/orders/${order.id}/ship`, { method: "POST", body: JSON.stringify({ trackingNumber: tracking, carrier }) });
               await load();
             }}
           >
-            <h2 className="font-bold">Mark shipped</h2>
+            <h2 className="text-[19px] font-bold text-[#191919]">Mark shipped</h2>
             <div className="mt-3 flex flex-wrap gap-2">
-              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} className="h-10 rounded-full border px-4" />
-              <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking number" className="h-10 rounded-full border px-4" />
-              <button className="h-10 rounded-full bg-[#121826] px-5 text-white">Ship</button>
+              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} className="h-10 rounded-full border border-[#e7e7e7] px-4 text-[14px]" />
+              <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking number" className="h-10 rounded-full border border-[#e7e7e7] px-4 text-[14px]" />
+              <button className="nexlo-btn">Ship</button>
             </div>
           </form>
         ) : null}
@@ -117,7 +134,7 @@ export default function OrderDetailPage() {
         {order.status === "shipped" ? (
           <button
             type="button"
-            className="h-10 rounded-full bg-[#12a37e] px-5 text-white"
+            className="nexlo-btn"
             onClick={async () => {
               await accountApi(`/api/v1/orders/${order.id}/deliver`, { method: "POST", body: "{}" });
               await load();
@@ -129,7 +146,7 @@ export default function OrderDetailPage() {
 
         {["delivered", "completed"].includes(order.status) ? (
           <form
-            className="rounded-2xl bg-white p-6 space-y-2"
+            className="nexlo-card space-y-3 p-5 sm:p-6"
             onSubmit={async (e) => {
               e.preventDefault();
               await accountApi("/api/v1/feedback", {
@@ -148,27 +165,59 @@ export default function OrderDetailPage() {
               await load();
             }}
           >
-            <h2 className="font-bold">Leave feedback</h2>
-            <select value={stars} onChange={(e) => setStars(Number(e.target.value))} className="h-10 rounded-full border px-3">
+            <h2 className="text-[19px] font-bold text-[#191919]">Leave feedback</h2>
+            <select value={stars} onChange={(e) => setStars(Number(e.target.value))} className="h-10 rounded-full border border-[#e7e7e7] px-3 text-[14px]">
               {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} stars</option>)}
             </select>
-            <div className="grid gap-2 sm:grid-cols-2 text-[13px]">
+            <div className="grid gap-2 text-[13px] sm:grid-cols-2">
               {([["item", "Item as described"], ["comms", "Communication"], ["ship", "Shipping time"], ["cost", "Shipping cost"]] as const).map(([key, label]) => (
-                <label key={key} className="flex items-center justify-between gap-2 rounded-xl bg-[#f5f8fc] px-3 py-2">
+                <label key={key} className="flex items-center justify-between gap-2 rounded-xl bg-[#f7f7f7] px-3 py-2">
                   {label}
-                  <input type="number" min={1} max={5} value={dsr[key]} onChange={(e) => setDsr({ ...dsr, [key]: Number(e.target.value) })} className="w-14 rounded border px-2" />
+                  <input type="number" min={1} max={5} value={dsr[key]} onChange={(e) => setDsr({ ...dsr, [key]: Number(e.target.value) })} className="w-14 rounded border border-[#e7e7e7] px-2" />
                 </label>
               ))}
             </div>
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} className="min-h-20 w-full rounded-xl border px-3 py-2" placeholder="How did it go?" />
-            <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-white">Save feedback</button>
+            <textarea value={comment} onChange={(e) => setComment(e.target.value)} className="min-h-20 w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[14px]" placeholder="How did it go?" />
+            <button className="nexlo-btn nexlo-btn-blue">Save feedback</button>
+          </form>
+        ) : null}
+
+        {["shipped", "delivered", "completed"].includes(order.status) ? (
+          <form
+            className="nexlo-card space-y-3 p-5 sm:p-6"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const form = new FormData(e.currentTarget);
+              await accountApi("/api/v1/returns", {
+                method: "POST",
+                body: JSON.stringify({
+                  orderId: order.id,
+                  reason: form.get("reason"),
+                  detail: form.get("detail"),
+                  resolution: "refund",
+                }),
+              });
+              window.location.href = "/account?tab=returns";
+            }}
+          >
+            <h2 className="text-[19px] font-bold text-[#191919]">Request a return</h2>
+            <p className="text-[13px] text-[#707070]">Not as described, damaged, or wrong item. Escrow stays frozen until the case is closed.</p>
+            <select name="reason" className="h-10 rounded-full border border-[#e7e7e7] px-3 text-[14px]">
+              <option value="not_as_described">Item not as described</option>
+              <option value="damaged">Damaged</option>
+              <option value="wrong_item">Wrong item</option>
+              <option value="changed_mind">Changed mind</option>
+              <option value="other">Other / not received</option>
+            </select>
+            <textarea name="detail" className="min-h-20 w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[14px]" placeholder="What happened?" />
+            <button className="h-10 rounded-full border border-[#3665f3] px-5 text-[13.5px] font-semibold text-[#3665f3]">Open return</button>
           </form>
         ) : null}
 
         {["pending_payment", "paid", "processing"].includes(order.status) ? (
           <button
             type="button"
-            className="h-10 rounded-full border px-5"
+            className="h-10 rounded-full border border-[#e7e7e7] px-5 text-[13.5px] font-semibold text-[#191919]"
             onClick={async () => {
               await accountApi(`/api/v1/orders/${order.id}/cancel`, { method: "POST", body: JSON.stringify({ reason: "Cancelled by user" }) });
               await load();
@@ -178,15 +227,16 @@ export default function OrderDetailPage() {
           </button>
         ) : null}
 
-        <section className="rounded-2xl bg-white p-6">
-          <h2 className="font-bold">History</h2>
-          <ul className="mt-2 space-y-1 text-[13px] text-[#5b6780]">
+        <section className="nexlo-card p-5 sm:p-6">
+          <h2 className="text-[19px] font-bold text-[#191919]">History</h2>
+          <ul className="mt-3 space-y-2 text-[13px] text-[#707070]">
             {data.history.map((h, i) => (
-              <li key={i}>{h.status_to} · {h.notes} · {new Date(h.created_at).toLocaleString()}</li>
+              <li key={i}>{h.status_to.replace(/_/g, " ")} · {h.notes} · {new Date(h.created_at).toLocaleString()}</li>
             ))}
           </ul>
         </section>
-      </div>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

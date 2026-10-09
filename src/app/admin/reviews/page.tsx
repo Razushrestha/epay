@@ -48,7 +48,7 @@ export default function AdminReviewsPage() {
           </section>
         ))}
       </div>
-      <section className="overflow-hidden rounded-[22px] border border-[#e7eef6] bg-white">
+      <section className="overflow-hidden nexlo-card">
         {rows.map((row) => (
           <article key={row.public_id} className="border-b border-[#eef2f7] px-5 py-4 last:border-b-0">
             <div className="flex flex-wrap items-center justify-between gap-2">

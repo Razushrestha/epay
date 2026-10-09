@@ -33,7 +33,7 @@ function EyeIcon({ off }: { off: boolean }) {
 }
 
 const fieldWrap =
-  "flex h-12 items-center gap-3 rounded-full border border-[#dfe5ee] bg-white px-4 text-[#8a94a6] transition focus-within:border-[#2f6bff] focus-within:text-[#2f6bff] focus-within:shadow-[0_0_0_3px_rgba(47,107,255,0.12)]";
+  "flex h-12 items-center gap-3 rounded-full border border-[#dfe5ee] bg-white px-4 text-[#8a94a6] transition focus-within:border-[#3665f3] focus-within:text-[#3665f3] focus-within:shadow-[0_0_0_3px_rgba(54,101,243,0.12)]";
 
 export function ForgotForm() {
   const [identifier, setIdentifier] = useState("");
@@ -92,8 +92,8 @@ export function ForgotForm() {
   }
 
   return (
-    <div className="w-full max-w-[460px] rounded-[28px] bg-white p-7 shadow-[0_28px_70px_-32px_rgba(47,107,255,0.35)] sm:p-9">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eaf1ff] text-[#2f6bff]">
+    <div className="w-full max-w-[460px] rounded-[28px] bg-white p-7 shadow-[0_28px_70px_-32px_rgba(54,101,243,0.35)] sm:p-9">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eaf1ff] text-[#3665f3]">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
           <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
@@ -114,7 +114,7 @@ export function ForgotForm() {
       {done ? (
         <Link
           href="/login"
-          className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#2f6bff] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(47,107,255,0.75)] transition hover:bg-[#2459e0]"
+          className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6]"
         >
           Back to sign in
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -177,7 +177,7 @@ export function ForgotForm() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  className="shrink-0 text-[#8a94a6] hover:text-[#2f6bff]"
+                  className="shrink-0 text-[#8a94a6] hover:text-[#3665f3]"
                 >
                   <EyeIcon off={showPassword} />
                 </button>
@@ -194,7 +194,7 @@ export function ForgotForm() {
           <button
             type="submit"
             disabled={loading}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#2f6bff] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(47,107,255,0.75)] transition hover:bg-[#2459e0] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "Working…" : sent ? "Save new password" : "Send code"}
             {!loading && (

@@ -163,7 +163,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
       <section className="relative overflow-hidden rounded-[22px] bg-[linear-gradient(100deg,#eaf4ff_0%,#f4f9ff_55%,#eef6ff_100%)] px-5 py-5 sm:px-7">
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <span className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-white text-[#2f6bff] shadow-[0_8px_24px_rgba(47,107,255,0.12)]">
+            <span className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-white text-[#3665f3] shadow-[0_8px_24px_rgba(54,101,243,0.12)]">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
                 <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H10l-4 3.2V6.5Z" />
                 <path d="M9 9.5h6M9 12.5h4" />
@@ -176,9 +176,9 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
           </div>
           <div className="relative hidden h-[108px] w-[220px] shrink-0 sm:block">
             <span className="absolute right-16 top-2 h-2 w-2 rounded-full bg-[#7ee7d6]" />
-            <span className="absolute right-6 top-8 h-1.5 w-1.5 rounded-full bg-[#2f6bff]" />
+            <span className="absolute right-6 top-8 h-1.5 w-1.5 rounded-full bg-[#3665f3]" />
             <span className="absolute bottom-4 right-24 text-[#7ee7d6]">✦</span>
-            <div className="absolute right-0 top-3 rounded-[28px] bg-white/90 px-5 py-4 shadow-[0_12px_30px_rgba(47,107,255,0.14)]">
+            <div className="absolute right-0 top-3 rounded-[28px] bg-white/90 px-5 py-4 shadow-[0_12px_30px_rgba(54,101,243,0.14)]">
               <div className="flex gap-1">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Star key={i} filled />
@@ -193,10 +193,10 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-        <section className="rounded-[22px] border border-[#e7eef6] bg-white px-5 py-4">
+        <section className="nexlo-card px-5 py-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Feedback Profile</h2>
-            <button type="button" aria-label="Profile options" onClick={() => setProfileOpen((v) => !v)} className="rounded-full p-1 text-[#8a94a6] hover:bg-[#f5f8fc]">
+            <button type="button" aria-label="Profile options" onClick={() => setProfileOpen((v) => !v)} className="rounded-full p-1 text-[#8a94a6] hover:bg-[#f7f7f7]">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={profileOpen ? "rotate-180" : ""}>
                 <path d="m6 9 6 6 6-6" />
               </svg>
@@ -222,15 +222,15 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
             </div>
           </div>
           {profileOpen ? (
-            <p className="mt-3 rounded-xl bg-[#f5f8fc] px-3 py-2 text-[13px] text-[#5b6780]">
+            <p className="mt-3 rounded-xl bg-[#f7f7f7] px-3 py-2 text-[13px] text-[#5b6780]">
               This is how other members see your public feedback profile.
             </p>
           ) : null}
         </section>
 
-        <section className="rounded-[22px] border border-[#e7eef6] bg-white px-5 py-4">
+        <section className="nexlo-card px-5 py-4">
           <h2 className="flex items-center gap-2 text-[16px] font-extrabold text-[#0f1c3f]">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f6bff" strokeWidth="1.8" aria-hidden>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3665f3" strokeWidth="1.8" aria-hidden>
               <path d="M10 13a5 5 0 0 0 7.1 0l1.4-1.4a5 5 0 0 0-7.1-7.1L10 5.9" />
               <path d="M14 11a5 5 0 0 0-7.1 0L5.5 12.4a5 5 0 0 0 7.1 7.1L14 18.1" />
             </svg>
@@ -244,7 +244,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
               ["/sell/listings", "View items for sale"],
             ].map(([href, label]) => (
               <li key={label} className="border-t border-[#eef2f7] first:border-t-0">
-                <Link href={href} className="flex items-center justify-between py-2.5 text-[14px] text-[#3a4a66] hover:text-[#2f6bff]">
+                <Link href={href} className="flex items-center justify-between py-2.5 text-[14px] text-[#3a4a66] hover:text-[#3665f3]">
                   {label}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                     <path d="m9 6 6 6-6 6" />
@@ -257,7 +257,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-        <section className="rounded-[22px] border border-[#e7eef6] bg-white px-5 py-5">
+        <section className="nexlo-card px-5 py-5">
           <h2 className="flex items-center gap-2 text-[16px] font-extrabold text-[#0f1c3f]">
             Feedback Ratings
             <InfoTip text="Counts of positive, neutral, and negative feedback left for you as a seller." />
@@ -269,7 +269,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
           </div>
         </section>
 
-        <section className="rounded-[22px] border border-[#e7eef6] bg-white px-5 py-5">
+        <section className="nexlo-card px-5 py-5">
           <h2 className="flex items-center gap-2 text-[16px] font-extrabold text-[#0f1c3f]">
             Detailed seller ratings
             <InfoTip text="Detailed ratings appear after you receive at least 10 seller ratings." />
@@ -290,7 +290,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
         </section>
       </div>
 
-      <section className="overflow-hidden rounded-[22px] border border-[#e7eef6] bg-white">
+      <section className="overflow-hidden nexlo-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eef2f7] px-5">
           <div className="flex min-w-0 flex-1 flex-wrap gap-1">
             {TABS.map((item) => (
@@ -302,11 +302,11 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
                   setPage(1);
                 }}
                 className={`relative px-2 py-3.5 text-[13.5px] sm:px-3 ${
-                  feedTab === item.id ? "font-semibold text-[#2f6bff]" : "font-medium text-[#6b7587] hover:text-[#0f1c3f]"
+                  feedTab === item.id ? "font-semibold text-[#3665f3]" : "font-medium text-[#6b7587] hover:text-[#0f1c3f]"
                 }`}
               >
                 {item.label}
-                {feedTab === item.id ? <span className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[#2f6bff]" /> : null}
+                {feedTab === item.id ? <span className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[#3665f3]" /> : null}
               </button>
             ))}
           </div>
@@ -316,7 +316,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
               role="switch"
               aria-checked={visible}
               onClick={() => setVisible((v) => !v)}
-              className={`relative h-[22px] w-[40px] rounded-full transition ${visible ? "bg-[#2f6bff]" : "bg-[#d5dce8]"}`}
+              className={`relative h-[22px] w-[40px] rounded-full transition ${visible ? "bg-[#3665f3]" : "bg-[#d5dce8]"}`}
             >
               <span className={`absolute top-[3px] h-4 w-4 rounded-full bg-white shadow-sm transition ${visible ? "left-[20px]" : "left-[3px]"}`} />
             </button>
@@ -347,7 +347,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
                 setPage(1);
               }}
               placeholder="Search feedback with item title, item ID or User ID..."
-              className="h-10 w-full rounded-lg border border-[#e2e8f0] bg-[#fbfcfe] pl-9 pr-10 text-[13.5px] outline-none placeholder:text-[#9aa3b2] focus:border-[#2f6bff]"
+              className="h-10 w-full rounded-lg border border-[#e2e8f0] bg-[#fbfcfe] pl-9 pr-10 text-[13.5px] outline-none placeholder:text-[#9aa3b2] focus:border-[#3665f3]"
             />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#c5d0e0]">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
@@ -398,7 +398,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
               {slice.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="py-16 text-center">
-                    <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef6ff] text-[#2f6bff]">
+                    <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef6ff] text-[#3665f3]">
                       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
                         <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H10l-4 3.2V6.5Z" />
                         <path d="M12 8.6 12.9 10.7 15.2 11l-1.7 1.5.5 2.3L12 13.7 10 14.8l.5-2.3L8.8 11l2.3-.3L12 8.6Z" fill="currentColor" stroke="none" />

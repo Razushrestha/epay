@@ -57,7 +57,7 @@ function UsersBoard() {
           <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Users</h1>
           <p className="text-[14px] text-[#6b7587]">Every registered member, staff flag, and standing action.</p>
         </div>
-        <button type="button" onClick={() => setOpen((v) => !v)} className="h-10 rounded-full bg-[#2f6bff] px-4 text-[14px] font-semibold text-white">
+        <button type="button" onClick={() => setOpen((v) => !v)} className="h-10 rounded-full bg-[#3665f3] px-4 text-[14px] font-semibold text-white">
           Add New User
         </button>
       </div>
@@ -66,7 +66,7 @@ function UsersBoard() {
 
       {open ? (
         <form
-          className="grid gap-3 rounded-[22px] border border-[#e7eef6] bg-white p-5 sm:grid-cols-2"
+          className="grid gap-3 nexlo-card p-5 sm:grid-cols-2"
           onSubmit={async (e) => {
             e.preventDefault();
             setError(null);
@@ -91,7 +91,7 @@ function UsersBoard() {
         </form>
       ) : null}
 
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); load(); }}>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search email, username, or name" className="h-10 min-w-[220px] flex-1 rounded-lg border border-[#e2e8f0] px-3" />
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Action reason" className="h-10 min-w-[180px] rounded-lg border border-[#e2e8f0] px-3" />
@@ -124,7 +124,7 @@ function UsersBoard() {
                   <td className="py-3">
                     <div className="flex flex-wrap gap-2">
                       {(["restrict", "suspend", "restore"] as const).map((action) => (
-                        <button key={action} type="button" className="capitalize text-[#2f6bff] hover:underline" onClick={() => act(person, action)}>{action}</button>
+                        <button key={action} type="button" className="capitalize text-[#3665f3] hover:underline" onClick={() => act(person, action)}>{action}</button>
                       ))}
                       <button
                         type="button"

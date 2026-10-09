@@ -12,6 +12,7 @@ type User = {
   email: string | null;
   avatarUrl: string | null;
   isStaff?: boolean;
+  staffRole?: string | null;
 };
 
 export function AdminShell({ children }: { children: ReactNode }) {

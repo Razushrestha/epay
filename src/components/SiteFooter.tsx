@@ -2,9 +2,24 @@ import Image from "next/image";
 import Link from "next/link";
 
 const cols = [
-  { h: "Buy", links: ["Registration", "Bidding", "Buyer protection", "Help"] },
-  { h: "Sell", links: ["Start selling", "Seller center", "Fees", "Payouts"] },
-  { h: "About Nexlo", links: ["Company info", "Careers", "Trust & safety", "Contact"] },
+  { h: "Buy", links: [
+    { label: "Registration", href: "/register" },
+    { label: "Bidding", href: "/help/faq" },
+    { label: "Buyer protection", href: "/help/buyer-protection" },
+    { label: "Help", href: "/help" },
+  ] },
+  { h: "Sell", links: [
+    { label: "Start selling", href: "/sell" },
+    { label: "Seller center", href: "/account?tab=selling" },
+    { label: "Fees", href: "/help/selling-guide" },
+    { label: "Payouts", href: "/account?tab=selling" },
+  ] },
+  { h: "About Nexlo", links: [
+    { label: "Company info", href: "/help/faq" },
+    { label: "Returns", href: "/help/returns" },
+    { label: "Trust & safety", href: "/help/buyer-protection" },
+    { label: "Contact", href: "/help" },
+  ] },
 ];
 
 export function SiteFooter() {
@@ -28,9 +43,9 @@ export function SiteFooter() {
             <p className="text-[13px] font-bold text-[#191919]">{c.h}</p>
             <ul className="mt-3 space-y-2 text-[12.5px] text-[#555]">
               {c.links.map((l) => (
-                <li key={l}>
-                  <Link href="#" className="hover:text-[#3665f3] hover:underline">
-                    {l}
+                <li key={l.label}>
+                  <Link href={l.href} className="hover:text-[#3665f3] hover:underline">
+                    {l.label}
                   </Link>
                 </li>
               ))}
@@ -40,7 +55,10 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-[#e5e5e5]">
         <p className="page-shell py-4 text-center text-[11.5px] text-[#707070] sm:text-left">
-          © {new Date().getFullYear()} Nexlo · Prices in NPR · Privacy · Terms
+          © {new Date().getFullYear()} Nexlo · Prices in NPR ·{" "}
+          <Link href="/privacy" className="hover:text-[#3665f3] hover:underline">Privacy</Link>
+          {" · "}
+          <Link href="/terms" className="hover:text-[#3665f3] hover:underline">Terms</Link>
         </p>
       </div>
     </footer>

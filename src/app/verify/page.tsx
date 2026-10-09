@@ -33,7 +33,7 @@ const features = [
 
 export default function VerifyPage() {
   return (
-    <main className="auth-lock grid h-dvh overflow-hidden bg-[#f5f8fc] lg:grid-cols-2">
+    <main className="auth-lock grid h-dvh overflow-hidden bg-[#f7f7f7] lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-[#1a2338] lg:block">
         <Image
           src="/auth/verify-scene.jpg"
@@ -111,7 +111,7 @@ export default function VerifyPage() {
             <span className="hidden sm:inline">Already have an account?</span>
             <Link
               href="/login"
-              className="rounded-full border border-[#2f6bff] bg-white/80 px-4 py-1.5 text-[13px] font-semibold text-[#2f6bff] transition hover:bg-[#2f6bff] hover:text-white"
+              className="rounded-full border border-[#3665f3] bg-white/80 px-4 py-1.5 text-[13px] font-semibold text-[#3665f3] transition hover:bg-[#3665f3] hover:text-white"
             >
               Sign in
             </Link>

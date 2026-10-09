@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { todaysDeals } from "@/lib/home-data";
+import { SaveButton } from "@/components/commerce/SaveButton";
 
 export function DealsRow() {
   return (
@@ -19,43 +20,42 @@ export function DealsRow() {
 
       <div className="no-scrollbar mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {todaysDeals.map((deal) => (
-          <Link
-            key={deal.id}
-            href={`/listing/${deal.id}`}
-            className="group overflow-hidden rounded-xl border border-[#e7e7e7] bg-white hover:shadow-md"
-          >
-            <span className="relative block bg-[#f7f7f7]">
-              <Image
-                src={deal.img}
-                alt={deal.title}
-                width={340}
-                height={260}
-                className="aspect-[17/13] w-full object-cover"
-                loading="lazy"
-              />
-              <span className="absolute left-2 top-2 rounded bg-[#e53238] px-1.5 py-[2px] text-[10px] font-bold text-white">
-                {deal.off}
+          <article key={deal.id} className="group relative overflow-hidden rounded-xl border border-[#e7e7e7] bg-white hover:shadow-md">
+            <Link href={`/listing/${deal.id}`} className="block">
+              <span className="relative block bg-[#f7f7f7]">
+                <Image
+                  src={deal.img}
+                  alt={deal.title}
+                  width={340}
+                  height={260}
+                  className="aspect-[17/13] w-full object-cover"
+                  loading="lazy"
+                />
+                <span className="absolute left-2 top-2 rounded bg-[#e53238] px-1.5 py-[2px] text-[10px] font-bold text-white">
+                  {deal.off}
+                </span>
               </span>
-              <span
-                aria-label="Add to watchlist"
-                className="absolute right-2 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[16px] text-[#333] shadow-sm"
-              >
-                ♡
+              <span className="block p-2.5">
+                <span className="clamp-2 block min-h-[32px] text-[12.5px] font-medium leading-snug text-[#191919]">
+                  {deal.title}
+                </span>
+                <span className="mt-1.5 block text-[15px] font-bold text-[#191919]">
+                  {deal.price}
+                </span>
+                <span className="mt-[2px] block text-[11px]">
+                  <span className="text-[#707070] line-through">{deal.was}</span>
+                  <span className="ml-1.5 font-semibold text-[#008638]">{deal.off}</span>
+                </span>
               </span>
-            </span>
-            <span className="block p-2.5">
-              <span className="clamp-2 block min-h-[32px] text-[12.5px] font-medium leading-snug text-[#191919]">
-                {deal.title}
-              </span>
-              <span className="mt-1.5 block text-[15px] font-bold text-[#191919]">
-                {deal.price}
-              </span>
-              <span className="mt-[2px] block text-[11px]">
-                <span className="text-[#707070] line-through">{deal.was}</span>
-                <span className="ml-1.5 font-semibold text-[#008638]">{deal.off}</span>
-              </span>
-            </span>
-          </Link>
+            </Link>
+            <SaveButton
+              listingId={deal.id}
+              title={deal.title}
+              photo={deal.img}
+              price={deal.price}
+              className="absolute right-2 top-1.5 z-10"
+            />
+          </article>
         ))}
       </div>
     </section>

@@ -169,13 +169,13 @@ export function LoginForm() {
   }
 
   const fieldWrap =
-    "flex h-11 items-center gap-3 rounded-full border border-[#dfe5ee] bg-white px-4 text-[#8a94a6] transition focus-within:border-[#2f6bff] focus-within:text-[#2f6bff] focus-within:shadow-[0_0_0_3px_rgba(47,107,255,0.12)]";
+    "flex h-11 items-center gap-3 rounded-full border border-[#dfe5ee] bg-white px-4 text-[#8a94a6] transition focus-within:border-[#3665f3] focus-within:text-[#3665f3] focus-within:shadow-[0_0_0_3px_rgba(54,101,243,0.12)]";
 
   return (
     <div className="w-full max-w-[420px]">
       <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-[#0f1c3f]">
         Sign in to{" "}
-        <span className="bg-gradient-to-r from-[#08c4a6] to-[#2f6bff] bg-clip-text text-transparent">
+        <span className="bg-gradient-to-r from-[#08c4a6] to-[#3665f3] bg-clip-text text-transparent">
           Nexlo
         </span>
       </h1>
@@ -192,9 +192,9 @@ export function LoginForm() {
             inputMode="numeric"
             autoComplete="one-time-code"
             placeholder="123456"
-            className="h-11 w-full rounded-full border border-[#dfe5ee] px-4 text-[15px] outline-none focus:border-[#2f6bff]"
+            className="h-11 w-full rounded-full border border-[#dfe5ee] px-4 text-[15px] outline-none focus:border-[#3665f3]"
           />
-          <button type="submit" disabled={loading} className="h-11 w-full rounded-full bg-[#2f6bff] text-[15px] font-semibold text-white disabled:opacity-60">
+          <button type="submit" disabled={loading} className="h-11 w-full rounded-full bg-[#3665f3] text-[15px] font-semibold text-white disabled:opacity-60">
             {loading ? "Checking…" : "Confirm"}
           </button>
         </form>
@@ -243,7 +243,7 @@ export function LoginForm() {
               onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? "Hide password" : "Show password"}
               aria-pressed={showPassword}
-              className="shrink-0 text-[#8a94a6] hover:text-[#2f6bff]"
+              className="shrink-0 text-[#8a94a6] hover:text-[#3665f3]"
             >
               <EyeIcon off={showPassword} />
             </button>
@@ -260,7 +260,7 @@ export function LoginForm() {
             />
             <span
               aria-hidden
-              className="flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border border-[#c9d2e0] bg-white text-transparent transition peer-checked:border-[#2f6bff] peer-checked:bg-[#2f6bff] peer-checked:text-white"
+              className="flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border border-[#c9d2e0] bg-white text-transparent transition peer-checked:border-[#3665f3] peer-checked:bg-[#3665f3] peer-checked:text-white"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m5 12.5 4.5 4.5L19 7.5" />
@@ -268,7 +268,7 @@ export function LoginForm() {
             </span>
             Remember me
           </label>
-          <Link href="/forgot" className="text-[13.5px] font-medium text-[#2f6bff] hover:underline">
+          <Link href="/forgot" className="text-[13.5px] font-medium text-[#3665f3] hover:underline">
             Forgot password?
           </Link>
         </div>
@@ -289,7 +289,7 @@ export function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#2f6bff] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(47,107,255,0.75)] transition hover:bg-[#2459e0] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Signing in…" : "Continue"}
           {!loading && (

@@ -6,7 +6,7 @@ export async function authFromHeaders(headers) {
   if (!token) return null;
   const hash = createHash("sha256").update(token).digest("hex");
   const { rows } = await query(
-    `SELECT u.id as user_id, u.public_id, u.email, u.phone, u.is_seller, u.is_staff, u.status, u.seller_level
+    `SELECT u.id as user_id, u.public_id, u.email, u.phone, u.is_seller, u.is_staff, u.staff_role, u.status, u.seller_level, u.email_verified_at, u.phone_verified_at
      FROM auth_sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > NOW() AND u.deleted_at IS NULL`,
     [hash],

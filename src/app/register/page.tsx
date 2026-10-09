@@ -54,7 +54,7 @@ export default function RegisterPage() {
           </Link>
           <h2 className="mt-6 max-w-[340px] text-[38px] font-extrabold leading-[1.05] tracking-tight text-[#0f1c3f] xl:text-[42px]">
             Join Nexlo and{" "}
-            <span className="bg-gradient-to-r from-[#12c4b0] to-[#2f6bff] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[#12c4b0] to-[#3665f3] bg-clip-text text-transparent">
               be part of something bigger.
             </span>
           </h2>
@@ -64,7 +64,7 @@ export default function RegisterPage() {
           <ul className="mt-5 flex max-w-[460px]">
             {features.map((f) => (
               <li key={f.label} className="flex flex-1 flex-col items-center px-1 text-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2f6bff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3665f3" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   {f.icon}
                 </svg>
                 <span className="mt-1 text-[11px] font-semibold leading-tight text-[#0f1c3f]">{f.label}</span>
@@ -97,7 +97,7 @@ export default function RegisterPage() {
           </Link>
           <p className="flex items-center gap-2 text-[13px] text-[#4b566b]">
             <span className="hidden sm:inline">Already have an account?</span>
-            <Link href="/login" className="font-semibold text-[#2f6bff] hover:underline">
+            <Link href="/login" className="font-semibold text-[#3665f3] hover:underline">
               Sign in →
             </Link>
           </p>

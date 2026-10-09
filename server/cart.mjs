@@ -19,6 +19,9 @@ export async function handleCart(req, method, urlPath, headers, body, ipAddress,
     const auth = token ? await validateToken(token) : null;
     const userId = auth?.userId || null;
     const sessionId = headers['x-session-id'] || req.headers['x-session-id'] || generateSessionId();
+    if (userId && sessionId) {
+      await mergeGuestCart(userId, sessionId);
+    }
 
     // Cart endpoints
     if (method === 'GET' && !pathParts[0]) {
@@ -96,6 +99,14 @@ async function validateToken(token) {
  */
 function generateSessionId() {
   return randomBytes(16).toString('hex');
+}
+
+async function mergeGuestCart(userId, sessionId) {
+  await query(
+    `UPDATE cart_items SET user_id = $1
+     WHERE session_id = $2 AND (user_id IS NULL OR user_id = $1)`,
+    [userId, sessionId]
+  );
 }
 
 /**

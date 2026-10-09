@@ -5,6 +5,7 @@ import { handleListings } from "./listings.mjs";
 import { handleCart } from "./cart.mjs";
 import { handlePayments } from "./payments.mjs";
 import { handlePhase3, isPhase3Path } from "./phase3.mjs";
+import { handlePhase4, isPhase4Path } from "./phase4.mjs";
 import { attachAuctionStream } from "./auctions.mjs";
 
 async function db() {
@@ -26,7 +27,7 @@ function setCors(req, res) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-session-id");
 }
 
 function json(req, res, status, body) {
@@ -112,6 +113,11 @@ export async function handleRequest(req, res) {
 
   if (pathname.startsWith(`${API_PREFIX}/`)) {
     const pathParts = pathname.replace(`${API_PREFIX}/`, "").split("/").filter(Boolean);
+    if (isPhase4Path(pathParts)) {
+      const body = ["POST", "PATCH", "PUT", "DELETE"].includes(method) ? await readJson(req) : {};
+      const result = await handlePhase4(req, method, pathParts, body);
+      if (result) return json(req, res, result.status, result.body);
+    }
     if (isPhase3Path(pathParts)) {
       const body = ["POST", "PATCH", "PUT", "DELETE"].includes(method) ? await readJson(req) : {};
       const result = await handlePhase3(req, method, pathParts, body);

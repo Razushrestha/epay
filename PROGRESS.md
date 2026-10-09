@@ -264,50 +264,51 @@
 
 ---
 
-## Phase 4 (Month 4) - **NOT STARTED ❌**
+## Phase 4 (Month 4) - **IN PROGRESS**
 
 **Deliverables:** Returns and disputes, seller dashboard and admin panel, testing, security review, performance tuning, user acceptance testing, go-live, training and handover
 
 ### Pending Features:
 
 #### 1. **Returns & Disputes**
-- [ ] Return requests (item not as described, damaged, wrong item)
-- [ ] Case management (buyer evidence, seller response, admin decision)
-- [ ] Return shipping labels
-- [ ] Refund processing
-- [ ] Buyer protection window (30 days after delivery)
+- [x] Return requests (item not as described, damaged, wrong item)
+- [x] Case management (buyer evidence, seller response, admin decision)
+- [x] Return shipping labels
+- [x] Refund processing
+- [x] Buyer protection window (30 days after delivery)
 
 #### 2. **Seller Tools**
-- [ ] Seller dashboard (expanded with charts, revenue, pending orders)
-- [ ] Inventory management (bulk edit, import/export)
-- [ ] Order management (mark shipped, print labels)
-- [ ] Vacation mode (auto-respond, hide listings)
-- [ ] Saved replies (common messages)
-- [ ] Reports (sales, taxes, fees)
+- [x] Seller dashboard (expanded with charts, revenue, pending orders)
+- [x] Inventory management (bulk edit, import/export)
+- [x] Order management (mark shipped, print labels)
+- [x] Vacation mode (auto-respond, hide listings)
+- [x] Saved replies (common messages)
+- [x] Reports (sales, taxes, fees)
 
 #### 3. **Admin Back-Office**
-- [ ] Role-based access control (Admin, Moderator, Finance, Support)
-- [ ] User management (search, ban, verify)
-- [ ] Listing moderation queue (approve/reject/flag)
-- [ ] Order management (view all, refund, cancel)
-- [ ] Finance dashboard (revenue, payouts, fees)
-- [ ] Dispute resolution panel
-- [ ] Content management (homepage banners, featured categories)
-- [ ] Audit log (all admin actions)
-- [ ] Reports & analytics (site metrics, GMV, conversion rates)
+- [x] Role-based access control (Admin, Moderator, Finance, Support)
+- [x] User management (search, ban, verify)
+- [x] Listing moderation queue (approve/reject/flag)
+- [x] Order management (view all, refund, cancel)
+- [x] Finance dashboard (revenue, payouts, fees)
+- [x] Dispute resolution panel
+- [x] Content management (homepage banners, featured categories)
+- [x] Audit log (all admin actions)
+- [x] Reports & analytics (site metrics, GMV, conversion rates)
 
 #### 4. **Trust & Safety**
-- [ ] Rule-based fraud checks (velocity checks, duplicate accounts, suspicious activity)
-- [ ] Strikes system (warnings → restrictions → ban)
-- [ ] Image moderation (prohibited content detection)
-- [ ] Email/phone verification enforcement
+- [x] Rule-based fraud checks (velocity checks, duplicate accounts, suspicious activity)
+- [x] Strikes system (warnings → restrictions → ban)
+- [x] Image moderation (prohibited content detection)
+- [x] Email/phone verification enforcement
 
 #### 5. **Testing & Go-Live**
-- [ ] Unit tests (backend API endpoints)
+- [x] Unit tests (backend API endpoints)
 - [ ] Integration tests (payment flows, order lifecycle)
 - [ ] Load testing (simulate 1000+ concurrent users)
-- [ ] Security review (OWASP Top 10, SQL injection, XSS, CSRF)
-- [ ] Performance tuning (database indexing, caching with Redis, CDN setup)
+- [x] Security review (OWASP Top 10, SQL injection, XSS, CSRF)
+- [x] Performance tuning (indexes on orders, listings, returns, audit)
+- [ ] Redis cache / CDN (production ops)
 - [ ] User acceptance testing (UAT with client team)
 - [ ] Production deployment (client-provided servers)
 - [ ] Training session (4 hours for client staff)

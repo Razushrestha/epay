@@ -38,13 +38,13 @@ export function SellerWallet() {
           ["In escrow", money(data.wallet?.pending_balance ?? 0)],
           ["Lifetime", money(data.wallet?.lifetime_earnings ?? 0)],
         ].map(([labelText, value]) => (
-          <div key={labelText} className="rounded-2xl bg-[#f5f8fc] p-4">
+          <div key={labelText} className="rounded-2xl bg-[#f7f7f7] p-4">
             <p className="text-[12px] text-[#7a8496]">{labelText}</p>
             <p className="mt-1 text-[18px] font-extrabold text-[#0f1c3f]">{value}</p>
           </div>
         ))}
       </div>
-      {notice ? <p className="text-[13px] text-[#2f6bff]">{notice}</p> : null}
+      {notice ? <p className="text-[13px] text-[#3665f3]">{notice}</p> : null}
 
       <form
         className="flex flex-wrap gap-2"
@@ -56,7 +56,7 @@ export function SellerWallet() {
         }}
       >
         <input value={amount} onChange={(e) => setAmount(e.target.value)} className="h-10 w-32 rounded-full border px-4" />
-        <button className="h-10 rounded-full bg-[#2f6bff] px-5 text-[14px] font-semibold text-white">Request payout</button>
+        <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Request payout</button>
         <p className="self-center text-[12px] text-[#8a94a6]">Minimum NPR 1,000</p>
       </form>
 

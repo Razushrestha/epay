@@ -97,7 +97,7 @@ export function VerifyForm() {
   }
 
   const fieldWrap =
-    "flex h-12 items-center gap-3 rounded-full border border-[#dfe5ee] bg-white px-4 text-[#8a94a6] transition focus-within:border-[#2f6bff] focus-within:text-[#2f6bff] focus-within:shadow-[0_0_0_3px_rgba(47,107,255,0.12)]";
+    "flex h-12 items-center gap-3 rounded-full border border-[#dfe5ee] bg-white px-4 text-[#8a94a6] transition focus-within:border-[#3665f3] focus-within:text-[#3665f3] focus-within:shadow-[0_0_0_3px_rgba(54,101,243,0.12)]";
 
   return (
     <div className="w-full max-w-[440px] rounded-[28px] bg-white p-7 shadow-[0_24px_60px_-28px_rgba(15,40,80,0.35)] sm:p-9">
@@ -149,7 +149,7 @@ export function VerifyForm() {
             type="button"
             onClick={() => setShowCode((v) => !v)}
             aria-label={showCode ? "Hide code" : "Show code"}
-            className="shrink-0 text-[#8a94a6] hover:text-[#2f6bff]"
+            className="shrink-0 text-[#8a94a6] hover:text-[#3665f3]"
           >
             <EyeIcon off={showCode} />
           </button>
@@ -168,7 +168,7 @@ export function VerifyForm() {
         <button
           type="submit"
           disabled={loading}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#2f6bff] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(47,107,255,0.75)] transition hover:bg-[#2459e0] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Checking…" : "Verify and continue"}
           {!loading && (

@@ -42,7 +42,7 @@ export default function AdminOrdersPage() {
         <p className="text-[14px] text-[#6b7587]">Track checkout, fulfillment, refunds, and cancellations.</p>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
-      <section className="rounded-[22px] border border-[#e7eef6] bg-white p-5">
+      <section className="nexlo-card p-5">
         <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); load(); }}>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search order ID or customer" className="h-10 min-w-[220px] flex-1 rounded-lg border border-[#e2e8f0] px-3" />
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 rounded-lg border border-[#e2e8f0] px-3">
@@ -67,7 +67,7 @@ export default function AdminOrdersPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-b border-[#f3f6fa]">
-                  <td className="py-3 font-semibold text-[#2f6bff]">#{row.order_number}</td>
+                  <td className="py-3 font-semibold text-[#3665f3]">#{row.order_number}</td>
                   <td className="py-3">
                     <p className="font-medium text-[#0f1c3f]">{row.customer}</p>
                     <p className="text-[12px] text-[#8a94a6]">{row.customer_email}</p>

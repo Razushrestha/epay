@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { accountApi, apiBase } from "@/lib/account-api";
 import { useRouter } from "next/navigation";
+import { SiteFooter } from "@/components/SiteFooter";
 
 interface Category {
   id: number;
@@ -254,51 +255,52 @@ export default function CreateListingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Create Listing</h1>
-          <p className="mt-2 text-gray-600">Sell your item on Nexlo</p>
+    <div className="min-h-screen bg-white py-8">
+      <div className="page-shell mx-auto max-w-4xl">
+        <div className="hero-bg mb-8 overflow-hidden rounded-[16px] px-6 py-8 sm:px-10">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f1c3f]">Sell</p>
+          <h1 className="mt-2 text-[32px] font-bold tracking-tight text-[#0f1c3f]">Create a listing</h1>
+          <p className="mt-2 max-w-[520px] text-[14px] text-[#333]">Photos, category, and price. Then publish — escrow covers every sale.</p>
         </div>
 
         {error && (
-          <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-800">
-            <strong>Error:</strong> {error}
+          <div className="mb-6 rounded-xl border border-[#f5c2c7] bg-[#fff5f5] p-4 text-[14px] text-[#e53238]">
+            {error}
           </div>
         )}
 
         {/* Progress indicator */}
         <div className="mb-8 flex items-center justify-between">
           <div className="flex flex-1 items-center">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-full ${step >= 1 ? "bg-blue-600 text-white" : "bg-gray-300"}`}>
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-bold ${step >= 1 ? "bg-[#0f1c3f] text-white" : "bg-[#e7e7e7] text-[#707070]"}`}>
               1
             </div>
-            <div className={`h-1 flex-1 ${step >= 2 ? "bg-blue-600" : "bg-gray-300"}`} />
+            <div className={`h-1 flex-1 ${step >= 2 ? "bg-[#0f1c3f]" : "bg-[#e7e7e7]"}`} />
           </div>
           <div className="flex flex-1 items-center">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-full ${step >= 2 ? "bg-blue-600 text-white" : "bg-gray-300"}`}>
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-bold ${step >= 2 ? "bg-[#0f1c3f] text-white" : "bg-[#e7e7e7] text-[#707070]"}`}>
               2
             </div>
-            <div className={`h-1 flex-1 ${step >= 3 ? "bg-blue-600" : "bg-gray-300"}`} />
+            <div className={`h-1 flex-1 ${step >= 3 ? "bg-[#0f1c3f]" : "bg-[#e7e7e7]"}`} />
           </div>
-          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${step >= 3 ? "bg-blue-600 text-white" : "bg-gray-300"}`}>
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-bold ${step >= 3 ? "bg-[#0f1c3f] text-white" : "bg-[#e7e7e7] text-[#707070]"}`}>
             3
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="rounded-lg bg-white p-8 shadow">
+        <form onSubmit={handleSubmit} className="nexlo-card p-6 sm:p-8">
           {/* Step 1: Basic Info */}
           {step === 1 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900">Basic Information</h2>
+              <h2 className="text-xl font-semibold text-[#191919]">Basic Information</h2>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Category *</label>
+                <label className="mb-1 block text-sm font-medium text-[#333]">Category *</label>
                 <select
                   required
                   value={formData.category_id}
                   onChange={(e) => updateField("category_id", e.target.value)}
-                  className="w-full rounded border border-gray-300 px-3 py-2"
+                  className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                 >
                   <option value="">Select a category</option>
                   {categories.map((cat) => (
@@ -310,7 +312,7 @@ export default function CreateListingPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Title *</label>
+                <label className="mb-1 block text-sm font-medium text-[#333]">Title *</label>
                 <input
                   type="text"
                   required
@@ -318,44 +320,44 @@ export default function CreateListingPage() {
                   value={formData.title}
                   onChange={(e) => updateField("title", e.target.value)}
                   placeholder="e.g., iPhone 14 Pro Max 256GB - Space Black"
-                  className="w-full rounded border border-gray-300 px-3 py-2"
+                  className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                 />
-                <p className="mt-1 text-sm text-gray-500">{formData.title.length}/80 characters</p>
+                <p className="mt-1 text-sm text-[#707070]">{formData.title.length}/80 characters</p>
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Subtitle</label>
+                <label className="mb-1 block text-sm font-medium text-[#333]">Subtitle</label>
                 <input
                   type="text"
                   maxLength={55}
                   value={formData.subtitle}
                   onChange={(e) => updateField("subtitle", e.target.value)}
                   placeholder="Optional subtitle for extra details"
-                  className="w-full rounded border border-gray-300 px-3 py-2"
+                  className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                 />
-                <p className="mt-1 text-sm text-gray-500">{formData.subtitle.length}/55 characters</p>
+                <p className="mt-1 text-sm text-[#707070]">{formData.subtitle.length}/55 characters</p>
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Description *</label>
+                <label className="mb-1 block text-sm font-medium text-[#333]">Description *</label>
                 <textarea
                   required
                   value={formData.description}
                   onChange={(e) => updateField("description", e.target.value)}
                   rows={8}
                   placeholder="Describe your item in detail..."
-                  className="w-full rounded border border-gray-300 px-3 py-2"
+                  className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                 />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Condition *</label>
+                  <label className="mb-1 block text-sm font-medium text-[#333]">Condition *</label>
                   <select
                     required
                     value={formData.condition_id}
                     onChange={(e) => updateField("condition_id", e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2"
+                    className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                   >
                     <option value="">Select condition</option>
                     {conditions.map((cond) => (
@@ -367,11 +369,11 @@ export default function CreateListingPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Brand</label>
+                  <label className="mb-1 block text-sm font-medium text-[#333]">Brand</label>
                   <select
                     value={formData.brand_id}
                     onChange={(e) => updateField("brand_id", e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2"
+                    className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                   >
                     <option value="">No brand</option>
                     {brands.map((brand) => (
@@ -386,7 +388,7 @@ export default function CreateListingPage() {
               <button
                 type="button"
                 onClick={() => setStep(2)}
-                className="w-full rounded-lg bg-blue-600 py-3 text-white hover:bg-blue-700"
+                className="nexlo-btn h-11 w-full"
               >
                 Next: Pricing & Format
               </button>
@@ -396,10 +398,10 @@ export default function CreateListingPage() {
           {/* Step 2: Pricing & Format */}
           {step === 2 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900">Pricing & Format</h2>
+              <h2 className="text-xl font-semibold text-[#191919]">Pricing & Format</h2>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">Listing Format *</label>
+                <label className="mb-2 block text-sm font-medium text-[#333]">Listing Format *</label>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2">
                     <input
@@ -440,7 +442,7 @@ export default function CreateListingPage() {
               {(formData.format === "fixed" || formData.format === "both") && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Price (NPR) *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#333]">Price (NPR) *</label>
                     <input
                       type="number"
                       required
@@ -448,17 +450,17 @@ export default function CreateListingPage() {
                       min="0"
                       value={formData.price}
                       onChange={(e) => updateField("price", e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Quantity</label>
+                    <label className="mb-1 block text-sm font-medium text-[#333]">Quantity</label>
                     <input
                       type="number"
                       min="1"
                       value={formData.quantity}
                       onChange={(e) => updateField("quantity", e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                 </div>
@@ -468,7 +470,7 @@ export default function CreateListingPage() {
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Starting Bid (NPR) *</label>
+                      <label className="mb-1 block text-sm font-medium text-[#333]">Starting Bid (NPR) *</label>
                       <input
                         type="number"
                         required
@@ -476,27 +478,27 @@ export default function CreateListingPage() {
                         min="0"
                         value={formData.auction_start_price}
                         onChange={(e) => updateField("auction_start_price", e.target.value)}
-                        className="w-full rounded border border-gray-300 px-3 py-2"
+                        className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Reserve Price (NPR)</label>
+                      <label className="mb-1 block text-sm font-medium text-[#333]">Reserve Price (NPR)</label>
                       <input
                         type="number"
                         step="0.01"
                         min="0"
                         value={formData.auction_reserve_price}
                         onChange={(e) => updateField("auction_reserve_price", e.target.value)}
-                        className="w-full rounded border border-gray-300 px-3 py-2"
+                        className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Duration</label>
+                    <label className="mb-1 block text-sm font-medium text-[#333]">Duration</label>
                     <select
                       value={formData.auction_duration}
                       onChange={(e) => updateField("auction_duration", e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     >
                       <option value="24">1 day</option>
                       <option value="72">3 days</option>
@@ -512,14 +514,14 @@ export default function CreateListingPage() {
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="flex-1 rounded-lg border border-gray-300 bg-white py-3 text-gray-700 hover:bg-gray-50"
+                  className="h-11 flex-1 rounded-full border border-[#e7e7e7] bg-white text-[13.5px] font-semibold text-[#191919] hover:bg-[#f7f7f7]"
                 >
                   Back
                 </button>
                 <button
                   type="button"
                   onClick={() => setStep(3)}
-                  className="flex-1 rounded-lg bg-blue-600 py-3 text-white hover:bg-blue-700"
+                  className="nexlo-btn h-11 flex-1"
                 >
                   Next: Shipping
                 </button>
@@ -530,14 +532,14 @@ export default function CreateListingPage() {
           {/* Step 3: Photos & Shipping */}
           {step === 3 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900">Photos & Shipping</h2>
+              <h2 className="text-xl font-semibold text-[#191919]">Photos & Shipping</h2>
 
               {/* Photo Upload */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-sm font-medium text-[#333]">
                   Photos (up to 12)
                 </label>
-                <p className="mb-3 text-sm text-gray-500">
+                <p className="mb-3 text-sm text-[#707070]">
                   Add photos to showcase your item. First photo will be the primary image.
                 </p>
                 
@@ -548,7 +550,7 @@ export default function CreateListingPage() {
                       <img
                         src={photo.preview}
                         alt={`Photo ${index + 1}`}
-                        className="h-full w-full rounded-lg border-2 border-gray-300 object-cover"
+                        className="h-full w-full rounded-lg border-2 border-[#e7e7e7] object-cover"
                       />
                       <button
                         type="button"
@@ -560,7 +562,7 @@ export default function CreateListingPage() {
                         </svg>
                       </button>
                       {index === 0 && (
-                        <div className="absolute bottom-2 left-2 rounded bg-blue-600 px-2 py-1 text-xs text-white">
+                        <div className="absolute bottom-2 left-2 rounded bg-[#0f1c3f] px-2 py-1 text-xs text-white">
                           Primary
                         </div>
                       )}
@@ -569,11 +571,11 @@ export default function CreateListingPage() {
 
                   {/* Add Photo Button */}
                   {photos.length < 12 && (
-                    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:border-blue-500 hover:bg-blue-50">
-                      <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#e7e7e7] bg-[#f7f7f7] hover:border-[#3665f3] hover:bg-[#eef3ff]">
+                      <svg className="h-8 w-8 text-[#707070]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
-                      <span className="mt-2 text-sm text-gray-500">Add Photo</span>
+                      <span className="mt-2 text-sm text-[#707070]">Add Photo</span>
                       <input
                         type="file"
                         accept="image/jpeg,image/jpg,image/png,image/webp"
@@ -592,7 +594,7 @@ export default function CreateListingPage() {
                 )}
                 
                 {photos.length > 0 && (
-                  <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                  <div className="mt-4 rounded-xl border border-[#cfe0ff] bg-[#eef3ff] p-4">
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
@@ -600,11 +602,11 @@ export default function CreateListingPage() {
                         onChange={(e) => setRemoveBackground(e.target.checked)}
                         className="rounded"
                       />
-                      <span className="text-sm font-medium text-gray-700">
+                      <span className="text-sm font-medium text-[#333]">
                         Remove background from photos (recommended for products)
                       </span>
                     </label>
-                    <p className="mt-1 text-xs text-gray-600">
+                    <p className="mt-1 text-xs text-[#707070]">
                       Automatically removes white backgrounds to make your products stand out.
                       Works best with items photographed on plain backgrounds.
                     </p>
@@ -627,24 +629,24 @@ export default function CreateListingPage() {
               {!formData.shipping_free && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Shipping Cost (NPR)</label>
+                    <label className="mb-1 block text-sm font-medium text-[#333]">Shipping Cost (NPR)</label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       value={formData.shipping_cost}
                       onChange={(e) => updateField("shipping_cost", e.target.value)}
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Item Location</label>
+                    <label className="mb-1 block text-sm font-medium text-[#333]">Item Location</label>
                     <input
                       type="text"
                       value={formData.item_location}
                       onChange={(e) => updateField("item_location", e.target.value)}
                       placeholder="e.g., Kathmandu, Nepal"
-                      className="w-full rounded border border-gray-300 px-3 py-2"
+                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
                     />
                   </div>
                 </div>
@@ -660,7 +662,7 @@ export default function CreateListingPage() {
                   />
                   <span className="text-sm font-medium">Publish Immediately</span>
                 </label>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-[#707070]">
                   {formData.publish_immediately
                     ? "Your listing will go live immediately"
                     : "Your listing will be saved as a draft"}
@@ -671,14 +673,14 @@ export default function CreateListingPage() {
                 <button
                   type="button"
                   onClick={() => setStep(2)}
-                  className="flex-1 rounded-lg border border-gray-300 bg-white py-3 text-gray-700 hover:bg-gray-50"
+                  className="h-11 flex-1 rounded-full border border-[#e7e7e7] bg-white text-[13.5px] font-semibold text-[#191919] hover:bg-[#f7f7f7]"
                 >
                   Back
                 </button>
                 <button
                   type="submit"
                   disabled={loading || uploadingPhotos}
-                  className="flex-1 rounded-lg bg-blue-600 py-3 text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="nexlo-btn h-11 flex-1 disabled:opacity-50"
                 >
                   {uploadingPhotos 
                     ? "Uploading photos..." 
@@ -693,6 +695,7 @@ export default function CreateListingPage() {
           )}
         </form>
       </div>
+      <SiteFooter />
     </div>
   );
 }

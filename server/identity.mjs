@@ -14,6 +14,7 @@ import { pool, initDb } from "./db.mjs";
 import { rateLimit, RateLimitConfig, clearRateLimit } from "./security/rate-limit.mjs";
 import { deliverCode } from "./mail.mjs";
 import { handleStaffExtras } from "./staff.mjs";
+import { evaluateUser, recordDevice } from "./trust.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
@@ -156,6 +157,7 @@ function publicUser(user, score, kyc) {
     sellerLevel: user.seller_level,
     isSeller: user.is_seller,
     isStaff: user.is_staff,
+    staffRole: user.staff_role || (user.is_staff ? "super_admin" : "none"),
     displayName: user.display_name,
     firstName: user.first_name,
     lastName: user.last_name,
@@ -402,8 +404,14 @@ export async function handleIdentity(req, res, ctx) {
       );
       await client.query("COMMIT");
       await deliverCode(channel, destination, code, "verify");
+      const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+      const risk = await evaluateUser(user.id, { kind: "register", ip, email, phone }).catch(() => null);
+      if (risk?.blocked) {
+        await (await db()).query(`UPDATE users SET status = 'restricted' WHERE id = $1`, [user.id]);
+      }
+      await recordDevice(user.id, body.deviceHash).catch(() => {});
       return json(req, res, 201, {
-        data: { id: user.public_id, destination, channel, devCode: devCodes ? code : undefined },
+        data: { id: user.public_id, destination, channel, devCode: devCodes ? code : undefined, review: Boolean(risk?.flagged || risk?.blocked) },
       });
     } catch (err) {
       await client.query("ROLLBACK");
