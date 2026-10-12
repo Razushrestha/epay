@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { accountApi, setToken } from "@/lib/account-api";
+import { accountApi, apiBase, digitsCode, getToken, setToken } from "@/lib/account-api";
 import { AccountChrome, fullName, initials } from "@/components/account/AccountChrome";
 import { FeedbackBoard } from "@/components/account/FeedbackBoard";
 import { MessagesInbox } from "@/components/account/MessagesInbox";
@@ -322,6 +322,95 @@ function AccountScreen() {
     country: "Nepal",
   });
   const [addressSlot, setAddressSlot] = useState<string | null>(null);
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneStep, setPhoneStep] = useState<"edit" | "code">("edit");
+  const [phoneBusy, setPhoneBusy] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [clearAvatar, setClearAvatar] = useState(false);
+
+  function resetAvatarEditor() {
+    setAvatarFile(null);
+    setAvatarPreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+    setClearAvatar(false);
+  }
+
+  function onAvatarFile(file: File | undefined) {
+    if (!file) return;
+    setAvatarPreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(file);
+    });
+    setAvatarFile(file);
+    setClearAvatar(false);
+    setError(null);
+  }
+
+  function openPhoneEditor(section: "phone" | "contact") {
+    const closing = editing === section;
+    setEditing(closing ? null : section);
+    if (closing || !user) return;
+    setPhoneDraft(user.phone ?? "");
+    setPhoneCode("");
+    setPhoneStep("edit");
+    setError(null);
+  }
+
+  async function requestPhoneChange(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setNotice(null);
+    if (!user?.emailVerified) {
+      setError("Verify your email before changing your phone number.");
+      return;
+    }
+    setPhoneBusy(true);
+    try {
+      const body = await accountApi<{
+        data: { sent?: boolean; deliveryError?: string; destinationMasked?: string; devCode?: string };
+      }>("/api/v1/account/phone/start", {
+        method: "POST",
+        body: JSON.stringify({ phone: phoneDraft }),
+      });
+      const filled = digitsCode(body.data?.devCode);
+      if (filled) setPhoneCode(filled);
+      setPhoneStep("code");
+      if (filled && body.data?.sent === false) {
+        setNotice("Email is not sending from this computer yet. The code is filled in. Confirm it to save the new number.");
+      } else {
+        setNotice(`We emailed a confirmation code to ${body.data?.destinationMasked ?? "your email"}. Enter it to save the new number.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start the phone change.");
+    } finally {
+      setPhoneBusy(false);
+    }
+  }
+
+  async function confirmPhoneChange(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setPhoneBusy(true);
+    try {
+      const body = await accountApi<{ user: User }>("/api/v1/account/phone/confirm", {
+        method: "POST",
+        body: JSON.stringify({ phone: phoneDraft, code: phoneCode }),
+      });
+      setUser(body.user);
+      setEditing(null);
+      setPhoneStep("edit");
+      setPhoneCode("");
+      setNotice("Phone number updated. Confirm the new number with Verify when you can.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update the phone number.");
+    } finally {
+      setPhoneBusy(false);
+    }
+  }
 
   async function load() {
     const body = await accountApi<{ user: User }>("/api/v1/account");
@@ -354,16 +443,32 @@ function AccountScreen() {
     if (!user) return;
     setError(null);
     try {
+      if (avatarFile) {
+        const token = getToken();
+        const payload = new FormData();
+        payload.append("photo", avatarFile);
+        const res = await fetch(`${apiBase}/api/v1/account/profile/avatar`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: payload,
+        });
+        const text = await res.text();
+        const uploaded = text ? (JSON.parse(text) as { error?: string; user?: User }) : {};
+        if (!res.ok) throw new Error(uploaded.error ?? "Could not upload the photo.");
+        if (uploaded.user) setUser(uploaded.user);
+      }
       const body = await accountApi<{ user: User }>("/api/v1/account/profile", {
         method: "PATCH",
         body: JSON.stringify({
           ...form,
           ...extra,
+          clearAvatar: !avatarFile && clearAvatar ? true : undefined,
           accountType: user.accountType,
           business: user.accountType === "business" ? { legalName: form.legalName, registrationCountry: form.country } : undefined,
         }),
       });
       setUser(body.user);
+      resetAvatarEditor();
       setEditing(null);
       setNotice("Profile saved.");
     } catch (err) {
@@ -400,9 +505,13 @@ function AccountScreen() {
         <>
           <section className="hero-bg relative overflow-hidden rounded-[16px] px-5 py-6 sm:px-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-              {user.avatarUrl ? (
+              {avatarPreview || (user.avatarUrl && !clearAvatar) ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatarUrl} alt="" className="h-[84px] w-[84px] rounded-full object-cover ring-4 ring-white" />
+                <img
+                  src={avatarPreview || user.avatarUrl || ""}
+                  alt=""
+                  className="h-[84px] w-[84px] rounded-full object-cover ring-4 ring-white"
+                />
               ) : (
                 <span className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-white text-[22px] font-extrabold text-[#3665f3] ring-4 ring-white">
                   {initials(user)}
@@ -424,7 +533,14 @@ function AccountScreen() {
               </div>
               <button
                 type="button"
-                onClick={() => setEditing(editing === "profile" ? null : "profile")}
+                onClick={() => {
+                  if (editing === "profile") {
+                    resetAvatarEditor();
+                    setEditing(null);
+                    return;
+                  }
+                  setEditing("profile");
+                }}
                 className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-[#d7e3f4] bg-white px-4 text-[13.5px] font-semibold text-[#3665f3] shadow-sm hover:bg-[#f7fbff]"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -442,6 +558,65 @@ function AccountScreen() {
                   saveProfile();
                 }}
               >
+                <div className="flex items-center gap-4 sm:col-span-2">
+                  <label className="relative h-16 w-16 shrink-0 cursor-pointer">
+                    {avatarPreview || (user.avatarUrl && !clearAvatar) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={avatarPreview || user.avatarUrl || ""}
+                        alt=""
+                        className="h-16 w-16 rounded-full object-cover ring-2 ring-white"
+                      />
+                    ) : (
+                      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#eef3fb] text-[16px] font-extrabold text-[#3665f3]">
+                        {initials(user)}
+                      </span>
+                    )}
+                    <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#3665f3] text-white shadow-sm">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+                        <path d="M4 8h3l2-3h6l2 3h3v11H4V8Z" />
+                        <circle cx="12" cy="13" r="3.2" />
+                      </svg>
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      onChange={(e) => onAvatarFile(e.target.files?.[0])}
+                    />
+                  </label>
+                  <div className="min-w-0">
+                    <p className="text-[13.5px] font-semibold text-[#0f1c3f]">Profile photo</p>
+                    <p className="text-[12.5px] text-[#6b7587]">JPG, PNG, or WebP. Up to 5 MB.</p>
+                    <div className="mt-1.5 flex flex-wrap gap-3">
+                      <label className="cursor-pointer text-[13px] font-medium text-[#3665f3] hover:underline">
+                        Upload photo
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="sr-only"
+                          onChange={(e) => onAvatarFile(e.target.files?.[0])}
+                        />
+                      </label>
+                      {avatarPreview || (user.avatarUrl && !clearAvatar) ? (
+                        <button
+                          type="button"
+                          className="text-[13px] font-medium text-red-600 hover:underline"
+                          onClick={() => {
+                            setAvatarFile(null);
+                            setAvatarPreview((current) => {
+                              if (current) URL.revokeObjectURL(current);
+                              return null;
+                            });
+                            setClearAvatar(true);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
                 <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} placeholder="First name" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
                 <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} placeholder="Last name" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
                 <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} placeholder="Display name" className="h-10 rounded-full border border-[#e5e7eb] px-4 sm:col-span-2" />
@@ -491,7 +666,7 @@ function AccountScreen() {
                   {!user.emailVerified || !user.phoneVerified ? (
                     <Link href="/verify" className="text-[13px] font-medium text-[#3665f3] hover:underline">Verify</Link>
                   ) : null}
-                  <EditBtn onClick={() => setEditing(editing === "contact" ? null : "contact")} />
+                  <EditBtn onClick={() => openPhoneEditor("contact")} />
                 </span>
               }
             >
@@ -511,7 +686,9 @@ function AccountScreen() {
                   </p>
                 ) : <p className="text-[#7a8496]">No phone on file</p>}
                 {editing === "contact" ? (
-                  <p className="text-[12.5px] text-[#6b7587]">Email and phone are set at registration. Use Verify to confirm them.</p>
+                  <p className="text-[12.5px] text-[#6b7587]">
+                    Email stays on this account. To change the phone number, use the form in Phone number. We send a code to your email first.
+                  </p>
                 ) : null}
               </div>
             </InfoRow>
@@ -520,12 +697,73 @@ function AccountScreen() {
               icon={<PersonIcon />}
               title="Phone number"
               hint="Your verified phone number."
-              action={<EditBtn onClick={() => setEditing(editing === "phone" ? null : "phone")} />}
+              action={<EditBtn onClick={() => openPhoneEditor("phone")} />}
             >
-              <p className="flex flex-wrap items-center gap-2">
-                {user.phone ? maskPhone(user.phone) : "Not added"}
-                {user.phone && user.phoneVerified ? <Verified /> : null}
-              </p>
+              {editing === "phone" || editing === "contact" ? (
+                <form
+                  className="max-w-sm space-y-2"
+                  onSubmit={phoneStep === "code" ? confirmPhoneChange : requestPhoneChange}
+                >
+                  {!user.emailVerified ? (
+                    <p className="text-[12.5px] text-[#b45309]">
+                      Verify your email before changing this number.{" "}
+                      <Link href="/verify" className="font-medium text-[#3665f3] hover:underline">
+                        Verify email
+                      </Link>
+                    </p>
+                  ) : (
+                    <p className="text-[12.5px] text-[#6b7587]">
+                      {phoneStep === "code"
+                        ? "Enter the 6-digit code we sent to your email."
+                        : "Changing this number requires a code sent to your verified email."}
+                    </p>
+                  )}
+                  <input
+                    value={phoneDraft}
+                    onChange={(e) => setPhoneDraft(e.target.value)}
+                    placeholder="+977..."
+                    autoComplete="tel"
+                    disabled={phoneStep === "code" || phoneBusy}
+                    className="h-9 w-full rounded-full border px-3"
+                  />
+                  {phoneStep === "code" ? (
+                    <input
+                      value={phoneCode}
+                      onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="Email code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      className="h-9 w-full rounded-full border px-3 tracking-[0.18em]"
+                    />
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      disabled={phoneBusy || (phoneStep === "edit" && !user.emailVerified)}
+                      className="h-9 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white disabled:opacity-60"
+                    >
+                      {phoneBusy ? "Please wait…" : phoneStep === "code" ? "Save number" : "Email me a code"}
+                    </button>
+                    {phoneStep === "code" ? (
+                      <button
+                        type="button"
+                        className="h-9 rounded-full px-3 text-[13px] text-[#3665f3]"
+                        onClick={() => {
+                          setPhoneStep("edit");
+                          setPhoneCode("");
+                        }}
+                      >
+                        Back
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
+              ) : (
+                <p className="flex flex-wrap items-center gap-2">
+                  {user.phone ? maskPhone(user.phone) : "Not added"}
+                  {user.phone && user.phoneVerified ? <Verified /> : null}
+                </p>
+              )}
             </InfoRow>
 
             <InfoRow
@@ -853,7 +1091,7 @@ function AccountScreen() {
           <div className="mt-6"><SellerHub /></div>
           <SellingOrders />
           <PendingOffers />
-          {!user.isSeller ? (
+          {!(user.isSeller || user.accountType === "business") ? (
             <button type="button" className="mt-4 h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white" onClick={async () => {
               const body = await accountApi<{ data: { twoFactorRequired: boolean } }>("/api/v1/account/seller", { method: "POST", body: "{}" });
               setNotice(body.data.twoFactorRequired ? "You can sell after two-factor is turned on." : "Seller tools are on.");
@@ -861,7 +1099,7 @@ function AccountScreen() {
             }}>Start selling</button>
           ) : <p className="mt-3 text-[14px]">This account can buy and sell.</p>}
           <h2 className="mt-8 text-[16px] font-bold">Identity check</h2>
-          <p className="mt-1 text-[13px] text-[#667085]">Status: {user.kyc?.status ?? "not submitted"}{user.kyc?.reason ? ` — ${user.kyc.reason}` : ""}.</p>
+          <p className="mt-1 text-[13px] text-[#667085]">Status: {user.kyc?.status ?? "not submitted"}{user.kyc?.reason ? `, ${user.kyc.reason}` : ""}.</p>
           <form className="mt-3 space-y-2" onSubmit={async (e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -1133,7 +1371,7 @@ function Standing({ user, appeal, setAppeal, onDone }: { user: User; appeal: str
       <ul className="mt-4 space-y-2 text-[13px]">
         {rows.map((row) => (
           <li key={row.public_id} className="rounded-xl border px-3 py-2">
-            <span className="capitalize">{row.status}</span> — {row.message}
+            <span className="capitalize">{row.status}</span>, {row.message}
             {row.reason ? <span className="block text-[#667085]">Action: {row.reason}</span> : null}
           </li>
         ))}

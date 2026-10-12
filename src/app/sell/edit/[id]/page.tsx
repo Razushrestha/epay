@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { accountApi, getToken } from "@/lib/account-api";
+import { accountApi, apiBase, getToken } from "@/lib/account-api";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PageHero } from "@/components/ui/PageHero";
+
+type ListingPhoto = { id: number; url: string; thumbnail_url?: string | null; is_primary?: boolean };
 
 type Listing = {
   id: number;
@@ -14,6 +16,7 @@ type Listing = {
   price: number | null;
   quantity: number;
   status: string;
+  photos?: ListingPhoto[] | null;
 };
 
 export default function EditListingPage() {
@@ -22,6 +25,7 @@ export default function EditListingPage() {
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!getToken()) {
@@ -57,6 +61,32 @@ export default function EditListingPage() {
     }
   }
 
+  async function addPhotos(files: FileList | null) {
+    if (!listing || !files?.length) return;
+    setUploading(true);
+    setError(null);
+    const token = getToken();
+    try {
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append("photo", file);
+        const res = await fetch(`${apiBase}/api/v1/listings/${listing.id}/photos/upload`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: form,
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Photo upload failed");
+      }
+      const fresh = await accountApi<{ listing: Listing }>(`/api/v1/listings/${listing.id}`);
+      setListing(fresh.listing);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Photo upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <>
       <PageHero
@@ -84,6 +114,19 @@ export default function EditListingPage() {
               Description
               <textarea value={listing.description || ""} onChange={(e) => setListing({ ...listing, description: e.target.value })} className="mt-1 min-h-32 w-full rounded-xl border border-[#e7e7e7] px-4 py-3 font-normal" />
             </label>
+            <div>
+              <p className="text-[13px] font-semibold text-[#191919]">Photos</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(listing.photos ?? []).map((photo) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={photo.id} src={photo.thumbnail_url || photo.url} alt="" className="h-20 w-20 rounded-xl object-cover" />
+                ))}
+                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border border-dashed border-[#c9d3e0] text-[12px] text-[#667085]">
+                  {uploading ? "…" : "Add"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)} />
+                </label>
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-[13px] font-semibold text-[#191919]">
                 Price (NPR)

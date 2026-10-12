@@ -12,9 +12,10 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool, initDb } from "./db.mjs";
 import { rateLimit, RateLimitConfig, clearRateLimit } from "./security/rate-limit.mjs";
-import { deliverCode } from "./mail.mjs";
+import { deliverCode, maskDestination } from "./mail.mjs";
 import { handleStaffExtras } from "./staff.mjs";
 import { evaluateUser, recordDevice } from "./trust.mjs";
+import { clearAvatar, uploadAvatar } from "./upload.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
@@ -97,6 +98,15 @@ function looksLikeEmail(value) {
   return value.includes("@");
 }
 
+function normalizePhone(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const plus = raw.startsWith("+");
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 8) return "";
+  return plus ? `+${digits}` : `+${digits}`;
+}
+
 async function findUser(identifier) {
   const key = String(identifier ?? "").trim().toLowerCase();
   const { rows } = await (await db()).query(
@@ -131,6 +141,28 @@ async function latestKyc(userId) {
   return rows[0] ?? null;
 }
 
+function blankToNull(value) {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  return trimmed.length ? trimmed : null;
+}
+
+async function enableSeller(userId) {
+  await (await db()).query(`UPDATE users SET is_seller = TRUE, updated_at = NOW() WHERE id = $1`, [userId]);
+  await (await db()).query(`UPDATE user_profiles SET buyer_only = FALSE WHERE user_id = $1`, [userId]);
+}
+
+async function ensureFollowsTable() {
+  await (await db()).query(`
+    CREATE TABLE IF NOT EXISTS seller_follows (
+      follower_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seller_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at timestamptz NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (follower_id, seller_id)
+    )
+  `);
+}
+
 function publicUser(user, score, kyc) {
   return {
     id: user.public_id,
@@ -140,12 +172,12 @@ function publicUser(user, score, kyc) {
     accountType: user.account_type,
     status: user.status,
     sellerLevel: user.seller_level,
-    isSeller: user.is_seller,
+    isSeller: Boolean(user.is_seller) || user.account_type === "business",
     isStaff: user.is_staff,
     staffRole: user.staff_role || (user.is_staff ? "super_admin" : "none"),
-    displayName: user.display_name,
-    firstName: user.first_name,
-    lastName: user.last_name,
+    displayName: blankToNull(user.display_name) || user.username || blankToNull(user.legal_name) || null,
+    firstName: blankToNull(user.first_name),
+    lastName: blankToNull(user.last_name),
     country: user.country,
     bio: user.bio,
     avatarUrl: user.avatar_url || null,
@@ -182,6 +214,16 @@ async function loadPublic(user) {
   return { ...publicUser(user, score, kyc), social: social.rows.map((row) => row.provider) };
 }
 
+function deliveryFields(delivery, code) {
+  return {
+    sent: Boolean(delivery?.sent),
+    skipped: Boolean(delivery?.skipped),
+    destinationMasked: delivery?.masked,
+    deliveryError: delivery?.sent ? undefined : delivery?.userMessage,
+    devCode: devCodes ? code : undefined,
+  };
+}
+
 async function issueCode(user, purpose, destination, channel) {
   const code = String(randomInt(100000, 1000000));
   await (await db()).query(
@@ -189,27 +231,28 @@ async function issueCode(user, purpose, destination, channel) {
      VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '10 minutes')`,
     [user.id, channel, purpose, destination, hashCode(code)],
   );
-  await deliverCode(channel, destination, code, purpose);
-  return code;
+  const delivery = await deliverCode(channel, destination, code, purpose);
+  return { code, delivery };
 }
 
 async function consumeCode(userId, purpose, code) {
+  const given = String(code ?? "").replace(/\s/g, "");
   const { rows } = await (await db()).query(
     `SELECT id, code_hash, attempts, expires_at, verified_at
      FROM verification_codes
-     WHERE user_id = $1 AND purpose = $2
-     ORDER BY created_at DESC LIMIT 1`,
+     WHERE user_id = $1 AND purpose = $2 AND verified_at IS NULL AND expires_at > NOW()
+     ORDER BY created_at DESC`,
     [userId, purpose],
   );
-  const row = rows[0];
-  if (!row || row.verified_at) return "missing";
-  if (new Date(row.expires_at).getTime() < Date.now()) return "expired";
-  if (row.attempts >= 5) return "locked";
-  if (!codesMatch(code, row.code_hash)) {
-    await (await db()).query(`UPDATE verification_codes SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
+  if (!rows.length) return "missing";
+  const unlocked = rows.filter((row) => row.attempts < 5);
+  if (!unlocked.length) return "locked";
+  const match = unlocked.find((row) => codesMatch(given, row.code_hash));
+  if (!match) {
+    await (await db()).query(`UPDATE verification_codes SET attempts = attempts + 1 WHERE id = $1`, [unlocked[0].id]);
     return "invalid";
   }
-  await (await db()).query(`UPDATE verification_codes SET verified_at = NOW() WHERE id = $1`, [row.id]);
+  await (await db()).query(`UPDATE verification_codes SET verified_at = NOW() WHERE id = $1`, [match.id]);
   return "ok";
 }
 
@@ -313,14 +356,14 @@ async function startTwoFactorSetup(user, requestedMethod) {
   const dest = user.email || user.phone;
   if (!dest) return { ok: false, error: "This account has no email or phone for a code" };
   const channel = user.email ? "email" : "phone";
-  const code = await issueCode(user, "enroll_2fa", dest, channel);
+  const issued = await issueCode(user, "enroll_2fa", dest, channel);
   await (await db()).query(
     `INSERT INTO two_factor (user_id, method, enabled_at)
      VALUES ($1, 'otp', NULL)
      ON CONFLICT (user_id) DO UPDATE SET method = 'otp', secret = NULL, enabled_at = NULL, updated_at = NOW()`,
     [user.id],
   );
-  return { ok: true, data: { method: "otp", devCode: devCodes ? code : undefined } };
+  return { ok: true, data: { method: "otp", ...deliveryFields(issued.delivery, issued.code) } };
 }
 
 async function confirmTwoFactorSetup(user, code) {
@@ -402,17 +445,18 @@ export async function handleIdentity(req, res, ctx) {
     const client = await (await db()).connect();
     try {
       await client.query("BEGIN");
+      const isSeller = accountType === "business";
       const { rows } = await client.query(
-        `INSERT INTO users (public_id, email, phone, password_hash, status, account_type)
-         VALUES ($1, $2, $3, $4, 'pending', $5)
+        `INSERT INTO users (public_id, email, phone, password_hash, status, account_type, is_seller)
+         VALUES ($1, $2, $3, $4, 'pending', $5, $6)
          RETURNING id, public_id, email, phone`,
-        [randomUUID(), email, phone, await hashPassword(password), accountType],
+        [randomUUID(), email, phone, await hashPassword(password), accountType, isSeller],
       );
       const user = rows[0];
       await client.query(
         `INSERT INTO user_profiles (user_id, first_name, last_name, display_name, country, buyer_only)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [user.id, firstName, lastName, displayName, country, Boolean(body.buyerOnly)],
+        [user.id, firstName, lastName, displayName, country, isSeller ? false : Boolean(body.buyerOnly)],
       );
       if (accountType === "business" && displayName) {
         await client.query(
@@ -433,7 +477,18 @@ export async function handleIdentity(req, res, ctx) {
         [user.id, channel, destination, hashCode(code)],
       );
       await client.query("COMMIT");
-      await deliverCode(channel, destination, code, "verify");
+      const pending = deliverCode(channel, destination, code, "verify");
+      const fallback = {
+        sent: false,
+        skipped: false,
+        masked: maskDestination(destination, channel),
+        userMessage: "We are sending your code now. Tap Resend if it does not arrive within a minute.",
+      };
+      const delivery = await Promise.race([
+        pending,
+        new Promise((resolve) => setTimeout(() => resolve(fallback), 1500)),
+      ]);
+      pending.catch((err) => console.error("[mail] background deliver", err?.message || err));
       const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
       const risk = await evaluateUser(user.id, { kind: "register", ip, email, phone }).catch(() => null);
       if (risk?.blocked) {
@@ -441,7 +496,13 @@ export async function handleIdentity(req, res, ctx) {
       }
       await recordDevice(user.id, body.deviceHash).catch(() => {});
       return json(req, res, 201, {
-        data: { id: user.public_id, destination, channel, devCode: devCodes ? code : undefined, review: Boolean(risk?.flagged || risk?.blocked) },
+        data: {
+          id: user.public_id,
+          destination,
+          channel,
+          review: Boolean(risk?.flagged || risk?.blocked),
+          ...deliveryFields(delivery, code),
+        },
       });
     } catch (err) {
       await client.query("ROLLBACK");
@@ -465,13 +526,14 @@ export async function handleIdentity(req, res, ctx) {
 
     const body = await readJson(req);
     const user = await findUser(body.identifier);
-    if (!user) return json(req, res, 200, { data: { sent: true } });
-    const channel = user.email ? "email" : user.phone ? "phone" : "email";
+    if (!user) return json(req, res, 200, { data: { sent: true, destinationMasked: maskDestination(body.identifier) } });
+    const identifier = String(body.identifier ?? "").trim();
+    const channel = looksLikeEmail(identifier) && user.email ? "email" : user.phone && !looksLikeEmail(identifier) ? "phone" : user.email ? "email" : "phone";
     const destination = channel === "phone" ? user.phone : user.email;
     if (!destination) return json(req, res, 400, { error: "This account has no email or phone" });
-    const code = await issueCode(user, "verify", destination, channel);
+    const issued = await issueCode(user, "verify", destination, channel);
     return json(req, res, 200, {
-      data: { sent: true, destination, channel, devCode: devCodes ? code : undefined },
+      data: { destination, channel, ...deliveryFields(issued.delivery, issued.code) },
     });
   }
 
@@ -524,7 +586,11 @@ export async function handleIdentity(req, res, ctx) {
     clearRateLimit(req);
     
     await refreshStanding(user);
-    if (user.status === "pending") return json(req, res, 403, { error: "Verify the code we sent before signing in" });
+    if (user.status === "pending") {
+      return json(req, res, 403, {
+        error: "Verify the code we sent before signing in. Open Verify and tap Resend if it did not arrive.",
+      });
+    }
     if (user.status === "suspended") {
       return json(req, res, 403, { error: "This account is suspended. You can appeal from the sign-in page after a reset, or contact support." });
     }
@@ -535,16 +601,16 @@ export async function handleIdentity(req, res, ctx) {
     }
     if (user.two_factor_enabled) {
       const challengeToken = await createChallenge(user, "login_2fa");
-      let devCode;
+      let issued;
       if (user.two_factor_method === "otp") {
         const channel = user.email ? "email" : "phone";
-        devCode = await issueCode(user, "login_2fa", user.email || user.phone, channel);
+        issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
       }
       return json(req, res, 200, {
         step: "challenge",
         method: user.two_factor_method,
         challengeToken,
-        devCode: devCodes ? devCode : undefined,
+        ...(issued ? deliveryFields(issued.delivery, issued.code) : {}),
       });
     }
     const token = await openSession(user, req, body.remember !== false);
@@ -686,8 +752,8 @@ export async function handleIdentity(req, res, ctx) {
     const channel = user.email && looksLikeEmail(String(body.identifier)) ? "email" : user.phone ? "phone" : "email";
     const destination = channel === "phone" ? user.phone : user.email;
     if (!destination) return json(req, res, 400, { error: "This account has no email or phone to reset with" });
-    const code = await issueCode(user, "reset", destination, channel);
-    return json(req, res, 200, { data: { sent: true, destination, devCode: devCodes ? code : undefined } });
+    const issued = await issueCode(user, "reset", destination, channel);
+    return json(req, res, 200, { data: { destination, ...deliveryFields(issued.delivery, issued.code) } });
   }
 
   if (pathname === `${API}/auth/reset` && method === "POST") {
@@ -714,8 +780,55 @@ export async function handleIdentity(req, res, ctx) {
     return json(req, res, 200, { user: await loadPublic(actor) });
   }
 
+  const followMatch = pathname.match(new RegExp(`^${API}/account/follow/(\\d+)$`));
+  if (followMatch && method === "GET") {
+    await ensureFollowsTable();
+    const { rows } = await (await db()).query(
+      `SELECT 1 FROM seller_follows WHERE follower_id = $1 AND seller_id = $2 LIMIT 1`,
+      [actor.id, Number(followMatch[1])],
+    );
+    return json(req, res, 200, { following: Boolean(rows[0]) });
+  }
+
+  if (pathname === `${API}/account/follow` && method === "POST") {
+    const body = await readJson(req);
+    const sellerId = Number(body.sellerId);
+    if (!sellerId) return json(req, res, 400, { error: "Seller is required" });
+    if (sellerId === Number(actor.id)) return json(req, res, 400, { error: "You cannot follow yourself" });
+    await ensureFollowsTable();
+    await (await db()).query(
+      `INSERT INTO seller_follows (follower_id, seller_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [actor.id, sellerId],
+    );
+    return json(req, res, 200, { following: true });
+  }
+
+  if (pathname === `${API}/account/follow` && method === "DELETE") {
+    const body = await readJson(req);
+    const sellerId = Number(body.sellerId);
+    await ensureFollowsTable();
+    await (await db()).query(`DELETE FROM seller_follows WHERE follower_id = $1 AND seller_id = $2`, [actor.id, sellerId]);
+    return json(req, res, 200, { following: false });
+  }
+
+  if (pathname === `${API}/account/profile/avatar` && method === "POST") {
+    const result = await uploadAvatar(req, actor.id);
+    if (result.status >= 400) return json(req, res, result.status, result.body);
+    const fresh = await findUser(actor.email || actor.phone || actor.public_id);
+    return json(req, res, 200, { user: await loadPublic(fresh), avatarUrl: result.body.avatarUrl });
+  }
+
+  if (pathname === `${API}/account/profile/avatar` && method === "DELETE") {
+    await clearAvatar(actor.id);
+    const fresh = await findUser(actor.email || actor.phone || actor.public_id);
+    return json(req, res, 200, { user: await loadPublic(fresh), avatarUrl: null });
+  }
+
   if (pathname === `${API}/account/profile` && method === "PATCH") {
     const body = await readJson(req);
+    if (body.clearAvatar === true) {
+      await clearAvatar(actor.id);
+    }
     await (await db()).query(
       `UPDATE user_profiles
        SET first_name = COALESCE($2, first_name),
@@ -726,11 +839,11 @@ export async function handleIdentity(req, res, ctx) {
        WHERE user_id = $1`,
       [
         actor.id,
-        body.firstName ?? null,
-        body.lastName ?? null,
-        body.displayName ?? null,
-        body.bio ?? null,
-        body.country ?? null,
+        body.firstName != null ? blankToNull(body.firstName) : null,
+        body.lastName != null ? blankToNull(body.lastName) : null,
+        body.displayName != null ? blankToNull(body.displayName) : null,
+        body.bio != null ? blankToNull(body.bio) : null,
+        body.country != null ? blankToNull(body.country) : null,
       ],
     );
     if (typeof body.username === "string") {
@@ -740,10 +853,17 @@ export async function handleIdentity(req, res, ctx) {
       }
     }
     if (body.accountType === "business" || body.accountType === "individual") {
-      await (await db()).query(`UPDATE users SET account_type = $2, updated_at = NOW() WHERE id = $1`, [
-        actor.id,
-        body.accountType,
-      ]);
+      await (await db()).query(
+        `UPDATE users
+         SET account_type = $2,
+             is_seller = CASE WHEN $2 = 'business' THEN TRUE ELSE is_seller END,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [actor.id, body.accountType],
+      );
+      if (body.accountType === "business") {
+        await (await db()).query(`UPDATE user_profiles SET buyer_only = FALSE WHERE user_id = $1`, [actor.id]);
+      }
     }
     if (body.business) {
       await (await db()).query(
@@ -765,6 +885,50 @@ export async function handleIdentity(req, res, ctx) {
       );
     }
     const fresh = await findUser(actor.email || actor.phone || actor.public_id);
+    return json(req, res, 200, { user: await loadPublic(fresh) });
+  }
+
+  if (pathname === `${API}/account/phone/start` && method === "POST") {
+    const body = await readJson(req);
+    if (!actor.email || !actor.email_verified_at) {
+      return json(req, res, 403, { error: "Verify your email before changing your phone number." });
+    }
+    const phone = normalizePhone(body.phone);
+    if (!phone) return json(req, res, 400, { error: "Enter a valid phone number." });
+    if (phone === normalizePhone(actor.phone)) {
+      return json(req, res, 400, { error: "That is already your phone number." });
+    }
+    const taken = await (await db()).query(`SELECT id FROM users WHERE phone = $1 AND id <> $2 LIMIT 1`, [phone, actor.id]);
+    if (taken.rows[0]) return json(req, res, 409, { error: "That phone number is already in use." });
+    const issued = await issueCode(actor, "change_phone", actor.email, "email");
+    return json(req, res, 200, {
+      data: {
+        phone,
+        destination: actor.email,
+        ...deliveryFields(issued.delivery, issued.code),
+      },
+    });
+  }
+
+  if (pathname === `${API}/account/phone/confirm` && method === "POST") {
+    const body = await readJson(req);
+    if (!actor.email || !actor.email_verified_at) {
+      return json(req, res, 403, { error: "Verify your email before changing your phone number." });
+    }
+    const phone = normalizePhone(body.phone);
+    if (!phone) return json(req, res, 400, { error: "Enter a valid phone number." });
+    const result = await consumeCode(actor.id, "change_phone", body.code);
+    if (result !== "ok") return json(req, res, 400, { error: "That email code is not valid." });
+    try {
+      await (await db()).query(
+        `UPDATE users SET phone = $2, phone_verified_at = NULL, updated_at = NOW() WHERE id = $1`,
+        [actor.id, phone],
+      );
+    } catch (err) {
+      if (err.code === "23505") return json(req, res, 409, { error: "That phone number is already in use." });
+      throw err;
+    }
+    const fresh = await findUser(actor.email || phone || actor.public_id);
     return json(req, res, 200, { user: await loadPublic(fresh) });
   }
 
@@ -911,7 +1075,7 @@ export async function handleIdentity(req, res, ctx) {
   }
 
   if (pathname === `${API}/account/seller` && method === "POST") {
-    await (await db()).query(`UPDATE users SET is_seller = TRUE, updated_at = NOW() WHERE id = $1`, [actor.id]);
+    await enableSeller(actor.id);
     return json(req, res, 200, {
       data: { isSeller: true, twoFactorRequired: !actor.two_factor_enabled },
     });

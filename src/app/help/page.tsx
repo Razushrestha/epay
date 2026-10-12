@@ -32,7 +32,7 @@ export default function HelpIndexPage() {
       <PageHero
         eyebrow="Help centre"
         title="Shop, bid, and sell with confidence"
-        body="Buyer protection, returns, selling, and FAQs — written the same way the rest of Nexlo works."
+        body="Buyer protection, returns, selling, and FAQs, written the same way the rest of Nexlo works."
         cta="Open a support ticket"
         href="/account?tab=tickets"
       />

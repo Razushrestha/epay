@@ -834,7 +834,7 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
                   {[
                     ["Brand", product.brand],
                     ["Condition", product.condition],
-                    ["Grade", product.grade ?? "—"],
+                    ["Grade", product.grade ?? "-"],
                     ["Category", product.categoryLabel],
                     ["Type", crumb],
                     ["Seller", product.seller],

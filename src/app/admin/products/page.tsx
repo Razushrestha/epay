@@ -96,7 +96,7 @@ export default function AdminProductsPage() {
                     </span>
                   </td>
                   <td className="py-3 text-[#3a4a66]">{row.seller}</td>
-                  <td className="py-3 font-semibold">{row.price != null ? money(row.price) : "—"}</td>
+                  <td className="py-3 font-semibold">{row.price != null ? money(row.price) : "-"}</td>
                   <td className="py-3"><StatusPill status={row.status} /></td>
                   <td className="py-3"><StatusPill status={row.moderation_status} /></td>
                   <td className="py-3">

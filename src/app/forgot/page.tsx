@@ -7,7 +7,7 @@ import { ForgotForm } from "@/components/auth/ForgotForm";
 const script = Caveat({ subsets: ["latin"], weight: ["600", "700"] });
 
 export const metadata: Metadata = {
-  title: "Reset your password — Nexlo",
+  title: "Reset your password | Nexlo",
   description: "Send a one-time code and choose a new Nexlo password.",
 };
 
@@ -48,7 +48,7 @@ export default function ForgotPage() {
           <Link href="/" aria-label="Nexlo home" className="w-fit">
             <Image
               src="/logo-transparent.png"
-              alt="Nexlo — Find What Comes Next."
+              alt="Nexlo: Find What Comes Next."
               width={808}
               height={256}
               priority

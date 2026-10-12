@@ -74,7 +74,7 @@ export function ReturnsBoard({ userId }: { userId?: string }) {
                   <button type="button" className="h-9 rounded-full bg-[#3665f3] px-4 text-[13px] text-white" onClick={async () => {
                     await accountApi(`/api/v1/returns/${row.public_id}/receive`, { method: "POST", body: "{}" });
                     await load();
-                  }}>Received — refund</button>
+                  }}>Received and refund</button>
                 ) : null}
               </div>
             </div>

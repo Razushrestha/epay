@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { apiBase } from "@/lib/account-api";
+import { apiBase, apiUnreachableMessage, digitsCode } from "@/lib/account-api";
 
 function MailIcon() {
   return (
@@ -45,8 +45,7 @@ export function ForgotForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function requestCode(e: React.FormEvent) {
-    e.preventDefault();
+  async function sendForgotCode() {
     setLoading(true);
     setError(null);
     try {
@@ -60,12 +59,25 @@ export function ForgotForm() {
         setError(body.error ?? "Could not send a code.");
         return;
       }
+      const filled = digitsCode(body.data?.devCode);
+      if (filled) setCode(filled);
+      if (body.data?.sent === false && !filled) {
+        setError(body.data.deliveryError ?? "We could not send the code. Try again.");
+        setSent(true);
+        return;
+      }
+      setError(null);
       setSent(true);
-    } catch {
-      setError("We could not reach the server.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function requestCode(e: React.FormEvent) {
+    e.preventDefault();
+    await sendForgotCode();
   }
 
   async function resetPassword(e: React.FormEvent) {
@@ -84,8 +96,8 @@ export function ForgotForm() {
         return;
       }
       setDone(true);
-    } catch {
-      setError("We could not reach the server.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }
@@ -141,6 +153,14 @@ export function ForgotForm() {
 
           {sent ? (
             <>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void sendForgotCode()}
+                className="text-left text-[13px] font-medium text-[#3665f3] hover:underline disabled:opacity-50"
+              >
+                Resend code
+              </button>
               <label className="sr-only" htmlFor="forgot-code">
                 6-digit code
               </label>

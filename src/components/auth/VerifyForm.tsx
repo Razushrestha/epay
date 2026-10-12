@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiBase, setToken } from "@/lib/account-api";
+import { apiBase, apiUnreachableMessage, digitsCode, localOtpNotice, setToken } from "@/lib/account-api";
 
 function MailIcon() {
   return (
@@ -41,9 +41,21 @@ export function VerifyForm() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setIdentifier(sessionStorage.getItem("nexlo_verify_id") ?? "");
+    const dest = sessionStorage.getItem("nexlo_verify_dest");
+    const sendError = sessionStorage.getItem("nexlo_code_error");
+    const filled = digitsCode(sessionStorage.getItem("nexlo_dev_code"));
+    if (filled) {
+      setCode(filled);
+      setShowCode(true);
+      setNotice(localOtpNotice);
+      return;
+    }
+    if (sendError) setError(sendError);
+    else if (dest) setNotice(`We sent a code to ${dest}. Check inbox and spam.`);
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -64,8 +76,8 @@ export function VerifyForm() {
       setToken(body.token);
       sessionStorage.removeItem("nexlo_dev_code");
       router.push("/account");
-    } catch {
-      setError("We could not reach the server.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }
@@ -87,34 +99,67 @@ export function VerifyForm() {
         setError(body.error ?? "Could not resend the code.");
         return;
       }
-      if (body.data?.devCode) sessionStorage.setItem("nexlo_dev_code", body.data.devCode);
+      const filled = digitsCode(body.data?.devCode);
+      if (filled) {
+        sessionStorage.setItem("nexlo_dev_code", filled);
+        setCode(filled);
+        setShowCode(true);
+      }
+      if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", body.data.destinationMasked);
+      if (filled) {
+        setError(null);
+        setNotice(localOtpNotice);
+        setResent(false);
+        return;
+      }
+      if (body.data?.sent === false) {
+        setError(body.data.deliveryError ?? "We could not send the code. Tap Resend again.");
+        setResent(false);
+        return;
+      }
+      setNotice(body.data?.destinationMasked ? `A new code was sent to ${body.data.destinationMasked}.` : null);
       setResent(true);
-    } catch {
-      setError("We could not reach the server.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setResending(false);
     }
   }
 
   const fieldWrap =
-    "flex h-12 items-center gap-3 rounded-full border border-[#dfe5ee] bg-white px-4 text-[#8a94a6] transition focus-within:border-[#3665f3] focus-within:text-[#3665f3] focus-within:shadow-[0_0_0_3px_rgba(54,101,243,0.12)]";
+    "flex h-11 items-center gap-3 rounded-full border border-[#dfe5ee] bg-white px-4 text-[#8a94a6] transition focus-within:border-[#3665f3] focus-within:text-[#3665f3] focus-within:shadow-[0_0_0_3px_rgba(54,101,243,0.12)]";
 
   return (
-    <div className="w-full max-w-[440px] rounded-[28px] bg-white p-7 shadow-[0_24px_60px_-28px_rgba(15,40,80,0.35)] sm:p-9">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[#e8fbf7] text-[#12c4b0]">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.4 7.5 9.5 4.4-1.1 7.5-4.9 7.5-9.5V6L12 3Z" />
-          <path d="m9.2 12.2 2 2 3.7-4" />
-        </svg>
-      </div>
-      <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-[#12c4b0]">
-        Confirm it&apos;s you
+    <div className="w-full max-w-[420px]">
+      <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-[#0f1c3f]">
+        Confirm it&apos;s{" "}
+        <span className="bg-gradient-to-r from-[#08c4a6] to-[#3665f3] bg-clip-text text-transparent">
+          you
+        </span>
       </h1>
-      <p className="mt-2 text-[13.5px] leading-relaxed text-[#6b7587]">
-        Enter the code sent to your email or phone. This is the same check eBay uses before a new account can buy or sell.
+      <p className="mt-1.5 text-[13.5px] text-[#6b7587]">
+        Enter the 6-digit code we sent. If it is delayed, wait a moment and tap Resend.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-6 space-y-3.5">
+      <div className="mt-4" aria-live="polite">
+        {error ? (
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
+            {error}
+          </p>
+        ) : null}
+        {notice && !error ? (
+          <p className="rounded-lg border border-[#cfe0ff] bg-[#f2f7ff] px-3 py-2 text-[12.5px] text-[#2a4fa8]">
+            {notice}
+          </p>
+        ) : null}
+        {resent && !error ? (
+          <p className="rounded-lg border border-[#b7eadc] bg-[#f1fbf7] px-3 py-2 text-[12.5px] text-[#0f7a63]">
+            A new code was sent. Check inbox and spam.
+          </p>
+        ) : null}
+      </div>
+
+      <form onSubmit={onSubmit} className="mt-6 space-y-3">
         <label className="sr-only" htmlFor="verify-identifier">
           Email or phone
         </label>
@@ -155,20 +200,10 @@ export function VerifyForm() {
           </button>
         </div>
 
-        {error ? (
-          <p role="alert" className="flex items-start gap-1.5 text-[13px] text-red-600">
-            <span aria-hidden>⚠</span>
-            {error}
-          </p>
-        ) : null}
-        {resent && !error ? (
-          <p className="text-[13px] text-green-700">A new code was sent. Check inbox and spam.</p>
-        ) : null}
-
         <button
           type="submit"
           disabled={loading}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Checking…" : "Verify and continue"}
           {!loading && (
@@ -179,14 +214,17 @@ export function VerifyForm() {
         </button>
       </form>
 
-      <button
-        type="button"
-        onClick={onResend}
-        disabled={resending || !identifier}
-        className="mt-4 w-full text-center text-[14px] font-medium text-[#6b7587] underline-offset-2 hover:text-[#12c4b0] hover:underline disabled:opacity-50"
-      >
-        {resending ? "Sending…" : "Resend code"}
-      </button>
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-[13.5px] text-[#6b7587]">Didn&apos;t get it?</p>
+        <button
+          type="button"
+          onClick={onResend}
+          disabled={resending || !identifier}
+          className="text-[13.5px] font-medium text-[#3665f3] hover:underline disabled:opacity-50"
+        >
+          {resending ? "Sending…" : "Resend code"}
+        </button>
+      </div>
     </div>
   );
 }

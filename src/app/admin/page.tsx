@@ -225,7 +225,7 @@ export default function AdminDashboardPage() {
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m8 14 2.5-3 2.5 3 3-4 3 4" /></svg>
                           </span>
                         )}
-                        <span className="text-[#3a4a66]">{row.product || "—"}</span>
+                        <span className="text-[#3a4a66]">{row.product || "-"}</span>
                       </span>
                     </td>
                     <td className="py-3.5 font-semibold text-[#0f1c3f]">{money(row.total_amount)}</td>

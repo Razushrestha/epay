@@ -79,7 +79,7 @@ export function HeroSection() {
             </ul>
           </div>
 
-          {/* right collage — fills the banner from the middle to the right edge */}
+          {/* right collage, fills the banner from the middle to the right edge */}
           <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[58%] sm:block">
             <div className="absolute left-[4%] top-[6%] w-[42%] overflow-hidden rounded-xl bg-white shadow-lg">
               <Image src={R.main} alt="" width={520} height={340} className="h-[46%] max-h-[170px] min-h-[130px] w-full object-cover" />

@@ -19,7 +19,7 @@ export default function AdvancedSearchPage() {
       <PageHero
         eyebrow="Search"
         title="Advanced search"
-        body="Narrow by keywords to exclude, category, buying format, price, location, and seller rating — then open live results."
+        body="Narrow by keywords to exclude, category, buying format, price, location, and seller rating, then open live results."
         cta="Back to search"
         href="/search"
       />

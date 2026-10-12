@@ -94,11 +94,11 @@ export async function handleListings(req, method, urlPath, headers, body, ipAddr
 
     // Watchlist
     if (method === 'POST' && pathParts[0] && pathParts[1] === 'watch') {
-      return await addToWatchlist(pathParts[0], auth.userId);
+      return await addToWatchlist(Number(pathParts[0]), auth.userId);
     }
 
     if (method === 'DELETE' && pathParts[0] && pathParts[1] === 'watch') {
-      return await removeFromWatchlist(pathParts[0], auth.userId);
+      return await removeFromWatchlist(Number(pathParts[0]), auth.userId);
     }
 
     if (method === 'GET' && pathParts[0] === 'watchlist') {
@@ -315,7 +315,8 @@ async function getListingById(listingId, authHeader) {
       b.name as brand_name, b.slug as brand_slug,
       cond.name as condition_name, cond.description as condition_description,
       u.id as seller_id, u.username as seller_username, u.email as seller_email,
-      up.display_name as seller_full_name, up.avatar_url as seller_avatar,
+      u.created_at as seller_created_at, u.account_type as seller_account_type,
+      up.display_name as seller_full_name, up.avatar_url as seller_avatar, up.country as seller_country,
       CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0
            ELSE 100.0 * COALESCE(fs.positive_count,0) / (COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0)) END as seller_feedback_score, fs.positive_count, fs.neutral_count, fs.negative_count,
       (SELECT json_agg(json_build_object(
@@ -366,32 +367,27 @@ async function getListingById(listingId, authHeader) {
   listing.variations = variationRows.rows;
   listing.skus = skuRows.rows;
 
-  // Track view
   const token = authHeader?.replace('Bearer ', '');
-  let userId = null;
-  if (token) {
-    const auth = await validateToken(token);
-    userId = auth?.userId;
-  }
-
-  await query(
-    `INSERT INTO listing_views (listing_id, user_id, ip_address, user_agent, viewed_at)
-     VALUES ($1, $2, $3, $4, NOW())`,
-    [listingId, userId, null, null]
-  );
-
-  await query(
-    `UPDATE listings SET view_count = view_count + 1 WHERE id = $1`,
-    [listingId]
-  );
-
-  if (userId) {
+  void (async () => {
+    let userId = null;
+    if (token) {
+      const auth = await validateToken(token);
+      userId = auth?.userId ?? null;
+    }
     await query(
-      `INSERT INTO recently_viewed (user_id, listing_id, viewed_at) VALUES ($1, $2, NOW())
-       ON CONFLICT (user_id, listing_id) DO UPDATE SET viewed_at = NOW()`,
-      [userId, listingId],
-    ).catch(() => {});
-  }
+      `INSERT INTO listing_views (listing_id, user_id, ip_address, user_agent, viewed_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [listingId, userId, null, null],
+    );
+    await query(`UPDATE listings SET view_count = view_count + 1 WHERE id = $1`, [listingId]);
+    if (userId) {
+      await query(
+        `INSERT INTO recently_viewed (user_id, listing_id, viewed_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (user_id, listing_id) DO UPDATE SET viewed_at = NOW()`,
+        [userId, listingId],
+      );
+    }
+  })().catch(() => {});
 
   return { status: 200, body: { listing } };
 }
@@ -475,17 +471,30 @@ async function getFeaturedListings() {
   return { status: 200, body: { listings: result.rows } };
 }
 
+async function ensureSeller(userId) {
+  const userCheck = await query(
+    'SELECT is_seller, account_type FROM users WHERE id = $1',
+    [userId],
+  );
+  const row = userCheck.rows[0];
+  if (!row) return { status: 401, body: { error: 'Sign in required' } };
+  if (row.is_seller) return null;
+  if (row.account_type !== 'business') {
+    return { status: 403, body: { error: 'Seller account required' } };
+  }
+  await query('UPDATE users SET is_seller = TRUE, updated_at = NOW() WHERE id = $1', [userId]);
+  await query('UPDATE user_profiles SET buyer_only = FALSE WHERE user_id = $1', [userId]).catch(() => {});
+  return null;
+}
+
 /**
  * Create listing (seller)
  */
 async function createListing(data, userId) {
   const verified = await enforceVerification(userId);
   if (verified) return verified;
-  // Verify user is a seller
-  const userCheck = await query('SELECT is_seller FROM users WHERE id = $1', [userId]);
-  if (!userCheck.rows[0]?.is_seller) {
-    return { status: 403, body: { error: 'Seller account required' } };
-  }
+  const sellerGate = await ensureSeller(userId);
+  if (sellerGate) return sellerGate;
 
   const {
     category_id, brand_id, title, subtitle, description, condition_id, condition_description,
@@ -752,13 +761,16 @@ async function deleteListingPhoto(photoId, userId) {
  * Add to watchlist
  */
 async function addToWatchlist(listingId, userId) {
-  await query(
+  const inserted = await query(
     `INSERT INTO watchlist (user_id, listing_id) VALUES ($1, $2)
-     ON CONFLICT (user_id, listing_id) DO NOTHING`,
-    [userId, listingId]
+     ON CONFLICT (user_id, listing_id) DO NOTHING
+     RETURNING listing_id`,
+    [Number(userId), Number(listingId)],
   );
 
-  await query('UPDATE listings SET watch_count = watch_count + 1 WHERE id = $1', [listingId]);
+  if (inserted.rowCount > 0) {
+    await query('UPDATE listings SET watch_count = watch_count + 1 WHERE id = $1', [Number(listingId)]);
+  }
 
   return { status: 200, body: { success: true } };
 }
@@ -866,6 +878,7 @@ async function getSellerListings(userId, params) {
   const status = params.get('status') || 'all';
   const limit = Math.min(parseInt(params.get('limit')) || 50, 200);
   const offset = parseInt(params.get('offset')) || 0;
+  userId = Number(userId);
 
   let sql = `
     SELECT 
@@ -873,7 +886,7 @@ async function getSellerListings(userId, params) {
       l.auction_current_price, l.auction_bid_count, l.view_count, l.watch_count,
       l.created_at, l.published_at,
       c.name as category_name,
-      (SELECT url FROM listing_photos WHERE listing_id = l.id AND is_primary = true LIMIT 1) as primary_photo
+      (SELECT url FROM listing_photos WHERE listing_id = l.id ORDER BY is_primary DESC, position LIMIT 1) as primary_photo
     FROM listings l
     JOIN categories c ON l.category_id = c.id
     WHERE l.seller_id = $1
@@ -899,6 +912,7 @@ async function getSellerListings(userId, params) {
  * Get seller analytics
  */
 async function getSellerAnalytics(userId) {
+  userId = Number(userId);
   const statsResult = await query(
     `SELECT 
        COUNT(*) FILTER (WHERE status = 'active') as active_count,

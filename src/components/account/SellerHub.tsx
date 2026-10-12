@@ -166,7 +166,7 @@ export function SellerHub() {
         <ul className="mt-3 space-y-2 text-[13px]">
           {replies.map((item) => (
             <li key={item.public_id} className="flex justify-between gap-3 rounded-xl bg-[#f7f7f7] px-3 py-2">
-              <span><strong>{item.title}</strong> — {item.body}</span>
+              <span><strong>{item.title}</strong>, {item.body}</span>
               <button type="button" className="text-red-600" onClick={async () => { await accountApi(`/api/v1/seller/replies/${item.public_id}`, { method: "DELETE" }); await load(); }}>Remove</button>
             </li>
           ))}
@@ -213,7 +213,7 @@ export function SellerHub() {
         <ul className="mt-3 space-y-2 text-[13px]">
           {blocked.map((row) => (
             <li key={row.blocked_user_id} className="flex justify-between gap-3 rounded-xl bg-[#f7f7f7] px-3 py-2">
-              <span>{row.name || row.blocked_user_id} — {row.reason || "Blocked"}</span>
+              <span>{row.name || row.blocked_user_id}, {row.reason || "Blocked"}</span>
               <button
                 type="button"
                 className="text-red-600"

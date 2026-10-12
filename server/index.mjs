@@ -14,8 +14,10 @@ const server = createServer(async (req, res) => {
   } catch (err) {
     console.error(err);
     if (!res.headersSent) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Internal server error" }));
+      const status = Number(err?.status || err?.statusCode);
+      const code = status >= 400 && status < 600 ? status : 500;
+      res.writeHead(code, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: code === 400 ? err.message : "Internal server error" }));
     }
   }
 });

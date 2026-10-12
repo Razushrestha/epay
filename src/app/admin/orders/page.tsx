@@ -78,7 +78,7 @@ export default function AdminOrdersPage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={row.thumbnail_url || row.photo_url || ""} alt="" className="h-8 w-8 rounded-lg object-cover" />
                       ) : null}
-                      {row.product || "—"}
+                      {row.product || "-"}
                     </span>
                   </td>
                   <td className="py-3 font-semibold">{money(row.total_amount)}</td>

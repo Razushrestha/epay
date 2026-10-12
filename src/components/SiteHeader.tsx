@@ -38,7 +38,7 @@ export function SiteHeader() {
         <Link href="/" className="flex shrink-0 items-center" aria-label="Nexlo home">
           <Image
             src="/logo.png"
-            alt="Nexlo — Find What Comes Next."
+            alt="Nexlo: Find What Comes Next."
             width={422}
             height={145}
             className="h-[48px] w-auto rounded-[8px]"

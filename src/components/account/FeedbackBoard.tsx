@@ -44,14 +44,14 @@ function handle(user: FeedbackUser) {
 
 function memberSince(iso?: string | null) {
   const d = iso ? new Date(iso) : new Date();
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${months[d.getMonth()]}-${String(d.getDate()).padStart(2, "0")}-${String(d.getFullYear()).slice(-2)}`;
 }
 
 function whenLabel(iso: string) {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 

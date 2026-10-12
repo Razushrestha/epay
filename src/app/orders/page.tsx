@@ -36,7 +36,7 @@ function OrdersContent() {
         title={success ? "Payment received. You're protected." : "Track every order in one place"}
         body={success
           ? "Funds are held in escrow until delivery. You can request a return within 30 days."
-          : "Shipping, returns, invoices, and feedback — with the same buyer protection as the rest of Nexlo."}
+          : "Shipping, returns, invoices, and feedback, with the same buyer protection as the rest of Nexlo."}
         cta="Continue shopping"
         href="/shop"
       />

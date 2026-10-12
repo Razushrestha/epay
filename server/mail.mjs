@@ -1,81 +1,191 @@
-import FormData from "form-data";
-import Mailgun from "mailgun.js";
-
-let cachedClient;
-
-function mailgunClient() {
-  const key = process.env.MAILGUN_API_KEY;
-  if (!key) return null;
-  if (!cachedClient) {
-    const mailgun = new Mailgun(FormData);
-    cachedClient = mailgun.client({
-      username: "api",
-      key,
-      url: process.env.MAILGUN_API_URL || "https://api.mailgun.net",
-    });
-  }
-  return cachedClient;
-}
+import { sendSms } from "./sms.mjs";
 
 const SUBJECTS = {
   verify: "Your Nexlo verification code",
   login_2fa: "Your Nexlo sign-in code",
   reset: "Your Nexlo password reset code",
   enroll_2fa: "Your Nexlo security code",
+  change_phone: "Confirm your Nexlo phone-number change",
 };
 
-export async function sendCodeEmail({ to, code, purpose = "verify" }) {
-  const client = mailgunClient();
-  const domain = process.env.MAILGUN_DOMAIN;
-  if (!client || !domain || !to) {
-    console.warn("[mail] Mailgun is not configured; skipping email to", to);
-    return { skipped: true };
+const SEND_TIMEOUT_MS = 8000;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function maskDestination(value, channel = "email") {
+  const v = String(value || "").trim();
+  if (!v) return channel === "phone" ? "your phone" : "your email";
+  if (channel === "phone") {
+    const digits = v.replace(/\D/g, "");
+    if (digits.length < 4) return "your phone";
+    return `${digits.slice(0, 2)}••••${digits.slice(-2)}`;
   }
+  const at = v.indexOf("@");
+  if (at < 1) return "your email";
+  return `${v.slice(0, 1)}•••@${v.slice(at + 1)}`;
+}
 
-  const from =
-    process.env.MAILGUN_FROM ||
-    `Mailgun Sandbox <postmaster@${domain}>`;
-  const subject = SUBJECTS[purpose] ?? "Your Nexlo code";
-  const text = `Your Nexlo code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`;
+export function mailgunBases() {
+  const primary = String(process.env.MAILGUN_API_URL || "https://api.mailgun.net").replace(/\/$/, "");
+  return [...new Set([primary, "https://api.mailgun.net", "https://api.eu.mailgun.net"])];
+}
 
+export function classifyMailError(err) {
+  const message = String(err?.message || err || "");
+  const status = Number(err?.status || 0);
+  const lower = message.toLowerCase();
+  if (status === 403 || lower.includes("authorized recipient") || lower.includes("sandbox")) {
+    return {
+      retryable: false,
+      userMessage:
+        "We could not deliver to this email. Check the address, then tap Resend. Mailgun sandbox only delivers to authorized recipients.",
+    };
+  }
+  if (status === 401) {
+    return { retryable: false, userMessage: "Email delivery is misconfigured. Tap Resend in a minute, or contact support." };
+  }
+  if (err?.name === "AbortError" || lower.includes("abort") || lower.includes("timeout")) {
+    return { retryable: true, userMessage: "The email provider timed out. Tap Resend." };
+  }
+  if (status === 429 || status >= 500) {
+    return { retryable: true, userMessage: "The email provider is busy. Tap Resend." };
+  }
+  return { retryable: !status || status >= 500, userMessage: "We could not send the code. Tap Resend." };
+}
+
+async function postMailgun(base, domain, key, fields) {
+  const body = new URLSearchParams();
+  for (const [k, v] of Object.entries(fields)) {
+    if (v) body.set(k, v);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
   try {
-    const data = await client.messages.create(domain, {
-      from,
-      to: [to],
-      subject,
-      text,
+    const res = await fetch(`${base}/v3/${domain}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`api:${key}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      signal: controller.signal,
     });
-    console.log("[mail] sent", purpose, "to", to, data?.id ?? "");
-    return { skipped: false, id: data?.id };
-  } catch (err) {
-    console.error("[mail] failed to send to", to, err?.message || err);
-    throw err;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.message || `Mailgun ${res.status}`);
+      err.status = res.status;
+      err.payload = data;
+      throw err;
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-export async function sendTransactional({ to, subject, text }) {
-  const client = mailgunClient();
+function codeEmailHtml(code, purpose) {
+  const label = SUBJECTS[purpose] ?? "Your Nexlo code";
+  return `<div style="font-family:Arial,sans-serif;max-width:480px;color:#0f1c3f">
+  <p style="font-size:16px;font-weight:700;margin:0 0 12px">${label}</p>
+  <p style="font-size:13px;color:#6b7587;margin:0 0 16px">Use this code within 10 minutes.</p>
+  <p style="font-size:28px;letter-spacing:8px;font-weight:800;margin:0 0 16px">${code}</p>
+  <p style="font-size:12px;color:#8a94a6">If you did not request this, you can ignore the email.</p>
+</div>`;
+}
+
+export async function sendCodeEmail({ to, code, purpose = "verify" }) {
+  const key = process.env.MAILGUN_API_KEY;
   const domain = process.env.MAILGUN_DOMAIN;
-  if (!client || !domain || !to) {
-    console.warn("[mail] skip transactional to", to, subject);
-    return { skipped: true };
+  const destination = String(to || "").trim().toLowerCase();
+  if (!key || !domain || !destination) {
+    const missing = [!key && "MAILGUN_API_KEY", !domain && "MAILGUN_DOMAIN"].filter(Boolean);
+    console.warn(
+      "[mail] Mailgun is not configured; skipping email to",
+      destination || to,
+      missing.length ? `(missing ${missing.join(", ")})` : "",
+    );
+    return {
+      sent: false,
+      skipped: true,
+      masked: maskDestination(destination, "email"),
+      userMessage: "Email delivery is not configured. Tap Resend, or use the on-screen code if one is shown.",
+    };
+  }
+
+  const from = process.env.MAILGUN_FROM || `Nexlo <postmaster@${domain}>`;
+  const subject = SUBJECTS[purpose] ?? "Your Nexlo code";
+  const text = `Your Nexlo code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`;
+  const html = codeEmailHtml(code, purpose);
+  const fields = { from, to: destination, subject, text, html };
+
+  let lastError;
+  for (const base of mailgunBases()) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const data = await postMailgun(base, domain, key, fields);
+        console.log("[mail] sent", purpose, "to", destination, "via", base, data?.id ?? "");
+        return { sent: true, skipped: false, id: data?.id, masked: maskDestination(destination, "email") };
+      } catch (err) {
+        lastError = err;
+        const classified = classifyMailError(err);
+        console.error("[mail] failed", purpose, destination, base, err?.status, err?.message || err);
+        if (!classified.retryable) {
+          return { sent: false, skipped: false, masked: maskDestination(destination, "email"), ...classified };
+        }
+        if (attempt === 0) await wait(400);
+      }
+    }
+  }
+  const classified = classifyMailError(lastError);
+  return { sent: false, skipped: false, masked: maskDestination(destination, "email"), ...classified };
+}
+
+export async function sendTransactional({ to, subject, text }) {
+  const key = process.env.MAILGUN_API_KEY;
+  const domain = process.env.MAILGUN_DOMAIN;
+  const destination = String(to || "").trim();
+  if (!key || !domain || !destination) {
+    console.warn("[mail] skip transactional to", destination || to, subject);
+    return { skipped: true, sent: false };
   }
   const from = process.env.MAILGUN_FROM || `Nexlo <postmaster@${domain}>`;
   try {
-    const data = await client.messages.create(domain, { from, to: [to], subject, text });
-    return { skipped: false, id: data?.id };
+    const data = await postMailgun(mailgunBases()[0], domain, key, { from, to: destination, subject, text });
+    return { skipped: false, sent: true, id: data?.id };
   } catch (err) {
     console.error("[mail] transactional failed", err?.message || err);
-    return { skipped: true };
+    return { skipped: true, sent: false };
   }
 }
 
 export async function deliverCode(channel, destination, code, purpose) {
-  if (channel !== "email" || !destination) return;
-  try {
-    await sendCodeEmail({ to: destination, code, purpose });
-  } catch (err) {
-    // Account creation should still succeed; the user can tap Resend.
-    console.error("[mail] deliverCode failed:", err?.message || err);
+  const dest = String(destination || "").trim();
+  if (!dest) {
+    return { sent: false, skipped: true, userMessage: "No email or phone to send a code to." };
   }
+  if (channel === "phone") {
+    const text = `Your Nexlo code is ${code}. It expires in 10 minutes.`;
+    const sms = await sendSms(dest, text);
+    if (sms.skipped) {
+      console.warn("[mail] SMS skipped for", maskDestination(dest, "phone"));
+      return {
+        sent: false,
+        skipped: true,
+        masked: maskDestination(dest, "phone"),
+        userMessage: "We could not send an SMS right now. Tap Resend, or register with email.",
+      };
+    }
+    if (sms.status && Number(sms.status) >= 400) {
+      return {
+        sent: false,
+        skipped: false,
+        masked: maskDestination(dest, "phone"),
+        userMessage: "SMS delivery failed. Tap Resend.",
+      };
+    }
+    return { sent: true, skipped: false, masked: maskDestination(dest, "phone") };
+  }
+  return sendCodeEmail({ to: dest, code, purpose });
 }

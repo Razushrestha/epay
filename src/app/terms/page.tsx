@@ -7,7 +7,7 @@ export default function TermsPage() {
       <PageHero
         eyebrow="Legal"
         title="Terms of service"
-        body="The rules for buying, bidding, and selling on Nexlo — including escrow, fees, and returns."
+        body="The rules for buying, bidding, and selling on Nexlo, including escrow, fees, and returns."
         cta="Buyer protection"
         href="/help/buyer-protection"
       />

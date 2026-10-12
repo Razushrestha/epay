@@ -54,58 +54,44 @@ async function removeBackground(imageBuffer) {
 /**
  * Parse multipart form data
  */
-function parseMultipartForm(req) {
-  return new Promise((resolve, reject) => {
-    const boundary = req.headers['content-type']?.split('boundary=')[1];
-    if (!boundary) {
-      return reject(new Error('No boundary found in content-type'));
+async function parseMultipartForm(req) {
+  const type = String(req.headers['content-type'] || '');
+  const match = type.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  const boundary = (match?.[1] || match?.[2] || '').trim();
+  if (!boundary) {
+    throw new Error('No boundary found in content-type');
+  }
+
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const buffer = Buffer.concat(chunks);
+  const parts = buffer.toString('binary').split(`--${boundary}`);
+
+  const files = [];
+  const fields = {};
+
+  for (const part of parts) {
+    if (!part.includes('Content-Disposition')) continue;
+    const nameMatch = part.match(/name="([^"]+)"/);
+    const filenameMatch = part.match(/filename="([^"]+)"/);
+    const contentTypeMatch = part.match(/Content-Type:\s*(.+)/i);
+
+    if (filenameMatch && contentTypeMatch) {
+      const name = nameMatch?.[1] || 'file';
+      const filename = filenameMatch[1];
+      const contentType = contentTypeMatch[1].trim();
+      const dataStart = part.indexOf('\r\n\r\n') + 4;
+      const dataEnd = part.lastIndexOf('\r\n');
+      const data = Buffer.from(part.slice(dataStart, dataEnd), 'binary');
+      files.push({ name, filename, contentType, data });
+    } else if (nameMatch) {
+      const dataStart = part.indexOf('\r\n\r\n') + 4;
+      const dataEnd = part.lastIndexOf('\r\n');
+      fields[nameMatch[1]] = part.slice(dataStart, dataEnd);
     }
+  }
 
-    const chunks = [];
-    req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => {
-      try {
-        const buffer = Buffer.concat(chunks);
-        const parts = buffer.toString('binary').split(`--${boundary}`);
-        
-        const files = [];
-        const fields = {};
-
-        for (const part of parts) {
-          if (part.includes('Content-Disposition')) {
-            const nameMatch = part.match(/name="([^"]+)"/);
-            const filenameMatch = part.match(/filename="([^"]+)"/);
-            const contentTypeMatch = part.match(/Content-Type: (.+)/);
-
-            if (filenameMatch && contentTypeMatch) {
-              // File upload
-              const name = nameMatch[1];
-              const filename = filenameMatch[1];
-              const contentType = contentTypeMatch[1].trim();
-              
-              const dataStart = part.indexOf('\r\n\r\n') + 4;
-              const dataEnd = part.lastIndexOf('\r\n');
-              const data = Buffer.from(part.slice(dataStart, dataEnd), 'binary');
-
-              files.push({ name, filename, contentType, data });
-            } else if (nameMatch) {
-              // Regular field
-              const name = nameMatch[1];
-              const dataStart = part.indexOf('\r\n\r\n') + 4;
-              const dataEnd = part.lastIndexOf('\r\n');
-              const value = part.slice(dataStart, dataEnd);
-              fields[name] = value;
-            }
-          }
-        }
-
-        resolve({ fields, files });
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on('error', reject);
-  });
+  return { fields, files };
 }
 
 /**
@@ -296,6 +282,92 @@ export async function uploadPhoto(req, listingId, userId) {
       body: { error: 'Failed to upload photo', details: error.message } 
     };
   }
+}
+
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+function publicObjectUrl(key) {
+  const baseUrl = String(process.env.AWS_ENDPOINT_URL_S3 || "").replace(/\/$/, "");
+  return baseUrl ? `${baseUrl}/uploads/${key}` : `/uploads/${key}`;
+}
+
+function storageKeyFromUrl(url, folder) {
+  const value = String(url || "");
+  const marker = `/uploads/${folder}/`;
+  const idx = value.indexOf(marker);
+  if (idx === -1) return null;
+  const name = value.slice(idx + marker.length).split("?")[0];
+  return name ? `${folder}/${name}` : null;
+}
+
+export async function uploadAvatar(req, userId) {
+  try {
+    const { files } = await parseMultipartForm(req);
+    const file = files?.[0];
+    if (!file) return { status: 400, body: { error: "Choose a photo to upload." } };
+    if (!ALLOWED_TYPES.includes(file.contentType)) {
+      return { status: 400, body: { error: "Use a JPG, PNG, or WebP image." } };
+    }
+    if (file.data.length > AVATAR_MAX_BYTES) {
+      return { status: 400, body: { error: "Photo must be 5 MB or smaller." } };
+    }
+
+    const processed = await sharp(file.data)
+      .rotate()
+      .resize(512, 512, { fit: "cover" })
+      .jpeg({ quality: 85, mozjpeg: true })
+      .withMetadata({ exif: {} })
+      .toBuffer();
+
+    const filename = `${userId}-${Date.now()}-${randomBytes(6).toString("hex")}.jpg`;
+    const key = `avatars/${filename}`;
+    let photoUrl = publicObjectUrl(key);
+    try {
+      await storage.upload(key, processed, {
+        contentType: "image/jpeg",
+        cacheControl: "public, max-age=31536000",
+      });
+    } catch (err) {
+      console.error("[avatar] object storage failed", err?.message || err);
+      photoUrl = `data:image/jpeg;base64,${processed.toString("base64")}`;
+    }
+
+    const previous = await query(`SELECT avatar_url FROM user_profiles WHERE user_id = $1`, [userId]);
+    const previousKey = storageKeyFromUrl(previous.rows[0]?.avatar_url, "avatars");
+    if (previousKey) {
+      try {
+        await storage.delete(previousKey);
+      } catch (err) {
+        console.warn("[avatar] could not delete previous file", err?.message || err);
+      }
+    }
+
+    await query(
+      `INSERT INTO user_profiles (user_id, avatar_url)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE SET avatar_url = EXCLUDED.avatar_url`,
+      [userId, photoUrl],
+    );
+
+    return { status: 200, body: { avatarUrl: photoUrl } };
+  } catch (error) {
+    console.error("Avatar upload error:", error);
+    return { status: 500, body: { error: "Could not upload that photo." } };
+  }
+}
+
+export async function clearAvatar(userId) {
+  const previous = await query(`SELECT avatar_url FROM user_profiles WHERE user_id = $1`, [userId]);
+  const previousKey = storageKeyFromUrl(previous.rows[0]?.avatar_url, "avatars");
+  if (previousKey) {
+    try {
+      await storage.delete(previousKey);
+    } catch (err) {
+      console.warn("[avatar] could not delete file", err?.message || err);
+    }
+  }
+  await query(`UPDATE user_profiles SET avatar_url = NULL WHERE user_id = $1`, [userId]);
+  return { status: 200, body: { avatarUrl: null } };
 }
 
 /**

@@ -52,7 +52,7 @@ export default function AdminCmsPage() {
           <button className="h-10 w-fit rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save page</button>
         </form>
         <ul className="mt-3 text-[13px] text-[#5b6780]">
-          {pages.map((p) => <li key={p.slug}>{p.slug} — {p.title} ({p.status})</li>)}
+          {pages.map((p) => <li key={p.slug}>{p.slug}, {p.title} ({p.status})</li>)}
         </ul>
       </section>
       <section className="nexlo-card p-5">

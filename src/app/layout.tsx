@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nexlo — Find What Comes Next",
+  title: "Nexlo: Find What Comes Next",
   description:
     "Shop, bid, and sell in Nepal. Auctions, deals, and buyer protection on Nexlo.",
 };

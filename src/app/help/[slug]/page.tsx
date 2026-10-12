@@ -8,7 +8,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { PageHero } from "@/components/ui/PageHero";
 
 const fallback: Record<string, { title: string; body: string }> = {
-  faq: { title: "Frequently asked questions", body: "Bidding uses proxy bids and a soft close. Best Offer gives the seller 48 hours. Pay with eSewa or Khalti — funds stay in escrow until delivery." },
+  faq: { title: "Frequently asked questions", body: "Bidding uses proxy bids and a soft close. Best Offer gives the seller 48 hours. Pay with eSewa or Khalti. Funds stay in escrow until delivery." },
   "buyer-protection": { title: "Buyer protection", body: "You have 30 days after delivery to open a return for not as described, damaged, or wrong item. Escrow stays frozen until the case is closed." },
   "selling-guide": { title: "Selling guide", body: "Create a listing, add photos, and publish. Ship within the handling time. Request payouts to bank, eSewa, or Khalti after funds clear." },
   returns: { title: "Returns policy", body: "Sellers have 3 days to respond. If they stay silent the case escalates to Nexlo staff. Changed-mind returns depend on the listing." },
@@ -33,7 +33,7 @@ export default function HelpArticlePage() {
       <PageHero
         eyebrow="Help centre"
         title={page?.title || "Loading guide…"}
-        body={error || "Escrow, returns, and staff review — the same rules that protect every order on Nexlo."}
+        body={error || "Escrow, returns, and staff review: the same rules that protect every order on Nexlo."}
       />
       <main className="page-shell py-8">
         <Link href="/help" className="nexlo-link text-[13px]">← All guides</Link>

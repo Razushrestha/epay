@@ -9,7 +9,7 @@ export default function SellPage() {
       <PageHero
         eyebrow="Sell on Nexlo"
         title="List it once. Reach every buyer in Nepal."
-        body="Auction, Buy It Now, or Best Offer. Photos, category, and KYC come next — then your listing goes live with escrow on every sale."
+        body="Auction, Buy It Now, or Best Offer. Photos, category, and KYC come next, then your listing goes live with escrow on every sale."
         cta="Create a listing"
         href="/sell/create"
       />

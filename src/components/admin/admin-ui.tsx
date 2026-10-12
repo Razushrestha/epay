@@ -3,9 +3,9 @@ export function money(value: number | string | null | undefined) {
 }
 
 export function when(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   const diff = Date.now() - d.getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "Just now";
@@ -19,7 +19,7 @@ export function when(iso?: string | null) {
 }
 
 export function clock(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();

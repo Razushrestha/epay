@@ -43,7 +43,7 @@ export async function handlePhase3(req, method, pathParts, body) {
     if (!auth) return { status: 401, body: { error: "Sign in required" } };
     const orderId = body.orderId;
     const stars = Number(body.rating);
-    if (!orderId || !(stars >= 1 && stars <= 5)) return { status: 400, body: { error: "Order and 1–5 rating required" } };
+    if (!orderId || !(stars >= 1 && stars <= 5)) return { status: 400, body: { error: "Order and 1 to 5 rating required" } };
     const order = await query(
       `SELECT o.id, o.buyer_id, oi.seller_id FROM orders o
        JOIN order_items oi ON oi.order_id = o.id

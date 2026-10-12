@@ -178,7 +178,7 @@ export default function CheckoutPage() {
       <PageHero
         eyebrow="Secure checkout"
         title="Review and pay"
-        body="Funds stay in escrow until delivery. Pay with eSewa or Khalti — 13% VAT included."
+        body="Funds stay in escrow until delivery. Pay with eSewa or Khalti. 13% VAT included."
         cta="Back to cart"
         href="/cart"
       />

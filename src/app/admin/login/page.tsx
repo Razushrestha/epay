@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AdminLoginForm } from "@/components/admin/AdminLoginForm";
 
 export const metadata: Metadata = {
-  title: "Admin Login — Nexlo",
+  title: "Admin Login | Nexlo",
   description: "Sign in to the Nexlo admin portal.",
 };
 
@@ -95,9 +95,9 @@ export default function AdminLoginPage() {
 
       <section className="relative hidden flex-col px-12 pb-8 pt-10 lg:flex xl:px-16">
         <Link href="/" className="w-fit" aria-label="Nexlo home">
-          <Image src="/logo-transparent.png" alt="Nexlo — Find What Comes Next." width={808} height={256} priority className="h-12 w-auto" />
+          <Image src="/logo-transparent.png" alt="Nexlo: Find What Comes Next." width={808} height={256} priority className="h-12 w-auto" />
         </Link>
-        <p className="mt-10 text-[15px] font-semibold text-[#3665f3]">Admin Portal —</p>
+        <p className="mt-10 text-[15px] font-semibold text-[#3665f3]">Admin Portal</p>
         <h2 className="mt-1 text-[44px] font-extrabold leading-[1.05] tracking-tight text-[#0f1c3f] xl:text-[52px]">
           Welcome Back,
           <br />

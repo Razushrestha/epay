@@ -9,13 +9,20 @@ type ChromeUser = {
   displayName: string | null;
   firstName: string | null;
   lastName: string | null;
+  username?: string | null;
   email: string | null;
   avatarUrl: string | null;
 };
 
+function present(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : "";
+}
+
 function initials(user: ChromeUser) {
-  const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.displayName || user.email || "N";
-  return name
+  const name = fullName(user);
+  const source = name === "Your account" ? present(user.email) || "N" : name;
+  return source
     .split(/\s+/)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? "")
@@ -23,7 +30,12 @@ function initials(user: ChromeUser) {
 }
 
 function fullName(user: ChromeUser) {
-  return `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.displayName || "Your account";
+  return (
+    present(`${user.firstName ?? ""} ${user.lastName ?? ""}`) ||
+    present(user.displayName) ||
+    present(user.username) ||
+    "Your account"
+  );
 }
 
 function Icon({ d, paths }: { d?: string; paths?: ReactNode }) {

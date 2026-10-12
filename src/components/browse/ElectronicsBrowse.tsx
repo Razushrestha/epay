@@ -15,8 +15,8 @@ const conditions = ["New", "Used", "Refurbished"] as const;
 const priceBands = [
   { id: "any", label: "Any price" },
   { id: "under-20", label: "Under NPR 20,000" },
-  { id: "20-50", label: "NPR 20,000 – 50,000" },
-  { id: "50-100", label: "NPR 50,000 – 100,000" },
+  { id: "20-50", label: "NPR 20,000 to 50,000" },
+  { id: "50-100", label: "NPR 50,000 to 100,000" },
   { id: "over-100", label: "Over NPR 100,000" },
 ] as const;
 const citiesFallback = ["Kathmandu", "Pokhara", "Lalitpur"];
@@ -527,7 +527,7 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                     <Image src={item.img} alt="" fill className="object-contain" sizes="44px" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-semibold text-[#191919]">{item.short ?? item.title.split("–")[0]}</span>
+                    <span className="block truncate text-[13px] font-semibold text-[#191919]">{item.short ?? item.title.split(",")[0]}</span>
                     <span className="mt-0.5 block text-[11.5px] text-[#8b909a]">From {npr(item.price)}</span>
                   </span>
                 </Link>

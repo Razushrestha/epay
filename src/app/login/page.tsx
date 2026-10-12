@@ -4,7 +4,7 @@ import Link from "next/link";
 import { LoginForm } from "@/components/auth/LoginForm";
 
 export const metadata: Metadata = {
-  title: "Sign in — Nexlo",
+  title: "Sign in | Nexlo",
   description: "Sign in to your Nexlo account to bid, buy and sell.",
 };
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
           <Link href="/" aria-label="Nexlo home" className="w-fit">
             <Image
               src="/logo-transparent.png"
-              alt="Nexlo — Find What Comes Next."
+              alt="Nexlo: Find What Comes Next."
               width={808}
               height={256}
               priority

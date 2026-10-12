@@ -39,7 +39,7 @@ export const elecGroups = [
 export const elecProducts: ElecProduct[] = [
   {
     id: 7,
-    title: "iPhone 14 Pro 128GB – Deep Purple",
+    title: "iPhone 14 Pro 128GB, Deep Purple",
     short: "iPhone 14 Pro",
     price: 72000,
     was: 95000,
@@ -60,7 +60,7 @@ export const elecProducts: ElecProduct[] = [
   },
   {
     id: 1,
-    title: 'MacBook Air M1 2020 13" – Space Gray',
+    title: 'MacBook Air M1 2020 13", Space Gray',
     short: "MacBook Air",
     price: 96000,
     was: 120000,
@@ -81,7 +81,7 @@ export const elecProducts: ElecProduct[] = [
   },
   {
     id: 21,
-    title: "Samsung Galaxy S22 256GB – Phantom Black",
+    title: "Samsung Galaxy S22 256GB, Phantom Black",
     short: "Samsung Galaxy",
     price: 55000,
     was: 70000,

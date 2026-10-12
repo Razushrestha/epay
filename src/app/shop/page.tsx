@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "Shop now — Nexlo",
+  title: "Shop now | Nexlo",
   description: "Free shipping on top categories, tech, fashion, and collectibles.",
 };
 
@@ -80,7 +80,7 @@ export default function ShopPage() {
           <div className="max-w-[420px] shrink-0">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f1c3f]">Shop</p>
             <h1 className="mt-2 text-[34px] font-bold leading-[1.05] tracking-tight text-[#0f1c3f] sm:text-[40px]">
-              Direct to you — for free
+              Direct to you, for free
             </h1>
             <p className="mt-3 text-[15px] text-[#333]">Free shipping on these favourite items, with escrow on every order.</p>
           </div>

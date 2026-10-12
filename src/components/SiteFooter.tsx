@@ -29,13 +29,13 @@ export function SiteFooter() {
         <div>
           <Image
             src="/logo.png"
-            alt="Nexlo — Find What Comes Next."
+            alt="Nexlo: Find What Comes Next."
             width={422}
             height={145}
             className="h-[52px] w-auto rounded-[8px]"
           />
           <p className="mt-2 max-w-[260px] text-[12px] leading-relaxed text-[#707070]">
-            Auctions, fixed-price deals and Best Offer — with escrow, returns and dispute protection.
+            Auctions, fixed-price deals and Best Offer, with escrow, returns, and dispute protection.
           </p>
         </div>
         {cols.map((c) => (

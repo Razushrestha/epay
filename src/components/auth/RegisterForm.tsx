@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { apiBase } from "@/lib/account-api";
+import { apiBase, apiUnreachableMessage } from "@/lib/account-api";
 
 function Icon({ children }: { children: React.ReactNode }) {
   return (
@@ -110,21 +110,35 @@ export function RegisterForm() {
       });
       
       clearTimeout(timeout);
-      
-      const body = await res.json();
+
+      const text = await res.text();
+      let body: { error?: string; data?: { devCode?: string; sent?: boolean; destinationMasked?: string; deliveryError?: string } } = {};
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        setError(`The API returned an unexpected response (${res.status}).`);
+        return;
+      }
       if (!res.ok) {
+        if (res.status === 409) {
+          sessionStorage.setItem("nexlo_verify_id", email.trim() || phone.trim());
+          setError(
+            `${body.error ?? "That email or phone is already registered."} If you just signed up, open Confirm it is you and tap Resend.`,
+          );
+          return;
+        }
         setError(body.error ?? "We could not create your account.");
         return;
       }
       if (body.data?.devCode) sessionStorage.setItem("nexlo_dev_code", body.data.devCode);
       sessionStorage.setItem("nexlo_verify_id", email.trim() || phone.trim());
+      sessionStorage.setItem("nexlo_code_sent", body.data?.sent === false ? "0" : "1");
+      if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", body.data.destinationMasked);
+      if (body.data?.deliveryError) sessionStorage.setItem("nexlo_code_error", body.data.deliveryError);
+      else sessionStorage.removeItem("nexlo_code_error");
       router.push("/verify");
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        setError("Server is waking up (takes ~30s on first request). Please try again.");
-      } else {
-        setError("We could not reach the server. Please try again in a moment.");
-      }
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }

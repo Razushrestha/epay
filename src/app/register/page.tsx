@@ -7,7 +7,7 @@ import { RegisterForm } from "@/components/auth/RegisterForm";
 const script = Caveat({ subsets: ["latin"], weight: ["600", "700"] });
 
 export const metadata: Metadata = {
-  title: "Create account — Nexlo",
+  title: "Create account | Nexlo",
   description: "Create a Nexlo account to bid, buy and sell.",
 };
 
@@ -50,7 +50,7 @@ export default function RegisterPage() {
 
         <div className="relative z-10 flex h-full flex-col px-10 pt-7 xl:px-12">
           <Link href="/" aria-label="Nexlo home" className="w-fit">
-            <Image src="/logo-transparent.png" alt="Nexlo — Find What Comes Next." width={808} height={256} priority className="h-12 w-auto" />
+            <Image src="/logo-transparent.png" alt="Nexlo: Find What Comes Next." width={808} height={256} priority className="h-12 w-auto" />
           </Link>
           <h2 className="mt-6 max-w-[340px] text-[38px] font-extrabold leading-[1.05] tracking-tight text-[#0f1c3f] xl:text-[42px]">
             Join Nexlo and{" "}
@@ -59,7 +59,7 @@ export default function RegisterPage() {
             </span>
           </h2>
           <p className="mt-3 max-w-[340px] text-[13.5px] leading-relaxed text-[#4b566b]">
-            Create your account, explore amazing products, connect with people and get access to exclusive offers — all in one place.
+            Create your account, explore amazing products, connect with people and get access to exclusive offers, all in one place.
           </p>
           <ul className="mt-5 flex max-w-[460px]">
             {features.map((f) => (

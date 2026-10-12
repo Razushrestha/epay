@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiBase, setToken } from "@/lib/account-api";
+import { apiBase, apiUnreachableMessage, digitsCode, setToken } from "@/lib/account-api";
 
 function MailIcon() {
   return (
@@ -117,7 +117,15 @@ export function LoginForm() {
       if (body.step === "challenge") {
         setStep("challenge");
         setChallengeToken(body.challengeToken);
-        setNotice(body.devCode ? `Enter the code from your app, or use ${body.devCode}.` : "Enter the code from your authenticator or the message we sent.");
+        const filled = digitsCode(body.devCode);
+        if (filled) setCode(filled);
+        setNotice(
+          filled
+            ? "Email is not sending from this computer yet. The code is filled in."
+            : body.sent === false
+              ? body.deliveryError ?? "We could not send the sign-in code. Sign in again to resend it."
+              : "Enter the code from your authenticator or the message we sent.",
+        );
         return;
       }
       if (body.step === "enroll") {
@@ -130,8 +138,8 @@ export function LoginForm() {
         return;
       }
       finish(body.token);
-    } catch {
-      setError("We could not reach the server. Please try again in a moment.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }
@@ -153,8 +161,8 @@ export function LoginForm() {
         return;
       }
       finish(body.token);
-    } catch {
-      setError("We could not reach the server. Please try again in a moment.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }
@@ -176,16 +184,19 @@ export function LoginForm() {
       }
       setEnrollMethod(body.data.method);
       setSecret(body.data.secret ?? "");
-      setCode("");
+      const filled = digitsCode(body.data.devCode);
+      setCode(filled);
       setNotice(
         body.data.secret
           ? "Add this key to an authenticator app, then enter the 6-digit code."
-          : body.data.devCode
-            ? `Your code is ${body.data.devCode}`
-            : "Enter the code we sent.",
+          : filled
+            ? "Email is not sending from this computer yet. The code is filled in."
+            : body.data.sent === false
+              ? body.data.deliveryError ?? "We could not send the code. Try email/phone again."
+              : "Enter the code we sent.",
       );
-    } catch {
-      setError("We could not reach the server. Please try again in a moment.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }
@@ -207,8 +218,8 @@ export function LoginForm() {
         return;
       }
       finish(body.token);
-    } catch {
-      setError("We could not reach the server. Please try again in a moment.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }
@@ -238,8 +249,8 @@ export function LoginForm() {
         return;
       }
       finish(body.token);
-    } catch {
-      setError("We could not reach the server. Please try again in a moment.");
+    } catch (err) {
+      setError(apiUnreachableMessage(err));
     } finally {
       setLoading(false);
     }
