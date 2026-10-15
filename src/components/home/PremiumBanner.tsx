@@ -5,7 +5,7 @@ import { premiumPicks } from "@/lib/home-data";
 export function PremiumBanner() {
   return (
     <section className="page-shell pt-6">
-      <div className="flex flex-col overflow-hidden rounded-[18px] bg-[#161616] lg:h-[248px] lg:flex-row lg:items-center">
+      <div className="promo-bg flex flex-col overflow-hidden rounded-[20px] lg:h-[248px] lg:flex-row lg:items-center">
         <div className="px-7 py-8 text-white sm:px-10 lg:w-[38%] lg:shrink-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9ca3af]">
             Premium picks
@@ -31,7 +31,7 @@ export function PremiumBanner() {
           {premiumPicks.map((p, i) => (
             <span
               key={p.label}
-              className="relative aspect-[5/6] overflow-hidden rounded-[18px] bg-[#1c1c1c]"
+              className="relative aspect-[5/6] overflow-hidden rounded-[18px] bg-white/10"
             >
               <Image
                 src={p.img}

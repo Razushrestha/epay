@@ -11,6 +11,8 @@ import { SellerHub } from "@/components/account/SellerHub";
 import { ReturnsBoard } from "@/components/account/ReturnsBoard";
 import { TicketsBoard } from "@/components/account/TicketsBoard";
 import { RecentlyViewed } from "@/components/browse/RecentlyViewed";
+import { CollectionsBoard } from "@/components/account/CollectionsBoard";
+import { FollowedSellers } from "@/components/account/FollowedSellers";
 
 type User = {
   id: string;
@@ -277,7 +279,7 @@ function AccountDashboard({ user, levelLabel }: { user: User; levelLabel: Record
           ["Returns", counts.returns],
           ["Tickets", counts.tickets],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-2xl bg-[#f7f7f7] p-4">
+          <div key={String(label)} className="rounded-2xl bg-[#f4f8fd] p-4">
             <p className="text-[12px] text-[#7a8496]">{label}</p>
             <p className="mt-1 text-[18px] font-extrabold capitalize text-[#0f1c3f]">{value}</p>
           </div>
@@ -285,7 +287,7 @@ function AccountDashboard({ user, levelLabel }: { user: User; levelLabel: Record
       </div>
       <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
         <Link href="/orders" className="h-9 rounded-full border px-4 leading-9">Orders</Link>
-        <Link href="/account?tab=returns" className="h-9 rounded-full border px-4 leading-9">Returns</Link>
+        <Link href="/resolution" className="h-9 rounded-full border px-4 leading-9">Resolution Center</Link>
         <Link href="/account?tab=tickets" className="h-9 rounded-full border px-4 leading-9">Support</Link>
       </div>
     </section>
@@ -1139,10 +1141,15 @@ function AccountScreen() {
         </section>
       )}
 
+      {tab === "collections" && <CollectionsBoard />}
+
+      {tab === "following" && <FollowedSellers />}
+
       {tab === "activity" && (
         <>
           <Standing user={user} appeal={appeal} setAppeal={setAppeal} onDone={() => load()} />
           <BiddingActivity />
+          <PendingOffers />
           <SavedSearchList />
           <RecentlyViewed compact />
         </>
@@ -1178,7 +1185,7 @@ function NotificationPrefs() {
       <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} /> Email alerts</label>
       <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} /> SMS for critical events</label>
       <label className="block text-[14px]">Quiet hours
-        <input value={quiet} onChange={(e) => setQuiet(e.target.value)} placeholder="22:00-07:00" className="mt-1 block h-10 w-full max-w-xs rounded-full border border-[#e7e7e7] px-4 text-[13px]" />
+        <input value={quiet} onChange={(e) => setQuiet(e.target.value)} placeholder="22:00-07:00" className="mt-1 block h-10 w-full max-w-xs rounded-full border border-[#e7eef6] px-4 text-[13px]" />
       </label>
       <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save</button>
       {saved ? <p className="text-[13px] text-[#12a37e]">{saved}</p> : null}
@@ -1223,10 +1230,14 @@ function SellingOrders() {
 }
 
 function PendingOffers() {
-  const [rows, setRows] = useState<{ id: number; title: string; amount: number; status: string; buyer_id: number }[]>([]);
+  const [rows, setRows] = useState<{ id: number; title: string; amount: number; status: string; awaitingYou?: boolean; youAreSeller?: boolean }[]>([]);
   const [counter, setCounter] = useState("");
+  async function loadOffers() {
+    const body = await accountApi<{ data: typeof rows }>("/api/v1/offers");
+    setRows(body.data);
+  }
   useEffect(() => {
-    accountApi<{ data: typeof rows }>("/api/v1/offers").then((b) => setRows(b.data)).catch(() => undefined);
+    loadOffers().catch(() => undefined);
   }, []);
   return (
     <div className="mt-8">
@@ -1234,24 +1245,25 @@ function PendingOffers() {
       <ul className="mt-2 space-y-2 text-[13px]">
         {rows.map((row) => (
           <li key={row.id} className="rounded-xl border px-3 py-2">
-            <p>{row.title} · NPR {Number(row.amount).toLocaleString()} · {row.status}</p>
-            {row.status === "pending" ? (
+            <p>{row.title} · NPR {Number(row.amount).toLocaleString()} · {row.status.replace(/_/g, " ")}
+              {row.awaitingYou ? <span className="ml-2 font-semibold text-[#3665f3]">Your move</span> : null}
+            </p>
+            {row.awaitingYou ? (
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" className="rounded-full bg-[#12a37e] px-3 py-1 text-white" onClick={async () => {
                   await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "accept" }) });
-                  const body = await accountApi<{ data: typeof rows }>("/api/v1/offers");
-                  setRows(body.data);
+                  if (row.youAreSeller) await loadOffers();
+                  else window.location.href = "/orders";
                 }}>Accept</button>
                 <button type="button" className="rounded-full border px-3 py-1" onClick={async () => {
                   await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "decline" }) });
-                  const body = await accountApi<{ data: typeof rows }>("/api/v1/offers");
-                  setRows(body.data);
+                  await loadOffers();
                 }}>Decline</button>
                 <input value={counter} onChange={(e) => setCounter(e.target.value)} placeholder="Counter" className="h-8 w-24 rounded-full border px-3" />
                 <button type="button" className="rounded-full border px-3 py-1" onClick={async () => {
                   await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "counter", amount: Number(counter) }) });
-                  const body = await accountApi<{ data: typeof rows }>("/api/v1/offers");
-                  setRows(body.data);
+                  setCounter("");
+                  await loadOffers();
                 }}>Counter</button>
               </div>
             ) : null}
@@ -1304,15 +1316,15 @@ function SavedSearchList() {
 }
 
 function BiddingActivity() {
-  const [bids, setBids] = useState<{ id: number; title: string; amount: number; listing_id: number; listing_status: string }[]>([]);
+  const [bids, setBids] = useState<{ id: number; title: string; amount: number; listing_id: number; listing_status: string; can_retract?: boolean }[]>([]);
   const [chances, setChances] = useState<{ id: number; title: string; amount: number; listing_id: number }[]>([]);
+  async function loadBids() {
+    const b = await accountApi<{ bids: typeof bids; secondChance: typeof chances }>("/api/v1/auctions");
+    setBids(b.bids || []);
+    setChances(b.secondChance || []);
+  }
   useEffect(() => {
-    accountApi<{ bids: typeof bids; secondChance: typeof chances }>("/api/v1/auctions")
-      .then((b) => {
-        setBids(b.bids || []);
-        setChances(b.secondChance || []);
-      })
-      .catch(() => undefined);
+    loadBids().catch(() => undefined);
   }, []);
   return (
     <section className="mt-4 nexlo-card p-6">
@@ -1331,12 +1343,34 @@ function BiddingActivity() {
             >
               Accept
             </button>
+            <button
+              type="button"
+              className="ml-2 text-[#e53238]"
+              onClick={async () => {
+                await accountApi("/api/v1/auctions/second-chance", { method: "POST", body: JSON.stringify({ offerId: row.id, accept: false }) });
+                setChances((current) => current.filter((item) => item.id !== row.id));
+              }}
+            >
+              Decline
+            </button>
           </li>
         ))}
         {bids.map((row) => (
           <li key={row.id} className="rounded-xl border px-3 py-2">
             <Link href={`/listing/${row.listing_id}`} className="font-semibold text-[#3665f3]">{row.title}</Link>
             <span className="ml-2">NPR {Number(row.amount).toLocaleString()} · {row.listing_status}</span>
+            {row.can_retract ? (
+              <button
+                type="button"
+                className="ml-2 text-[#e53238]"
+                onClick={async () => {
+                  await accountApi(`/api/v1/auctions/${row.listing_id}/retract`, { method: "POST", body: "{}" });
+                  await loadBids();
+                }}
+              >
+                Retract
+              </button>
+            ) : null}
           </li>
         ))}
         {bids.length === 0 && chances.length === 0 ? <li className="text-[#8a94a6]">No bids yet.</li> : null}

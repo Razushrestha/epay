@@ -11,7 +11,9 @@ export async function handleInbox(method, pathParts, auth, body) {
     const { rows } = await query(
       `SELECT c.*,
               CASE WHEN c.buyer_id = $1 THEN su.email ELSE bu.email END AS counterpart_email,
-              CASE WHEN c.buyer_id = $1 THEN sp.display_name ELSE bp.display_name END AS counterpart_name,
+              CASE WHEN c.buyer_id = $1 THEN COALESCE(sp.display_name, su.username) ELSE COALESCE(bp.display_name, bu.username) END AS counterpart_name,
+              CASE WHEN c.buyer_id = $1 THEN su.username ELSE bu.username END AS counterpart_username,
+              (SELECT title FROM listings WHERE id = c.listing_id) AS listing_title,
               (SELECT body FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
               (SELECT COUNT(*)::int FROM messages m WHERE m.conversation_id = c.id AND m.sender_id <> $1 AND m.read_at IS NULL) AS unread
        FROM conversations c
@@ -28,17 +30,23 @@ export async function handleInbox(method, pathParts, auth, body) {
   }
 
   if (method === "POST" && pathParts[0] === "conversations" && !pathParts[1]) {
-    if (Number(body.sellerId) === Number(auth.user_id)) return { status: 400, body: { error: "You cannot message yourself" } };
+    const otherId = Number(body.sellerId || body.memberId || body.userId);
+    if (!otherId) return { status: 400, body: { error: "Choose a member to message" } };
+    if (otherId === Number(auth.user_id)) return { status: 400, body: { error: "You cannot message yourself" } };
     const listingId = body.listingId || null;
     const found = await query(
-      `SELECT * FROM conversations WHERE buyer_id = $1 AND seller_id = $2 AND COALESCE(listing_id, 0) = COALESCE($3::bigint, 0)`,
-      [auth.user_id, body.sellerId, listingId],
+      `SELECT * FROM conversations
+       WHERE COALESCE(listing_id, 0) = COALESCE($3::bigint, 0)
+         AND ((buyer_id = $1 AND seller_id = $2) OR (buyer_id = $2 AND seller_id = $1))
+       ORDER BY last_message_at DESC NULLS LAST
+       LIMIT 1`,
+      [auth.user_id, otherId, listingId],
     );
     if (found.rows[0]) return { status: 200, body: { data: found.rows[0] } };
     const inserted = await query(
       `INSERT INTO conversations (buyer_id, seller_id, listing_id, subject)
        VALUES ($1,$2,$3,$4) RETURNING *`,
-      [auth.user_id, body.sellerId, listingId, body.subject || "Question about an item"],
+      [auth.user_id, otherId, listingId, body.subject || "Message"],
     );
     return { status: 201, body: { data: inserted.rows[0] } };
   }
@@ -51,7 +59,7 @@ export async function handleInbox(method, pathParts, auth, body) {
       `UPDATE messages SET read_at = NOW() WHERE conversation_id = $1 AND sender_id <> $2 AND read_at IS NULL`,
       [convo.id, auth.user_id],
     );
-    return { status: 200, body: { conversation: convo, messages: rows } };
+    return { status: 200, body: { conversation: convo, messages: rows, youId: auth.user_id } };
   }
 
   if (method === "POST" && pathParts[0] === "conversations" && pathParts[1] && pathParts[2] === "messages") {

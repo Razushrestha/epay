@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { apiBase, apiUnreachableMessage, digitsCode, setToken } from "@/lib/account-api";
+import { SocialSignIn } from "@/components/auth/SocialSignIn";
 
 function MailIcon() {
   return (
@@ -33,40 +34,6 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
-function GoogleLogo() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
-      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.4 30.4 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
-      <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z" />
-      <path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z" />
-      <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z" />
-    </svg>
-  );
-}
-
-function AppleLogo() {
-  return (
-    <svg width="17" height="18" viewBox="0 0 24 24" fill="#111" aria-hidden>
-      <path d="M16.37 12.6c-.03-2.5 2.04-3.7 2.13-3.76-1.16-1.7-2.97-1.93-3.61-1.96-1.54-.16-3 .9-3.78.9-.78 0-1.98-.88-3.26-.86-1.68.03-3.22.98-4.09 2.48-1.74 3.02-.45 7.5 1.25 9.95.83 1.2 1.82 2.55 3.12 2.5 1.25-.05 1.72-.81 3.24-.81 1.51 0 1.94.81 3.26.78 1.35-.03 2.2-1.22 3.02-2.43.95-1.39 1.34-2.74 1.37-2.81-.03-.01-2.62-1-2.65-3.98ZM13.9 5.3c.69-.84 1.16-2 1.03-3.16-1 .04-2.2.66-2.92 1.5-.64.74-1.2 1.92-1.05 3.05 1.11.09 2.24-.56 2.94-1.39Z" />
-    </svg>
-  );
-}
-
-function FacebookLogo() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-      <circle cx="12" cy="12" r="12" fill="#1877F2" />
-      <path fill="#fff" d="M16.67 15.47 17.2 12h-3.33v-2.25c0-.95.47-1.88 1.96-1.88h1.52V4.92s-1.38-.24-2.7-.24c-2.75 0-4.55 1.67-4.55 4.68V12H6.05v3.47h3.05V24h3.77v-8.53h2.8Z" />
-    </svg>
-  );
-}
-
-const socials = [
-  { name: "Google", logo: <GoogleLogo /> },
-  { name: "Apple", logo: <AppleLogo /> },
-  { name: "Facebook", logo: <FacebookLogo /> },
-];
-
 export function LoginForm() {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
@@ -81,16 +48,6 @@ export function LoginForm() {
   const [code, setCode] = useState("");
   const [secret, setSecret] = useState("");
   const [enrollMethod, setEnrollMethod] = useState<"" | "authenticator" | "otp">("");
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
-
-  useEffect(() => {
-    if (!googleClientId || document.getElementById("nexlo-gis")) return;
-    const script = document.createElement("script");
-    script.id = "nexlo-gis";
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    document.body.appendChild(script);
-  }, [googleClientId]);
 
   function finish(token: string) {
     setToken(token);
@@ -223,56 +180,6 @@ export function LoginForm() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function completeGoogle(idToken: string) {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${apiBase}/api/v1/auth/google`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        setError(body.error ?? "Google sign-in did not complete.");
-        return;
-      }
-      if (body.step === "enroll") {
-        setStep("enroll");
-        setChallengeToken(body.challengeToken);
-        setEnrollMethod("");
-        setSecret("");
-        setCode("");
-        setNotice("Sellers must turn on two-factor before signing in. Choose a method below.");
-        return;
-      }
-      finish(body.token);
-    } catch (err) {
-      setError(apiUnreachableMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function startGoogle() {
-    if (!googleClientId) {
-      setError("Google sign-in is not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID.");
-      return;
-    }
-    const g = (window as unknown as { google?: { accounts: { id: { initialize: (o: object) => void; prompt: () => void } } } }).google;
-    if (!g?.accounts?.id) {
-      setError("Google is still loading. Try again in a moment.");
-      return;
-    }
-    g.accounts.id.initialize({
-      client_id: googleClientId,
-      callback: (resp: { credential: string }) => {
-        void completeGoogle(resp.credential);
-      },
-    });
-    g.accounts.id.prompt();
   }
 
   const fieldWrap =
@@ -454,25 +361,22 @@ export function LoginForm() {
         <span className="h-px flex-1 bg-[#e5eaf2]" />
       </div>
 
-      <div className={`space-y-2.5 ${step === "password" ? "" : "hidden"}`}>
-        {socials.map((s) => (
-          <button
-            key={s.name}
-            type="button"
-            onClick={() => {
-              setError(null);
-              if (s.name === "Google") {
-                startGoogle();
-                return;
-              }
-              setNotice(`${s.name} sign-in is not connected yet. Use Google or your email.`);
-            }}
-            className="relative flex h-11 w-full items-center justify-center rounded-full border border-[#dfe5ee] bg-white text-[14.5px] font-medium text-[#1a2338] transition hover:border-[#c3cddd] hover:bg-[#f8fafd]"
-          >
-            <span className="absolute left-4 flex items-center">{s.logo}</span>
-            Continue with {s.name}
-          </button>
-        ))}
+      <div className={step === "password" ? "" : "hidden"}>
+        <SocialSignIn
+          onError={(message) => {
+            setNotice(null);
+            setError(message);
+          }}
+          onEnroll={(token) => {
+            setStep("enroll");
+            setChallengeToken(token);
+            setEnrollMethod("");
+            setSecret("");
+            setCode("");
+            setNotice("Sellers must turn on two-factor before signing in. Choose a method below.");
+          }}
+          onSignedIn={(token) => finish(token)}
+        />
       </div>
     </div>
   );

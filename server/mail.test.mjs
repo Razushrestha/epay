@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyMailError, mailgunBases, maskDestination } from "./mail.mjs";
+import { classifyMailError, mailgunBases, mailgunWrongRegion, maskDestination } from "./mail.mjs";
 
 test("masks email and phone destinations", () => {
   assert.equal(maskDestination("buyer@nexlo.test", "email"), "b•••@nexlo.test");
@@ -28,4 +28,9 @@ test("sandbox and timeout errors are classified for the UI", () => {
 
   const busy = classifyMailError({ status: 503, message: "unavailable" });
   assert.equal(busy.retryable, true);
+
+  const unauthorized = classifyMailError({ status: 401, message: "Forbidden" });
+  assert.equal(unauthorized.retryable, true);
+  assert.equal(mailgunWrongRegion({ status: 401, message: "Forbidden" }), true);
+  assert.equal(mailgunWrongRegion({ status: 404, message: "Domain not found" }), true);
 });

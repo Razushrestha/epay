@@ -27,6 +27,7 @@ interface Listing {
   brand_name: string | null;
   primary_photo: string | null;
   seller_username: string;
+  status?: string;
 }
 
 interface Category {
@@ -72,7 +73,10 @@ function SearchContent() {
     free_shipping: "",
     seller_rating: "",
     exclude: "",
+    completed: "",
   });
+  const [specFilters, setSpecFilters] = useState<Record<string, string>>({});
+  const [facets, setFacets] = useState<Record<string, { value: string; count: number }[]>>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -100,6 +104,7 @@ function SearchContent() {
       free_shipping: searchParams?.get("free_shipping") || current.free_shipping,
       seller_rating: searchParams?.get("seller_rating") || current.seller_rating,
       exclude: searchParams?.get("exclude") || current.exclude,
+      completed: searchParams?.get("completed") || current.completed,
     }));
   }, [searchParams]);
 
@@ -109,7 +114,7 @@ function SearchContent() {
     } else {
       browseListings();
     }
-  }, [query, filters, currentPage]);
+  }, [query, filters, currentPage, specFilters]);
 
   async function loadFilterOptions() {
     try {
@@ -153,6 +158,8 @@ function SearchContent() {
       if (filters.free_shipping) params.set("free_shipping", filters.free_shipping);
       if (filters.seller_rating) params.set("seller_rating", filters.seller_rating);
       if (filters.exclude) params.set("exclude", filters.exclude);
+      if (filters.completed) params.set("completed", filters.completed);
+      if (Object.keys(specFilters).length) params.set("specifics", JSON.stringify(specFilters));
       params.set("sort", filters.sort);
 
       const res = await fetch(`${apiBase}/api/v1/listings/search?${params}`);
@@ -160,7 +167,8 @@ function SearchContent() {
 
       const data = await res.json();
       setListings(data.listings || []);
-      setTotal(data.listings?.length || 0);
+      setFacets(data.facets || {});
+      setTotal(Number(data.total || data.listings?.length || 0));
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -187,12 +195,15 @@ function SearchContent() {
       if (filters.location) params.set("location", filters.location);
       if (filters.free_shipping) params.set("free_shipping", filters.free_shipping);
       if (filters.seller_rating) params.set("seller_rating", filters.seller_rating);
+      if (filters.completed) params.set("completed", filters.completed);
+      if (Object.keys(specFilters).length) params.set("specifics", JSON.stringify(specFilters));
 
       const res = await fetch(`${apiBase}/api/v1/listings?${params}`);
       if (!res.ok) throw new Error("Failed to load listings");
 
       const data = await res.json();
       setListings(data.listings || []);
+      setFacets(data.facets || {});
       setTotal(data.total || 0);
     } catch (err: any) {
       setError(err.message);
@@ -219,7 +230,9 @@ function SearchContent() {
       free_shipping: "",
       seller_rating: "",
       exclude: "",
+      completed: "",
     });
+    setSpecFilters({});
     setCurrentPage(1);
   }
 
@@ -255,7 +268,7 @@ function SearchContent() {
       />
       <div className="page-shell py-8">
         <div className="mb-6">
-          {total > 0 && <p className="text-[14px] text-[#707070]">{total.toLocaleString()} items</p>}
+          {total > 0 && <p className="text-[14px] text-[#6b7587]">{total.toLocaleString()} items</p>}
         </div>
 
         {error && (
@@ -269,7 +282,7 @@ function SearchContent() {
           <div className="w-full shrink-0 lg:w-64">
             <div className="nexlo-card sticky top-4 p-4">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-[15px] font-bold text-[#191919]">Filters</h2>
+                <h2 className="text-[15px] font-bold text-[#0f1c3f]">Filters</h2>
                 <button onClick={clearFilters} className="nexlo-link text-[13px]">
                   Clear
                 </button>
@@ -278,11 +291,11 @@ function SearchContent() {
               <div className="space-y-4">
                 {/* Category */}
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Category</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Category</label>
                   <select
                     value={filters.category_id}
                     onChange={(e) => updateFilter("category_id", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
                   >
                     <option value="">All Categories</option>
                     {categories.map((cat) => (
@@ -295,11 +308,11 @@ function SearchContent() {
 
                 {/* Format */}
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Format</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Format</label>
                   <select
                     value={filters.format}
                     onChange={(e) => updateFilter("format", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
                   >
                     <option value="">All Formats</option>
                     <option value="fixed">Buy It Now</option>
@@ -309,11 +322,11 @@ function SearchContent() {
 
                 {/* Brand */}
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Brand</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Brand</label>
                   <select
                     value={filters.brand_id}
                     onChange={(e) => updateFilter("brand_id", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
                   >
                     <option value="">All Brands</option>
                     {brands.slice(0, 50).map((brand) => (
@@ -326,11 +339,11 @@ function SearchContent() {
 
                 {/* Condition */}
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Condition</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Condition</label>
                   <select
                     value={filters.condition}
                     onChange={(e) => updateFilter("condition", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
                   >
                     <option value="">Any Condition</option>
                     {conditions.map((cond) => (
@@ -342,16 +355,16 @@ function SearchContent() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Location</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Location</label>
                   <input
                     type="text"
                     placeholder="Kathmandu"
                     value={filters.location}
                     onChange={(e) => updateFilter("location", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
                   />
                 </div>
-                <label className="flex items-center gap-2 text-[13px] text-[#191919]">
+                <label className="flex items-center gap-2 text-[13px] text-[#0f1c3f]">
                   <input
                     type="checkbox"
                     checked={filters.free_shipping === "1"}
@@ -359,12 +372,45 @@ function SearchContent() {
                   />
                   Free shipping
                 </label>
+                <label className="flex items-center gap-2 text-[13px] text-[#0f1c3f]">
+                  <input
+                    type="checkbox"
+                    checked={filters.completed === "1"}
+                    onChange={(e) => updateFilter("completed", e.target.checked ? "1" : "")}
+                  />
+                  Sold / completed listings
+                </label>
+                {Object.entries(facets).map(([name, options]) => (
+                  <div key={name}>
+                    <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">{name}</label>
+                    <select
+                      value={specFilters[name] || ""}
+                      onChange={(e) => {
+                        setSpecFilters((current) => {
+                          const next = { ...current };
+                          if (e.target.value) next[name] = e.target.value;
+                          else delete next[name];
+                          return next;
+                        });
+                        setCurrentPage(1);
+                      }}
+                      className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
+                    >
+                      <option value="">Any</option>
+                      {options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.value} ({opt.count})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Min seller rating</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Min seller rating</label>
                   <select
                     value={filters.seller_rating}
                     onChange={(e) => updateFilter("seller_rating", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
                   >
                     <option value="">Any</option>
                     <option value="80">80%+</option>
@@ -374,21 +420,21 @@ function SearchContent() {
                 </div>
                 {/* Price Range */}
                 <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#191919]">Price (NPR)</label>
+                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Price (NPR)</label>
                   <div className="flex gap-2">
                     <input
                       type="number"
                       placeholder="Min"
                       value={filters.min_price}
                       onChange={(e) => updateFilter("min_price", e.target.value)}
-                      className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                      className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
                     />
                     <input
                       type="number"
                       placeholder="Max"
                       value={filters.max_price}
                       onChange={(e) => updateFilter("max_price", e.target.value)}
-                      className="w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[13px]"
+                      className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
                     />
                   </div>
                 </div>
@@ -400,13 +446,13 @@ function SearchContent() {
           <div className="flex-1">
             {/* Sort */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[13px] text-[#707070]">
+              <div className="text-[13px] text-[#6b7587]">
                 {loading ? "Loading…" : `${listings.length} of ${total.toLocaleString()} results`}
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="h-9 rounded-full border border-[#e7e7e7] px-3 text-[13px] text-[#3665f3]"
+                  className="h-9 rounded-full border border-[#e7eef6] px-3 text-[13px] text-[#3665f3]"
                   onClick={async () => {
                     if (!getToken()) {
                       window.location.href = `/login?redirect=/search?q=${encodeURIComponent(query)}`;
@@ -432,7 +478,7 @@ function SearchContent() {
               <select
                 value={filters.sort}
                 onChange={(e) => updateFilter("sort", e.target.value)}
-                className="h-9 rounded-full border border-[#e7e7e7] px-3 text-[13px]"
+                className="h-9 rounded-full border border-[#e7eef6] px-3 text-[13px]"
               >
                 <option value="best_match">Best Match</option>
                 <option value="newest">Newest First</option>
@@ -445,10 +491,10 @@ function SearchContent() {
             </div>
 
             {loading ? (
-              <div className="py-12 text-center text-[14px] text-[#707070]">Loading…</div>
+              <div className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</div>
             ) : listings.length === 0 ? (
               <div className="nexlo-card p-12 text-center">
-                <p className="text-[14px] text-[#707070]">No listings found. Try adjusting your filters.</p>
+                <p className="text-[14px] text-[#6b7587]">No listings found. Try adjusting your filters.</p>
               </div>
             ) : (
               <>
@@ -459,7 +505,7 @@ function SearchContent() {
                       className="nexlo-card group relative overflow-hidden transition hover:shadow-[0_8px_24px_-16px_rgba(15,28,63,0.35)]"
                     >
                       <Link href={`/listing/${listing.id}`} className="block">
-                        <div className="relative aspect-square overflow-hidden bg-[#f7f7f7]">
+                        <div className="relative aspect-square overflow-hidden bg-[#f4f8fd]">
                           {listing.primary_photo ? (
                             <img
                               src={listing.primary_photo}
@@ -467,28 +513,32 @@ function SearchContent() {
                               className="h-full w-full object-cover transition group-hover:scale-105"
                             />
                           ) : (
-                            <div className="flex h-full items-center justify-center text-[12px] text-[#707070]">
+                            <div className="flex h-full items-center justify-center text-[12px] text-[#6b7587]">
                               No image
                             </div>
                           )}
-                          {listing.shipping_free && (
+                          {listing.status === "sold" || listing.status === "ended" ? (
+                            <div className="absolute top-2 left-2 rounded-full bg-[#0f1c3f] px-2 py-1 text-[11px] font-semibold text-white">
+                              Sold
+                            </div>
+                          ) : listing.shipping_free ? (
                             <div className="absolute top-2 left-2 rounded-full bg-[#0d9488] px-2 py-1 text-[11px] font-semibold text-white">
                               Free shipping
                             </div>
-                          )}
+                          ) : null}
                         </div>
                         <div className="p-3 pb-12">
-                          <h3 className="line-clamp-2 text-[13px] font-medium text-[#191919] group-hover:text-[#3665f3]">
+                          <h3 className="line-clamp-2 text-[13px] font-medium text-[#0f1c3f] group-hover:text-[#3665f3]">
                             {listing.title}
                           </h3>
                           <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-[16px] font-bold text-[#191919]">
+                            <span className="text-[16px] font-bold text-[#0f1c3f]">
                               {listing.format === "auction" && listing.auction_current_price
                                 ? formatPrice(listing.auction_current_price)
                                 : formatPrice(listing.price)}
                             </span>
                             {listing.format === "auction" && (
-                              <span className="text-[11px] text-[#707070]">{listing.auction_bid_count} bids</span>
+                              <span className="text-[11px] text-[#6b7587]">{listing.auction_bid_count} bids</span>
                             )}
                           </div>
                           {listing.auction_ends_at && (
@@ -496,7 +546,7 @@ function SearchContent() {
                               {formatTimeRemaining(listing.auction_ends_at)} left
                             </div>
                           )}
-                          <div className="mt-2 text-[11px] text-[#707070]">{listing.category_name}</div>
+                          <div className="mt-2 text-[11px] text-[#6b7587]">{listing.category_name}</div>
                         </div>
                       </Link>
                       <SaveButton
@@ -506,7 +556,7 @@ function SearchContent() {
                         price={listing.auction_current_price || listing.price || 0}
                         className="absolute right-2 top-2 z-10"
                       />
-                      {listing.format !== "auction" ? (
+                      {listing.format !== "auction" && listing.status !== "sold" && listing.status !== "ended" ? (
                         <button
                           type="button"
                           className="absolute bottom-3 left-3 right-3 h-8 rounded-full bg-[#0f1c3f] text-[12px] font-semibold text-white"
@@ -534,17 +584,17 @@ function SearchContent() {
                     <button
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="h-9 rounded-full border border-[#e7e7e7] px-4 text-[13px] disabled:opacity-50"
+                      className="h-9 rounded-full border border-[#e7eef6] px-4 text-[13px] disabled:opacity-50"
                     >
                       Previous
                     </button>
-                    <span className="flex items-center px-4 text-[13px] text-[#707070]">
+                    <span className="flex items-center px-4 text-[13px] text-[#6b7587]">
                       Page {currentPage} of {totalPages}
                     </span>
                     <button
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="h-9 rounded-full border border-[#e7e7e7] px-4 text-[13px] disabled:opacity-50"
+                      className="h-9 rounded-full border border-[#e7eef6] px-4 text-[13px] disabled:opacity-50"
                     >
                       Next
                     </button>
@@ -562,7 +612,7 @@ function SearchContent() {
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={<div className="py-12 text-center text-[14px] text-[#707070]">Loading…</div>}>
+    <Suspense fallback={<div className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</div>}>
       <SearchContent />
     </Suspense>
   );

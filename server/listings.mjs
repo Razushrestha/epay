@@ -7,6 +7,20 @@ import { query } from './db.mjs';
 import { uploadPhoto, deletePhoto, setPrimaryPhoto } from './upload.mjs';
 import { enforceVerification, evaluateUser } from './trust.mjs';
 import { indexListing, searchListingsAdvanced, suggestListings } from './search-index.mjs';
+import { notify } from './notify.mjs';
+import { sellerDsr } from './m3-commerce.mjs';
+import { cdnifyListing } from './cdn.mjs';
+import {
+  completedRequested,
+  ensureM2ListingColumns,
+  getDealListings,
+  getSimilarListings,
+  listingFacets,
+  quoteListingShipping,
+  rankListings,
+  saveVariationPhotos,
+  statusClause,
+} from './m2-listings.mjs';
 
 /**
  * Main listings router
@@ -16,12 +30,25 @@ export async function handleListings(req, method, urlPath, headers, body, ipAddr
   const pathParts = url.pathname.replace('/api/v1/listings', '').split('/').filter(Boolean);
 
   try {
+    await ensureM2ListingColumns();
     // Public endpoints
     if (method === 'GET' && !pathParts[0]) {
       return await getListings(url.searchParams);
     }
 
-    if (method === 'GET' && pathParts[0] && !isNaN(pathParts[0])) {
+    if (method === 'GET' && pathParts[0] === 'deals') {
+      return await getDealListings(url.searchParams.get('limit'));
+    }
+
+    if (method === 'GET' && pathParts[0] && pathParts[1] === 'similar') {
+      return await getSimilarListings(pathParts[0]);
+    }
+
+    if (method === 'GET' && pathParts[0] && pathParts[1] === 'shipping') {
+      return await quoteListingShipping(pathParts[0], url.searchParams.get('destination') || url.searchParams.get('city'));
+    }
+
+    if (method === 'GET' && pathParts[0] && !isNaN(pathParts[0]) && !pathParts[1]) {
       return await getListingById(pathParts[0], headers.authorization);
     }
 
@@ -54,6 +81,11 @@ export async function handleListings(req, method, urlPath, headers, body, ipAddr
     }
 
     if (method === 'PATCH' && pathParts[0] && !isNaN(pathParts[0])) {
+      if (Array.isArray(body?.variation_photos)) {
+        const saved = await saveVariationPhotos(pathParts[0], auth.userId, body.variation_photos);
+        const extras = Object.keys(body).filter((key) => key !== 'variation_photos');
+        if (!extras.length) return saved;
+      }
       return await updateListing(pathParts[0], body, auth.userId);
     }
 
@@ -189,61 +221,71 @@ async function getListings(params) {
       l.id, l.title, l.subtitle, l.format, l.price, l.quantity,
       l.auction_current_price, l.auction_bid_count, l.auction_ends_at,
       l.shipping_free, l.shipping_cost, l.status, l.view_count, l.watch_count,
-      l.created_at, l.published_at,
+      l.created_at, l.published_at, l.compare_at, l.specifics,
       c.name as category_name, c.slug as category_slug,
       b.name as brand_name, b.slug as brand_slug,
       (SELECT url FROM listing_photos WHERE listing_id = l.id AND is_primary = true LIMIT 1) as primary_photo,
       u.username as seller_username,
+      u.public_id as seller_public_id,
       CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0
            ELSE 100.0 * COALESCE(fs.positive_count,0) / (COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0)) END as seller_feedback_score
     FROM listings l
     JOIN categories c ON l.category_id = c.id
     LEFT JOIN brands b ON l.brand_id = b.id
     JOIN users u ON l.seller_id = u.id
+    LEFT JOIN user_profiles up ON up.user_id = u.id
     LEFT JOIN feedback_scores fs ON fs.user_id = u.id
-    WHERE l.status = 'active' AND l.moderation_status = 'approved'
-      AND NOT EXISTS (
-        SELECT 1 FROM vacation_mode v
-        WHERE v.seller_id = l.seller_id AND v.active = TRUE AND v.hide_listings = TRUE
-          AND (v.ends_at IS NULL OR v.ends_at > NOW())
-      )
   `;
 
   const values = [];
   let paramCount = 1;
+  const filters = [
+    statusClause(completedRequested(params)),
+    `NOT EXISTS (
+        SELECT 1 FROM vacation_mode v
+        WHERE v.seller_id = l.seller_id AND v.active = TRUE AND v.hide_listings = TRUE
+          AND (v.ends_at IS NULL OR v.ends_at > NOW())
+      )`,
+  ];
 
   if (categoryId) {
-    sql += ` AND l.category_id = $${paramCount++}`;
+    filters.push(`l.category_id = $${paramCount++}`);
     values.push(categoryId);
   }
 
   if (brandId) {
-    sql += ` AND l.brand_id = $${paramCount++}`;
+    filters.push(`l.brand_id = $${paramCount++}`);
     values.push(brandId);
   }
 
   if (format) {
-    sql += ` AND l.format = $${paramCount++}`;
+    filters.push(`l.format = $${paramCount++}`);
     values.push(format);
   }
 
   if (condition) {
-    sql += ` AND l.condition_id = $${paramCount++}`;
+    filters.push(`l.condition_id = $${paramCount++}`);
     values.push(condition);
   }
 
   if (seller) {
-    sql += ` AND u.username = $${paramCount++}`;
+    filters.push(`(
+      u.username ILIKE $${paramCount}
+      OR u.public_id::text = $${paramCount}
+      OR lower(COALESCE(up.display_name, '')) = lower($${paramCount})
+      OR ($${paramCount} ~ '^[0-9]+$' AND u.id = $${paramCount}::bigint)
+    )`);
     values.push(seller);
+    paramCount += 1;
   }
 
   if (minPrice) {
-    sql += ` AND COALESCE(l.price, l.auction_current_price) >= $${paramCount++}`;
+    filters.push(`COALESCE(l.price, l.auction_current_price) >= $${paramCount++}`);
     values.push(minPrice);
   }
 
   if (maxPrice) {
-    sql += ` AND COALESCE(l.price, l.auction_current_price) <= $${paramCount++}`;
+    filters.push(`COALESCE(l.price, l.auction_current_price) <= $${paramCount++}`);
     values.push(maxPrice);
   }
 
@@ -251,16 +293,29 @@ async function getListings(params) {
   const freeShipping = params.get('free_shipping');
   const minSellerRating = params.get('seller_rating');
   if (location) {
-    sql += ` AND l.item_location ILIKE $${paramCount++}`;
+    filters.push(`l.item_location ILIKE $${paramCount++}`);
     values.push(`%${location}%`);
   }
   if (freeShipping === '1' || freeShipping === 'true') {
-    sql += ` AND l.shipping_free = TRUE`;
+    filters.push(`l.shipping_free = TRUE`);
   }
   if (minSellerRating) {
-    sql += ` AND CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0 ELSE 100.0 * COALESCE(fs.positive_count,0) / (COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0)) END >= $${paramCount++}`;
+    filters.push(`CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0 ELSE 100.0 * COALESCE(fs.positive_count,0) / (COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0)) END >= $${paramCount++}`);
     values.push(Number(minSellerRating));
   }
+  const specifics = params.get('specifics');
+  if (specifics) {
+    try {
+      filters.push(`l.specifics @> $${paramCount++}::jsonb`);
+      values.push(JSON.stringify(JSON.parse(specifics)));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const whereSql = filters.join(' AND ');
+  const whereValues = [...values];
+  sql += ` WHERE ${whereSql}`;
 
   // Sorting
   switch (sort) {
@@ -287,17 +342,26 @@ async function getListings(params) {
   values.push(limit, offset);
 
   const result = await query(sql, values);
-
-  // Get total count
+  const listings = rankListings(result.rows, sort).map(cdnifyListing);
   const countResult = await query(
-    `SELECT COUNT(*) as total FROM listings WHERE status = 'active' AND moderation_status = 'approved'`
+    `SELECT COUNT(*)::int AS total
+     FROM listings l
+     JOIN categories c ON l.category_id = c.id
+     LEFT JOIN brands b ON l.brand_id = b.id
+     JOIN users u ON l.seller_id = u.id
+     LEFT JOIN user_profiles up ON up.user_id = u.id
+     LEFT JOIN feedback_scores fs ON fs.user_id = u.id
+     WHERE ${whereSql}`,
+    whereValues,
   );
+  const facets = await listingFacets(whereSql, whereValues);
 
   return {
     status: 200,
     body: {
-      listings: result.rows,
-      total: parseInt(countResult.rows[0].total),
+      listings,
+      total: Number(countResult.rows[0]?.total || listings.length),
+      facets,
       limit,
       offset
     }
@@ -314,7 +378,7 @@ async function getListingById(listingId, authHeader) {
       c.name as category_name, c.slug as category_slug,
       b.name as brand_name, b.slug as brand_slug,
       cond.name as condition_name, cond.description as condition_description,
-      u.id as seller_id, u.username as seller_username, u.email as seller_email,
+      u.id as seller_id, u.public_id as seller_public_id, u.username as seller_username, u.email as seller_email,
       u.created_at as seller_created_at, u.account_type as seller_account_type,
       up.display_name as seller_full_name, up.avatar_url as seller_avatar, up.country as seller_country,
       CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0
@@ -325,9 +389,14 @@ async function getListingById(listingId, authHeader) {
       ) ORDER BY p.position)
        FROM listing_photos p WHERE p.listing_id = l.id) as photos,
       (SELECT json_agg(json_build_object(
-        'id', q.id, 'question', q.question, 'answer', q.answer, 'created_at', q.created_at
+        'id', q.id, 'question', q.question, 'answer', q.answer, 'created_at', q.created_at,
+        'answered_at', q.answered_at,
+        'asker', COALESCE(ap.display_name, au.username, 'Member')
       ) ORDER BY q.created_at DESC)
-       FROM listing_questions q WHERE q.listing_id = l.id AND q.is_public = true) as questions
+       FROM listing_questions q
+       JOIN users au ON au.id = q.asker_id
+       LEFT JOIN user_profiles ap ON ap.user_id = au.id
+       WHERE q.listing_id = l.id AND q.is_public = true) as questions
     FROM listings l
     JOIN categories c ON l.category_id = c.id
     LEFT JOIN brands b ON l.brand_id = b.id
@@ -348,7 +417,7 @@ async function getListingById(listingId, authHeader) {
     query(
       `SELECT v.id, v.name, v.position,
               COALESCE((
-                SELECT json_agg(json_build_object('id', o.id, 'value', o.value) ORDER BY o.position)
+                SELECT json_agg(json_build_object('id', o.id, 'value', o.value, 'photo_url', o.photo_url) ORDER BY o.position)
                 FROM listing_variation_options o WHERE o.variation_id = v.id
               ), '[]'::json) AS options
        FROM listing_variations v
@@ -366,6 +435,8 @@ async function getListingById(listingId, authHeader) {
   ]);
   listing.variations = variationRows.rows;
   listing.skus = skuRows.rows;
+  listing.dsr = await sellerDsr(listing.seller_id);
+  Object.assign(listing, cdnifyListing(listing));
 
   const token = authHeader?.replace('Bearer ', '');
   void (async () => {
@@ -413,6 +484,7 @@ async function searchListings(params) {
       c.name as category_name, c.slug as category_slug,
       (SELECT url FROM listing_photos WHERE listing_id = l.id AND is_primary = true LIMIT 1) as primary_photo,
       u.username as seller_username,
+      u.public_id as seller_public_id,
       ts_rank(to_tsvector('english', l.title || ' ' || l.description), plainto_tsquery('english', $1)) as rank
     FROM listings l
     JOIN categories c ON l.category_id = c.id
@@ -442,7 +514,7 @@ async function searchListings(params) {
   return {
     status: 200,
     body: {
-      listings: result.rows,
+      listings: result.rows.map(cdnifyListing),
       query: q,
       limit,
       offset
@@ -468,7 +540,7 @@ async function getFeaturedListings() {
     LIMIT 12`
   );
 
-  return { status: 200, body: { listings: result.rows } };
+  return { status: 200, body: { listings: result.rows.map(cdnifyListing) } };
 }
 
 async function ensureSeller(userId) {
@@ -501,7 +573,7 @@ async function createListing(data, userId) {
     format, price, quantity, auction_start_price, auction_reserve_price, auction_duration,
     allow_best_offer, auto_accept_price, auto_decline_price,
     shipping_free, shipping_cost, shipping_international, shipping_international_cost,
-    item_location, sku, upc, specifics, publish_immediately
+    item_location, sku, upc, specifics, publish_immediately, compare_at, shipping_additional
   } = data;
 
   if (!category_id || !title || !description || !format) {
@@ -530,11 +602,11 @@ async function createListing(data, userId) {
       allow_best_offer, auto_accept_price, auto_decline_price,
       shipping_free, shipping_cost, shipping_international, shipping_international_cost,
       item_location, sku, upc, specifics, status, published_at,
-      auction_starts_at, auction_ends_at, auction_current_price, moderation_status
+      auction_starts_at, auction_ends_at, auction_current_price, moderation_status, compare_at, shipping_additional
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, ${publishedAt},
       ${publish_immediately && (format === 'auction' || format === 'both') ? 'NOW()' : 'NULL'},
       ${publish_immediately && (format === 'auction' || format === 'both') ? `NOW() + INTERVAL '${durationHours} hours'` : 'NULL'},
-      $27, $28)
+      $27, $28, $29, $30)
     RETURNING *`,
     [
       userId, category_id, brand_id, title, subtitle, description,
@@ -542,7 +614,8 @@ async function createListing(data, userId) {
       auction_start_price, auction_reserve_price, auction_duration,
       allow_best_offer, auto_accept_price, auto_decline_price,
       shipping_free, shipping_cost, shipping_international, shipping_international_cost,
-      item_location, sku, upc, JSON.stringify(specifics || {}), status, startPrice, moderation
+      item_location, sku, upc, JSON.stringify(specifics || {}), status, startPrice, moderation,
+      compare_at || null, shipping_additional || null
     ]
   );
   if (risk.flagged && result.rows[0]) {
@@ -579,7 +652,8 @@ async function updateListing(listingId, data, userId) {
     'title', 'subtitle', 'description', 'condition_id', 'condition_description',
     'price', 'quantity', 'brand_id', 'shipping_free', 'shipping_cost',
     'shipping_international', 'shipping_international_cost', 'item_location',
-    'sku', 'upc', 'allow_best_offer', 'auto_accept_price', 'auto_decline_price'
+    'sku', 'upc', 'allow_best_offer', 'auto_accept_price', 'auto_decline_price',
+    'compare_at', 'shipping_additional', 'is_featured'
   ];
 
   for (const key of allowed) {
@@ -812,7 +886,7 @@ async function getWatchlist(userId, params) {
     [userId, limit, offset]
   );
 
-  return { status: 200, body: { listings: result.rows, limit, offset } };
+  return { status: 200, body: { listings: result.rows.map(cdnifyListing), limit, offset } };
 }
 
 /**
@@ -825,6 +899,12 @@ async function askQuestion(listingId, data, userId) {
     return { status: 400, body: { error: 'Question must be at least 10 characters' } };
   }
 
+  const owner = await query(`SELECT seller_id, title FROM listings WHERE id = $1`, [listingId]);
+  if (!owner.rows[0]) return { status: 404, body: { error: 'Listing not found' } };
+  if (Number(owner.rows[0].seller_id) === Number(userId)) {
+    return { status: 400, body: { error: 'Sellers cannot ask a question on their own listing' } };
+  }
+
   const result = await query(
     `INSERT INTO listing_questions (listing_id, asker_id, question)
      VALUES ($1, $2, $3)
@@ -833,6 +913,13 @@ async function askQuestion(listingId, data, userId) {
   );
 
   await query('UPDATE listings SET question_count = question_count + 1 WHERE id = $1', [listingId]);
+  await notify(
+    owner.rows[0].seller_id,
+    "question",
+    "New question on your listing",
+    question.slice(0, 140),
+    `/listing/${listingId}`,
+  );
 
   return { status: 201, body: { question: result.rows[0] } };
 }
@@ -856,7 +943,7 @@ async function answerQuestion(questionId, data, userId) {
     [questionId]
   );
 
-  if (!checkResult.rows[0] || checkResult.rows[0].seller_id !== userId) {
+  if (!checkResult.rows[0] || Number(checkResult.rows[0].seller_id) !== Number(userId)) {
     return { status: 403, body: { error: 'Not authorized' } };
   }
 
@@ -867,6 +954,15 @@ async function answerQuestion(questionId, data, userId) {
      RETURNING *`,
     [answer, userId, questionId]
   );
+  if (result.rows[0]) {
+    await notify(
+      result.rows[0].asker_id,
+      "question",
+      "Your question was answered",
+      answer.slice(0, 140),
+      `/listing/${result.rows[0].listing_id}`,
+    );
+  }
 
   return { status: 200, body: { question: result.rows[0] } };
 }
@@ -905,7 +1001,7 @@ async function getSellerListings(userId, params) {
 
   const result = await query(sql, values);
 
-  return { status: 200, body: { listings: result.rows, limit, offset } };
+  return { status: 200, body: { listings: result.rows.map(cdnifyListing), limit, offset } };
 }
 
 /**
@@ -937,11 +1033,12 @@ async function saveVariations(listingId, variations, skus) {
       [listingId, name, i],
     );
     for (const [j, opt] of (variation.options || []).entries()) {
-      const value = String(opt).trim();
+      const value = typeof opt === "object" ? String(opt.value || "").trim() : String(opt).trim();
+      const photoUrl = typeof opt === "object" ? opt.photo_url || opt.photo || null : null;
       if (!value) continue;
       await query(
-        `INSERT INTO listing_variation_options (variation_id, value, position) VALUES ($1,$2,$3)`,
-        [created.rows[0].id, value, j],
+        `INSERT INTO listing_variation_options (variation_id, value, position, photo_url) VALUES ($1,$2,$3,$4)`,
+        [created.rows[0].id, value, j, photoUrl],
       );
     }
   }
@@ -965,7 +1062,8 @@ function cartesianSkus(variations) {
     const next = [];
     for (const combo of combos) {
       for (const opt of v.options) {
-        next.push({ ...combo, [v.name]: opt });
+        const value = typeof opt === "object" ? opt.value : opt;
+        next.push({ ...combo, [v.name]: value });
       }
     }
     combos = next;
@@ -981,7 +1079,7 @@ async function getRecentlyViewed(userId) {
      WHERE r.user_id = $1 ORDER BY r.viewed_at DESC LIMIT 24`,
     [userId],
   );
-  return { status: 200, body: { listings: rows } };
+  return { status: 200, body: { listings: rows.map(cdnifyListing) } };
 }
 
 async function listSavedSearches(userId) {

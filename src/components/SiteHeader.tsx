@@ -11,14 +11,14 @@ export function SiteHeader() {
   return (
     <header className="bg-white">
       {/* ── utility strip ─────────────────────────────── */}
-      <div className="border-b border-[#e5e5e5]">
-        <div className="page-shell flex items-center justify-between py-[7px] text-[12px] leading-none text-[#333]">
+      <div className="border-b border-[#e7eef6] bg-[#f4f8fd]">
+        <div className="page-shell flex items-center justify-between py-[8px] text-[12px] leading-none text-[#5b6780]">
           <div className="flex items-center gap-4">
             <span>Free shipping on millions of items</span>
-            <span className="hidden text-[#ddd] sm:inline">|</span>
-            <span className="hidden sm:inline">30-day returns</span>
-            <span className="hidden text-[#ddd] md:inline">|</span>
-            <span className="hidden md:inline">Buyer protection</span>
+            <span className="hidden text-[#c9d8ff] sm:inline">|</span>
+            <Link href="/resolution" className="hidden hover:text-[#3665f3] hover:underline sm:inline">30-day returns</Link>
+            <span className="hidden text-[#c9d8ff] md:inline">|</span>
+            <Link href="/buyer-protection" className="hidden hover:text-[#3665f3] hover:underline md:inline">Buyer protection</Link>
           </div>
           <div className="flex items-center gap-4">
             <button className="flex items-center gap-1 hover:underline">
@@ -37,11 +37,11 @@ export function SiteHeader() {
       <div className="page-shell flex items-center gap-4 pb-2.5 pt-3">
         <Link href="/" className="flex shrink-0 items-center" aria-label="Nexlo home">
           <Image
-            src="/logo.png"
+            src="/logo-transparent.png"
             alt="Nexlo: Find What Comes Next."
-            width={422}
-            height={145}
-            className="h-[48px] w-auto rounded-[8px]"
+            width={808}
+            height={256}
+            className="h-[48px] w-auto"
             priority
           />
         </Link>

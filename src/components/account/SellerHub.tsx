@@ -84,7 +84,7 @@ export function SellerHub() {
           ["To fulfil", dash?.pendingOrders ?? 0],
           ["Low stock", dash?.lowStock ?? 0],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-2xl bg-[#f7f7f7] p-4">
+          <div key={String(label)} className="rounded-2xl bg-[#f4f8fd] p-4">
             <p className="text-[12px] text-[#7a8496]">{label}</p>
             <p className="mt-1 text-[20px] font-extrabold text-[#0f1c3f]">{value}</p>
           </div>
@@ -112,7 +112,7 @@ export function SellerHub() {
         <p className="mt-1 text-[12px] text-[#8a94a6]">Edit price or quantity, then save. Low stock is 2 or fewer.</p>
         <ul className="mt-3 space-y-2">
           {listings.slice(0, 12).map((item, i) => (
-            <li key={item.id} className="grid gap-2 rounded-xl bg-[#f7f7f7] px-3 py-2 sm:grid-cols-[1fr_90px_70px]">
+            <li key={item.id} className="grid gap-2 rounded-xl bg-[#f4f8fd] px-3 py-2 sm:grid-cols-[1fr_90px_70px]">
               <span className="truncate text-[14px] font-medium">{item.title}</span>
               <input defaultValue={item.price} className="h-9 rounded-lg border px-2 text-[13px]" onBlur={(e) => { listings[i].price = Number(e.target.value); }} />
               <input defaultValue={item.quantity} className="h-9 rounded-lg border px-2 text-[13px]" onBlur={(e) => { listings[i].quantity = Number(e.target.value); }} />
@@ -165,7 +165,7 @@ export function SellerHub() {
         </form>
         <ul className="mt-3 space-y-2 text-[13px]">
           {replies.map((item) => (
-            <li key={item.public_id} className="flex justify-between gap-3 rounded-xl bg-[#f7f7f7] px-3 py-2">
+            <li key={item.public_id} className="flex justify-between gap-3 rounded-xl bg-[#f4f8fd] px-3 py-2">
               <span><strong>{item.title}</strong>, {item.body}</span>
               <button type="button" className="text-red-600" onClick={async () => { await accountApi(`/api/v1/seller/replies/${item.public_id}`, { method: "DELETE" }); await load(); }}>Remove</button>
             </li>
@@ -212,7 +212,7 @@ export function SellerHub() {
         </form>
         <ul className="mt-3 space-y-2 text-[13px]">
           {blocked.map((row) => (
-            <li key={row.blocked_user_id} className="flex justify-between gap-3 rounded-xl bg-[#f7f7f7] px-3 py-2">
+            <li key={row.blocked_user_id} className="flex justify-between gap-3 rounded-xl bg-[#f4f8fd] px-3 py-2">
               <span>{row.name || row.blocked_user_id}, {row.reason || "Blocked"}</span>
               <button
                 type="button"

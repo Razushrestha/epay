@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { apiBase, apiUnreachableMessage } from "@/lib/account-api";
+import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
+import { SocialSignIn } from "@/components/auth/SocialSignIn";
 
 function Icon({ children }: { children: React.ReactNode }) {
   return (
@@ -11,37 +12,6 @@ function Icon({ children }: { children: React.ReactNode }) {
     </svg>
   );
 }
-
-const socials = [
-  {
-    name: "Google",
-    logo: (
-      <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden>
-        <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.4 30.4 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
-        <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z" />
-        <path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z" />
-        <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Apple",
-    logo: (
-      <svg width="15" height="16" viewBox="0 0 24 24" fill="#111" aria-hidden>
-        <path d="M16.37 12.6c-.03-2.5 2.04-3.7 2.13-3.76-1.16-1.7-2.97-1.93-3.61-1.96-1.54-.16-3 .9-3.78.9-.78 0-1.98-.88-3.26-.86-1.68.03-3.22.98-4.09 2.48-1.74 3.02-.45 7.5 1.25 9.95.83 1.2 1.82 2.55 3.12 2.5 1.25-.05 1.72-.81 3.24-.81 1.51 0 1.94.81 3.26.78 1.35-.03 2.2-1.22 3.02-2.43.95-1.39 1.34-2.74 1.37-2.81-.03-.01-2.62-1-2.65-3.98ZM13.9 5.3c.69-.84 1.16-2 1.03-3.16-1 .04-2.2.66-2.92 1.5-.64.74-1.2 1.92-1.05 3.05 1.11.09 2.24-.56 2.94-1.39Z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Facebook",
-    logo: (
-      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
-        <circle cx="12" cy="12" r="12" fill="#1877F2" />
-        <path fill="#fff" d="M16.67 15.47 17.2 12h-3.33v-2.25c0-.95.47-1.88 1.96-1.88h1.52V4.92s-1.38-.24-2.7-.24c-2.75 0-4.55 1.67-4.55 4.68V12H6.05v3.47h3.05V24h3.77v-8.53h2.8Z" />
-      </svg>
-    ),
-  },
-];
 
 export function RegisterForm() {
   const router = useRouter();
@@ -87,7 +57,7 @@ export function RegisterForm() {
     try {
       // Add 30-second timeout for cold start
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
+      const timeout = setTimeout(() => controller.abort(), 45000);
       
       const res = await fetch(`${apiBase}/api/v1/auth/register`, {
         method: "POST",
@@ -105,6 +75,8 @@ export function RegisterForm() {
           accountType,
           country: accountType === "business" ? country : undefined,
           buyerOnly: accountType === "business" ? buyerOnly : false,
+          acceptedPrivacy: true,
+          acceptedTerms: true,
         }),
         signal: controller.signal,
       });
@@ -389,22 +361,18 @@ export function RegisterForm() {
         <span className="h-px flex-1 bg-[#e5eaf2]" />
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        {socials.map((s) => (
-          <button
-            key={s.name}
-            type="button"
-            onClick={() => {
-              setError(null);
-              setNotice(`${s.name} sign-up will be available soon. Use your email for now.`);
-            }}
-            className="flex h-10 items-center justify-center gap-1.5 rounded-full border border-[#e3e8f0] text-[13px] font-medium text-[#1a2338] hover:bg-[#f8fafd]"
-          >
-            {s.logo}
-            {s.name}
-          </button>
-        ))}
-      </div>
+      <SocialSignIn
+        layout="row"
+        onError={(message) => {
+          setNotice(null);
+          setError(message);
+        }}
+        onEnroll={() => router.push("/login")}
+        onSignedIn={(token) => {
+          setToken(token);
+          router.push("/account");
+        }}
+      />
 
       <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-[#e8eef6] bg-[#f7fafc] px-3 py-2.5 text-[12px] leading-snug text-[#6b7587]">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3665f3" strokeWidth="1.7" className="mt-0.5 shrink-0" aria-hidden>

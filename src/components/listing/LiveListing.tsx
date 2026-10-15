@@ -6,6 +6,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { accountApi, apiBase, getToken } from "@/lib/account-api";
 import { addToCart, loadWatchIds, toggleWatch } from "@/lib/commerce";
+import { SaveToCollection } from "@/components/listing/SaveToCollection";
+import { WatchlistIcon } from "@/components/commerce/WatchlistIcon";
+import { DsrBars } from "@/components/seller/DsrBars";
 
 type Listing = {
   id: number;
@@ -19,6 +22,7 @@ type Listing = {
   allow_best_offer?: boolean;
   auto_accept_price?: number | null;
   seller_id: number;
+  seller_public_id?: string | null;
   seller_username?: string | null;
   seller_full_name?: string | null;
   seller_email?: string | null;
@@ -36,6 +40,8 @@ type Listing = {
   condition_name?: string;
   shipping_free?: boolean;
   shipping_cost?: number;
+  shipping_additional?: number | null;
+  compare_at?: number | null;
   item_location?: string | null;
   published_at?: string | null;
   created_at?: string | null;
@@ -44,12 +50,22 @@ type Listing = {
   auction_bid_count?: number | null;
   auction_ends_at?: string | null;
   photos?: { url: string; thumbnail_url?: string | null; is_primary?: boolean }[] | null;
-  variations?: { id: number; name: string; options: { id: number; value: string }[] | null }[] | null;
+  variations?: { id: number; name: string; options: { id: number; value: string; photo_url?: string | null }[] | null }[] | null;
   skus?: { id: number; combination: Record<string, string>; price: number | null; quantity: number }[] | null;
+  specifics?: Record<string, string> | null;
+  questions?: { id: number; question: string; answer: string | null; created_at: string; answered_at?: string | null; asker?: string }[] | null;
+  dsr?: { count: number; item: number | null; communication: number | null; shipping_time: number | null; shipping_cost: number | null } | null;
 };
 
 type Bid = { amount: number; created_at: string; bidder: string };
-type Tab = "overview" | "shipping" | "seller" | "reviews";
+type Tab = "overview" | "shipping" | "seller" | "reviews" | "qa";
+type SimilarItem = {
+  id: number;
+  title: string;
+  price: number | null;
+  auction_current_price?: number | null;
+  primary_photo: string | null;
+};
 
 function money(n: number) {
   return `NPR ${Number(n || 0).toLocaleString("en-NP")}`;
@@ -85,7 +101,7 @@ function Icon({
   name,
   className,
 }: {
-  name: "chevron" | "heart" | "share" | "truck" | "pin" | "lock" | "return" | "badge" | "box" | "tag" | "grid" | "clock" | "star" | "check" | "chat";
+  name: "chevron" | "heart" | "share" | "truck" | "pin" | "lock" | "return" | "badge" | "box" | "tag" | "grid" | "clock" | "star" | "check" | "chat" | "cart" | "bookmark";
   className?: string;
 }) {
   const common = {
@@ -120,6 +136,16 @@ function Icon({
   if (name === "grid") return <svg {...common}><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" /></svg>;
   if (name === "clock") return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
   if (name === "check") return <svg {...common}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>;
+  if (name === "cart") {
+    return (
+      <svg {...common}>
+        <circle cx="9" cy="20" r="1.3" fill="currentColor" stroke="none" />
+        <circle cx="17" cy="20" r="1.3" fill="currentColor" stroke="none" />
+        <path d="M3 4h2l2.2 11h10.3a1 1 0 0 0 1-.8L21 8H7" />
+      </svg>
+    );
+  }
+  if (name === "bookmark") return <svg {...common}><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-3.2L6 20V5a1 1 0 0 1 1-1Z" /></svg>;
   return <svg {...common}><path d="M4 6h16v12H7l-3 3V6Z" /></svg>;
 }
 
@@ -156,6 +182,8 @@ export function LiveListing({ listing }: { listing: Listing }) {
   const [copied, setCopied] = useState(false);
   const [following, setFollowing] = useState(false);
   const [qty, setQty] = useState(1);
+  const [youLead, setYouLead] = useState(false);
+  const [canRetract, setCanRetract] = useState(false);
   const [bidBusy, setBidBusy] = useState(false);
   const [watchBusy, setWatchBusy] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
@@ -163,6 +191,14 @@ export function LiveListing({ listing }: { listing: Listing }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [tick, setTick] = useState(0);
   const [picked, setPicked] = useState<Record<string, string>>({});
+  const [dest, setDest] = useState("");
+  const [quote, setQuote] = useState<{ amount: number; label: string; combinedAdditional?: number } | null>(null);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const [similar, setSimilar] = useState<SimilarItem[]>([]);
+  const [questions, setQuestions] = useState(listing.questions || []);
+  const [askText, setAskText] = useState("");
+  const [answerDraft, setAnswerDraft] = useState<Record<number, string>>({});
+  const [qaBusy, setQaBusy] = useState(false);
   const isAuction = listing.format === "auction" || listing.format === "both";
   const isFixed = listing.format === "fixed" || listing.format === "both";
   const live = listing.status === "active";
@@ -172,20 +208,23 @@ export function LiveListing({ listing }: { listing: Listing }) {
   );
   const stock = selectedSku?.quantity ?? listing.quantity ?? 1;
   const sellerName = listing.seller_username || listing.seller_full_name || "Seller";
+  const sellerHref = `/seller/${encodeURIComponent(listing.seller_username || listing.seller_public_id || String(listing.seller_id))}`;
   const title = prettyTitle(listing.title);
   const location = listing.item_location?.trim() || listing.seller_country || "Kathmandu, Nepal";
   const reviews = Number(listing.positive_count || 0) + Number(listing.neutral_count || 0) + Number(listing.negative_count || 0);
   const positive = reviews > 0 ? Math.round(Number(listing.seller_feedback_score || 0)) : null;
   const rating = reviews > 0 ? Math.max(1, Math.round((Number(positive) / 20) * 10) / 10) : null;
-  const compareAt = Number(listing.price || 0);
-  const showWas = isAuction && compareAt > price && compareAt > 0;
-  const off = showWas ? Math.round(((compareAt - price) / compareAt) * 100) : 0;
+  const compareAt = Number(listing.compare_at || 0);
   const memberYear = listing.seller_created_at ? new Date(listing.seller_created_at).getFullYear() : 2026;
   const visibleThumbs = thumbs.slice(0, 4);
   const extraThumbs = Math.max(0, thumbs.length - 4);
 
   useEffect(() => {
     loadWatchIds().then((ids) => setSaved(ids.has(listing.id)));
+    fetch(`${apiBase}/api/v1/listings/${listing.id}/similar`)
+      .then((res) => res.json())
+      .then((body) => setSimilar(body.listings || []))
+      .catch(() => setSimilar([]));
   }, [listing.id]);
 
   useEffect(() => {
@@ -219,7 +258,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
 
   useEffect(() => {
     if (!isAuction) return;
-    accountApi<{ listing: Listing; bids: Bid[]; increment: number }>(`/api/v1/auctions/${listing.id}`)
+    accountApi<{ listing: Listing; bids: Bid[]; increment: number; youLead?: boolean; canRetract?: boolean }>(`/api/v1/auctions/${listing.id}`)
       .then((snap) => {
         if (snap.listing) {
           setPrice(Number(snap.listing.auction_current_price || price));
@@ -228,6 +267,8 @@ export function LiveListing({ listing }: { listing: Listing }) {
         }
         setBids(snap.bids || []);
         if (snap.increment) setIncrement(snap.increment);
+        if (typeof snap.youLead === "boolean") setYouLead(snap.youLead);
+        if (typeof snap.canRetract === "boolean") setCanRetract(snap.canRetract);
       })
       .catch(() => undefined);
     const url = `${apiBase}/api/v1/auctions/${listing.id}/stream`;
@@ -253,8 +294,29 @@ export function LiveListing({ listing }: { listing: Listing }) {
     () => (bidCount > 0 ? price + increment : Number(listing.auction_start_price || price)),
     [bidCount, price, increment, listing.auction_start_price],
   );
-  const hero = photos[index] || thumbs[index] || "/logo.png";
+  const variationPhoto = variations
+    .flatMap((v) => (v.options || []).map((opt) => ({ name: v.name, value: opt.value, photo: opt.photo_url })))
+    .find((opt) => picked[opt.name] === opt.value && opt.photo)?.photo;
+  const hero = variationPhoto || photos[index] || thumbs[index] || "/logo.png";
   const displayPrice = isAuction ? price : Number(selectedSku?.price ?? listing.price ?? 0);
+  const showWas = compareAt > displayPrice && compareAt > 0;
+  const off = showWas ? Math.round(((compareAt - displayPrice) / compareAt) * 100) : 0;
+
+  async function quoteShipping() {
+    setQuoteBusy(true);
+    try {
+      const res = await fetch(
+        `${apiBase}/api/v1/listings/${listing.id}/shipping?destination=${encodeURIComponent(dest)}`,
+      );
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Could not quote shipping");
+      setQuote(body);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not quote shipping");
+    } finally {
+      setQuoteBusy(false);
+    }
+  }
 
   function step(direction: number) {
     if (photos.length < 2) return;
@@ -295,7 +357,22 @@ export function LiveListing({ listing }: { listing: Listing }) {
         method: "POST",
         body: JSON.stringify({ maxAmount: amount }),
       });
+      setYouLead(Boolean(body.youLead));
+      setCanRetract(true);
       setNotice(body.youLead ? "You are the high bidder." : "Bid placed, but another bidder still leads.");
+    } finally {
+      setBidBusy(false);
+    }
+  }
+
+  async function retractBid() {
+    if (!requireAuth()) return;
+    setBidBusy(true);
+    try {
+      await accountApi(`/api/v1/auctions/${listing.id}/retract`, { method: "POST", body: "{}" });
+      setYouLead(false);
+      setCanRetract(false);
+      setNotice("Bid retracted. You can bid again.");
     } finally {
       setBidBusy(false);
     }
@@ -333,6 +410,49 @@ export function LiveListing({ listing }: { listing: Listing }) {
       router.push("/account?tab=messages");
     } finally {
       setMessageBusy(false);
+    }
+  }
+
+  async function askQuestion() {
+    if (!requireAuth()) return;
+    if (askText.trim().length < 10) {
+      setNotice("Questions need at least 10 characters.");
+      return;
+    }
+    setQaBusy(true);
+    try {
+      const body = await accountApi<{ question: { id: number; question: string; created_at: string } }>(
+        `/api/v1/listings/${listing.id}/question`,
+        { method: "POST", body: JSON.stringify({ question: askText.trim() }) },
+      );
+      setQuestions((current) => [
+        { id: body.question.id, question: body.question.question, answer: null, created_at: body.question.created_at, asker: "You" },
+        ...current,
+      ]);
+      setAskText("");
+      setNotice("Question posted. The seller will answer on this page.");
+      setTab("qa");
+    } finally {
+      setQaBusy(false);
+    }
+  }
+
+  async function answerQuestion(id: number) {
+    const answer = String(answerDraft[id] || "").trim();
+    if (!answer) return;
+    setQaBusy(true);
+    try {
+      await accountApi(`/api/v1/listings/questions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ answer }),
+      });
+      setQuestions((current) =>
+        current.map((q) => (q.id === id ? { ...q, answer, answered_at: new Date().toISOString() } : q)),
+      );
+      setAnswerDraft((current) => ({ ...current, [id]: "" }));
+      setNotice("Answer posted.");
+    } finally {
+      setQaBusy(false);
     }
   }
 
@@ -403,6 +523,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
+    { id: "qa", label: `Q&A${questions.length ? ` (${questions.length})` : ""}` },
     { id: "shipping", label: "Shipping & Returns" },
     { id: "seller", label: "Seller Info" },
     { id: "reviews", label: "Reviews" },
@@ -422,21 +543,21 @@ export function LiveListing({ listing }: { listing: Listing }) {
             <span className="max-w-[280px] truncate text-[#5b6780]">{title}</span>
           </nav>
 
-          <div className="mt-4 grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(300px,340px)]">
+          <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)_minmax(300px,340px)]">
             <section>
-              <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-3 sm:grid-cols-[72px_minmax(0,1fr)]">
+              <div className="grid grid-cols-[68px_minmax(0,1fr)] gap-3 sm:grid-cols-[76px_minmax(0,1fr)]">
                 <div className="flex flex-col gap-2">
-                  {visibleThumbs.map((src, i) => {
+                  {(visibleThumbs.length ? visibleThumbs : [hero]).map((src, i) => {
                     const last = i === visibleThumbs.length - 1 && extraThumbs > 0;
                     return (
                       <button
                         key={`${src}-${i}`}
                         type="button"
                         onClick={() => setIndex(last ? 4 : i)}
-                        className={`relative h-16 w-16 overflow-hidden rounded-xl border-2 bg-[#f4f7fb] sm:h-[72px] sm:w-[72px] ${index === i ? "border-[#3665f3]" : "border-transparent"}`}
+                        className={`relative h-[68px] w-[68px] overflow-hidden rounded-xl border-2 bg-white sm:h-[72px] sm:w-[72px] ${index === i ? "border-[#3665f3]" : "border-[#e6ebf2]"}`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={src} alt="" className="h-full w-full object-cover" />
+                        <img src={src} alt="" className="h-full w-full object-contain p-1" />
                         {last ? (
                           <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-[13px] font-semibold text-white">+{extraThumbs}</span>
                         ) : null}
@@ -445,23 +566,23 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   })}
                 </div>
 
-                <div className="relative overflow-hidden rounded-2xl bg-[#f4f7fb]">
+                <div className="relative overflow-hidden rounded-2xl border border-[#e7eef8] bg-[linear-gradient(145deg,#f4f8ff_0%,#e7f0ff_42%,#f8fbff_100%)]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={hero} alt={title} className="h-[420px] w-full object-cover sm:h-[480px]" />
-                  <div className="absolute right-3 top-3 flex gap-2">
-                    <button type="button" aria-label={saved ? "Saved" : "Save"} onClick={() => saveWatch().catch(() => undefined)} className={`flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm ${saved ? "text-[#ef3b3b]" : "text-[#5b6780]"}`}>
-                      <Icon name="heart" />
+                  <img src={hero} alt={title} className="h-[420px] w-full object-contain p-6 sm:h-[460px]" />
+                  <div className="absolute right-3 top-3 z-10 flex gap-2">
+                    <button type="button" aria-label={saved ? "Remove from watchlist" : "Add to watchlist"} onClick={() => saveWatch().catch(() => undefined)} className={`flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md ${saved ? "text-[#e53238]" : "text-[#0f1c3f]"}`}>
+                      <WatchlistIcon saved={saved} size={18} />
                     </button>
-                    <button type="button" aria-label={copied ? "Copied" : "Share"} onClick={share} className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#5b6780] shadow-sm">
+                    <button type="button" aria-label={copied ? "Copied" : "Share"} onClick={share} className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#0f1c3f] shadow-md">
                       <Icon name="share" />
                     </button>
                   </div>
                   {photos.length > 1 ? (
                     <>
-                      <button type="button" aria-label="Previous photo" onClick={() => step(-1)} className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-sm">
+                      <button type="button" aria-label="Previous photo" onClick={() => step(-1)} className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[#0f1c3f] shadow-md">
                         <span className="rotate-180"><Icon name="chevron" /></span>
                       </button>
-                      <button type="button" aria-label="Next photo" onClick={() => step(1)} className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-sm">
+                      <button type="button" aria-label="Next photo" onClick={() => step(1)} className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[#0f1c3f] shadow-md">
                         <Icon name="chevron" />
                       </button>
                     </>
@@ -493,15 +614,12 @@ export function LiveListing({ listing }: { listing: Listing }) {
             <section className="min-w-0 pt-1">
               {tab === "overview" ? (
                 <>
-                  <p className="text-[13px] font-semibold text-[#0d9488]">{listing.category_name || "Electronics"}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-[#0f1c3f]">{title}</h1>
-                    {listing.condition_name ? (
-                      <span className="rounded-full bg-[#e8f8ee] px-2.5 py-1 text-[12px] font-semibold text-[#16a34a]">
-                        {listing.condition_name} Condition
-                      </span>
-                    ) : null}
-                  </div>
+                  <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-[#0f1c3f] sm:text-[28px]">{title}</h1>
+                  {listing.condition_name ? (
+                    <span className="mt-2 inline-flex rounded-full bg-[#e8f8ee] px-2.5 py-1 text-[12px] font-semibold text-[#16a34a]">
+                      {listing.condition_name} Condition
+                    </span>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap items-end gap-2.5">
                     <p className="text-[30px] font-extrabold leading-none text-[#0f1c3f]">{money(displayPrice)}</p>
                     {showWas ? <p className="text-[15px] text-[#98a2b3] line-through">{money(compareAt)}</p> : null}
@@ -514,7 +632,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                     </p>
                   ) : null}
 
-                  <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
                     <Trust icon="truck">{listing.shipping_free ? "Free shipping" : money(Number(listing.shipping_cost || 0))}</Trust>
                     <Trust icon="pin">{location}</Trust>
                     <Trust icon="lock">Secure payment</Trust>
@@ -529,6 +647,9 @@ export function LiveListing({ listing }: { listing: Listing }) {
                       { icon: "tag" as const, label: "Brand", value: listing.brand_name || "N/A" },
                       { icon: "grid" as const, label: "Category", value: listing.category_name || "N/A" },
                       { icon: "clock" as const, label: "Posted", value: postedAgo(listing.published_at || listing.created_at) },
+                      ...Object.entries(listing.specifics || {})
+                        .filter(([, value]) => String(value || "").trim())
+                        .map(([label, value]) => ({ icon: "tag" as const, label, value: String(value) })),
                     ].map((row) => (
                       <div key={row.label} className="flex items-start gap-3">
                         <span className="mt-0.5 text-[#8a94a6]"><Icon name={row.icon} /></span>
@@ -548,7 +669,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                       <p className="text-[13.5px] font-semibold text-[#0f1c3f]">This item is covered by Nexlo&apos;s Buyer Protection</p>
                       <p className="mt-0.5 text-[12.5px] text-[#5b6780]">
                         Shop with confidence.{" "}
-                        <Link href="/help/returns" className="font-medium text-[#3665f3] hover:underline">Learn more</Link>
+                        <Link href="/buyer-protection" className="font-medium text-[#3665f3] hover:underline">Learn more</Link>
                       </p>
                     </div>
                   </div>
@@ -557,13 +678,132 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-[#4b5563]">
                     {listing.description || listing.subtitle || "No description yet."}
                   </p>
+                  {isAuction ? (
+                    <div className="mt-8">
+                      <h2 className="text-[15px] font-bold text-[#0f1c3f]">Bid history ({bidCount})</h2>
+                      {bids.length ? (
+                        <table className="mt-3 w-full text-left text-[13px]">
+                          <thead>
+                            <tr className="border-b border-[#e8eef5] text-[#8a94a6]">
+                              <th className="pb-2 font-medium">Bidder</th>
+                              <th className="pb-2 font-medium">Bid</th>
+                              <th className="pb-2 font-medium">Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bids.map((bid, i) => (
+                              <tr key={`${bid.created_at}-${i}`} className="border-b border-[#f3f6fa]">
+                                <td className="py-2 text-[#0f1c3f]">{bid.bidder}</td>
+                                <td className="py-2 font-semibold">{money(Number(bid.amount))}</td>
+                                <td className="py-2 text-[#8a94a6]">{new Date(bid.created_at).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="mt-2 text-[13px] text-[#8a94a6]">No bids yet. Be the first.</p>
+                      )}
+                    </div>
+                  ) : null}
                 </>
+              ) : null}
+
+              {tab === "qa" ? (
+                <div className="space-y-4 text-[14px] leading-relaxed text-[#4b5563]">
+                  <h2 className="text-[18px] font-bold text-[#0f1c3f]">Questions and answers</h2>
+                  {questions.length ? (
+                    <ul className="space-y-3">
+                      {questions.map((item) => (
+                        <li key={item.id} className="rounded-2xl border border-[#e7eef6] p-3">
+                          <p className="font-semibold text-[#0f1c3f]">Q: {item.question}</p>
+                          <p className="mt-1 text-[12px] text-[#8a94a6]">{item.asker || "Member"} · {new Date(item.created_at).toLocaleDateString()}</p>
+                          {item.answer ? (
+                            <p className="mt-2 text-[#4b5563]">A: {item.answer}</p>
+                          ) : isOwner ? (
+                            <form
+                              className="mt-2 flex gap-2"
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                answerQuestion(item.id).catch((err) => setNotice(err instanceof Error ? err.message : "Could not answer"));
+                              }}
+                            >
+                              <input
+                                value={answerDraft[item.id] || ""}
+                                onChange={(e) => setAnswerDraft((current) => ({ ...current, [item.id]: e.target.value }))}
+                                placeholder="Write an answer"
+                                className="h-10 flex-1 rounded-full border border-[#e2e8f0] px-3"
+                              />
+                              <button className="h-10 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white" disabled={qaBusy}>
+                                Answer
+                              </button>
+                            </form>
+                          ) : (
+                            <p className="mt-2 text-[13px] text-[#8a94a6]">Waiting for the seller.</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No questions yet. Ask the seller about this item.</p>
+                  )}
+                  {!isOwner ? (
+                    <form
+                      className="space-y-2 rounded-2xl border border-[#e7eef6] bg-[#f8fbff] p-3"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        askQuestion().catch((err) => setNotice(err instanceof Error ? err.message : "Could not post question"));
+                      }}
+                    >
+                      <label className="text-[12.5px] font-semibold text-[#0f1c3f]">
+                        Ask a public question
+                        <textarea
+                          value={askText}
+                          onChange={(e) => setAskText(e.target.value)}
+                          placeholder="Does this include the original charger?"
+                          className="mt-1 min-h-20 w-full rounded-xl border border-[#e2e8f0] px-3 py-2 font-normal"
+                        />
+                      </label>
+                      <button type="submit" disabled={qaBusy} className="h-10 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white disabled:opacity-60">
+                        {qaBusy ? "Posting…" : "Post question"}
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
               ) : null}
 
               {tab === "shipping" ? (
                 <div className="space-y-3 text-[14px] leading-relaxed text-[#4b5563]">
                   <h2 className="text-[18px] font-bold text-[#0f1c3f]">Shipping & Returns</h2>
                   <p>{listing.shipping_free ? "Free shipping" : `Shipping ${money(Number(listing.shipping_cost || 0))}`} from {location}.</p>
+                  {Number(listing.shipping_additional) > 0 ? (
+                    <p>Additional item from this seller: {money(Number(listing.shipping_additional))}.</p>
+                  ) : null}
+                  <form
+                    className="flex flex-wrap items-end gap-2 rounded-2xl border border-[#e7eef6] bg-[#f8fbff] p-3"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      quoteShipping().catch(() => undefined);
+                    }}
+                  >
+                    <label className="min-w-[180px] flex-1 text-[12.5px] font-semibold text-[#0f1c3f]">
+                      Destination city
+                      <input
+                        value={dest}
+                        onChange={(e) => setDest(e.target.value)}
+                        placeholder="Pokhara, Nepal"
+                        className="mt-1 h-10 w-full rounded-full border border-[#e2e8f0] px-3 font-normal"
+                      />
+                    </label>
+                    <button type="submit" disabled={quoteBusy} className="h-10 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white disabled:opacity-60">
+                      {quoteBusy ? "Checking…" : "Calculate shipping"}
+                    </button>
+                  </form>
+                  {quote ? (
+                    <p className="text-[14px] font-semibold text-[#0f1c3f]">
+                      {quote.label}: {quote.amount > 0 ? money(quote.amount) : "Free"}
+                      {quote.combinedAdditional ? ` · extra item ${money(quote.combinedAdditional)}` : ""}
+                    </p>
+                  ) : null}
                   <p>Returns are accepted within 7 days if the item is not as described. Nexlo Buyer Protection covers eligible orders.</p>
                   {isAuction ? <p>This auction ends in {countdown(endsAt)}.</p> : null}
                 </div>
@@ -578,6 +818,9 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   </p>
                   <p>{reviews ? `${positive}% positive feedback from ${reviews.toLocaleString()} reviews.` : "No reviews yet."}</p>
                   <p>Ships from {location}.</p>
+                  <div className="pt-2">
+                    <DsrBars dsr={listing.dsr} />
+                  </div>
                 </div>
               ) : null}
 
@@ -585,11 +828,12 @@ export function LiveListing({ listing }: { listing: Listing }) {
                 <div className="space-y-3 text-[14px] leading-relaxed text-[#4b5563]">
                   <h2 className="text-[18px] font-bold text-[#0f1c3f]">Reviews</h2>
                   <p>{reviews ? `${reviews} seller reviews · ${positive}% positive.` : "No reviews on this seller yet."}</p>
+                  <DsrBars dsr={listing.dsr} />
                 </div>
               ) : null}
             </section>
 
-            <aside className="space-y-3 xl:sticky xl:top-24">
+            <aside className="space-y-3 lg:sticky lg:top-20">
               <div className="rounded-2xl border border-[#e7eef6] bg-white p-4 shadow-[0_8px_30px_-18px_rgba(15,28,63,0.25)]">
                 <div className="flex items-start gap-3">
                   {listing.seller_avatar ? (
@@ -602,7 +846,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1 font-bold text-[#0f1c3f]">
-                      <Link href={`/seller/${encodeURIComponent(sellerName)}`} className="truncate hover:underline">{sellerName}</Link>
+                      <Link href={sellerHref} className="truncate hover:underline">{sellerName}</Link>
                       <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#3665f3] text-white" title="Verified">
                         <Icon name="check" className="h-2.5 w-2.5" />
                       </span>
@@ -613,7 +857,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                     type="button"
                     disabled={followBusy}
                     onClick={() => toggleFollow().catch((err) => setNotice(err instanceof Error ? err.message : "Could not follow"))}
-                    className="h-8 rounded-full border border-[#d7e0ec] px-3 text-[12.5px] font-semibold text-[#3665f3] disabled:opacity-60"
+                    className="h-8 rounded-full border border-[#3665f3] px-3.5 text-[12.5px] font-semibold text-[#3665f3] disabled:opacity-60"
                   >
                     {isOwner ? "Your shop" : followBusy ? "…" : following ? "Following" : "Follow"}
                   </button>
@@ -632,33 +876,61 @@ export function LiveListing({ listing }: { listing: Listing }) {
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-[#e7eef6] bg-white p-4 shadow-[0_8px_30px_-18px_rgba(15,28,63,0.25)]">
+              <div className="rounded-2xl border border-[#e7eef6] bg-white p-5 shadow-[0_8px_30px_-18px_rgba(15,28,63,0.25)]">
                 <div className="flex flex-wrap items-end gap-2">
                   <p className="text-[26px] font-extrabold leading-none text-[#0f1c3f]">{money(displayPrice)}</p>
                   {showWas ? <p className="text-[13px] text-[#98a2b3] line-through">{money(compareAt)}</p> : null}
                   {off > 0 ? <span className="text-[12.5px] font-semibold text-[#16a34a]">{off}% OFF</span> : null}
                 </div>
                 <p className="mt-2 text-[13px] text-[#16a34a]">{listing.shipping_free ? "Free shipping" : money(Number(listing.shipping_cost || 0))}</p>
+                {!live ? <p className="mt-2 text-[13px] font-semibold text-[#e53238]">This listing has ended.</p> : null}
+                <button type="button" className="mt-1 text-[12.5px] font-semibold text-[#3665f3] hover:underline" onClick={() => setTab("shipping")}>
+                  Calculate shipping to your city
+                </button>
 
                 {notice ? <p className="mt-3 rounded-xl bg-[#eef4ff] px-3 py-2 text-[13px] text-[#3665f3]">{notice}</p> : null}
 
                 {variations.length ? (
-                  <div className="mt-3 space-y-2">
-                    {variations.map((variation) => (
-                      <label key={variation.id} className="block text-[12.5px] font-semibold text-[#0f1c3f]">
-                        {variation.name}
-                        <select
-                          className="mt-1 h-10 w-full rounded-full border border-[#e2e8f0] px-3 font-normal"
-                          value={picked[variation.name] || ""}
-                          onChange={(e) => setPicked((current) => ({ ...current, [variation.name]: e.target.value }))}
-                        >
-                          <option value="">Select {variation.name}</option>
-                          {(variation.options || []).map((opt) => (
-                            <option key={opt.id} value={opt.value}>{opt.value}</option>
-                          ))}
-                        </select>
-                      </label>
-                    ))}
+                  <div className="mt-3 space-y-3">
+                    {variations.map((variation) => {
+                      const photoOptions = (variation.options || []).filter((opt) => opt.photo_url);
+                      return (
+                        <div key={variation.id}>
+                          <p className="text-[12.5px] font-semibold text-[#0f1c3f]">{variation.name}</p>
+                          {photoOptions.length ? (
+                            <div className="mt-1.5 flex flex-wrap gap-2">
+                              {(variation.options || []).map((opt) => (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => setPicked((current) => ({ ...current, [variation.name]: opt.value }))}
+                                  className={`overflow-hidden rounded-xl border ${picked[variation.name] === opt.value ? "border-[#3665f3] ring-2 ring-[#3665f3]/30" : "border-[#e2e8f0]"}`}
+                                  title={opt.value}
+                                >
+                                  {opt.photo_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={opt.photo_url} alt={opt.value} className="h-14 w-14 object-cover" />
+                                  ) : (
+                                    <span className="flex h-14 min-w-14 items-center justify-center px-2 text-[12px]">{opt.value}</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <select
+                              className="mt-1 h-10 w-full rounded-full border border-[#e2e8f0] px-3 font-normal"
+                              value={picked[variation.name] || ""}
+                              onChange={(e) => setPicked((current) => ({ ...current, [variation.name]: e.target.value }))}
+                            >
+                              <option value="">Select {variation.name}</option>
+                              {(variation.options || []).map((opt) => (
+                                <option key={opt.id} value={opt.value}>{opt.value}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
 
@@ -705,9 +977,10 @@ export function LiveListing({ listing }: { listing: Listing }) {
                     {isFixed && live ? (
                       <button
                         type="button"
-                        className={`${isAuction ? "mt-2" : "mt-4"} h-11 w-full rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6]`}
+                        className={`${isAuction ? "mt-2" : "mt-4"} inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6]`}
                         onClick={() => buyNow().catch((err) => setNotice(err instanceof Error ? err.message : "Could not add to cart"))}
                       >
+                        <Icon name="cart" />
                         Buy it now
                       </button>
                     ) : null}
@@ -718,10 +991,14 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   type="button"
                   disabled={watchBusy}
                   onClick={() => saveWatch().catch((err) => setNotice(err instanceof Error ? err.message : "Could not update watchlist"))}
-                  className="mt-2 h-11 w-full rounded-full border border-[#d7e0ec] text-[14px] font-semibold text-[#0f1c3f] disabled:opacity-60"
+                  className={`mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border text-[14px] font-semibold disabled:opacity-60 ${
+                    saved ? "border-[#e53238] bg-[#fff5f5] text-[#e53238]" : "border-[#d7e0ec] text-[#0f1c3f]"
+                  }`}
                 >
-                  {watchBusy ? "Saving…" : saved ? "Saved to Watchlist" : "Add to Watchlist"}
+                  <WatchlistIcon saved={saved} size={16} />
+                  {watchBusy ? "Saving…" : saved ? "Saved to watchlist" : "Add to watchlist"}
                 </button>
+                <SaveToCollection listingId={listing.id} />
 
                 {isAuction && !isOwner ? (
                   <form
@@ -745,14 +1022,30 @@ export function LiveListing({ listing }: { listing: Listing }) {
                         {bidBusy ? "…" : "Place bid"}
                       </button>
                     </div>
+                    {youLead ? <p className="mt-2 text-[12.5px] font-semibold text-[#12a37e]">You are the high bidder.</p> : null}
+                    {canRetract ? (
+                      <button
+                        type="button"
+                        className="mt-2 text-[12.5px] font-semibold text-[#e53238]"
+                        disabled={bidBusy}
+                        onClick={() => retractBid().catch((err) => setNotice(err instanceof Error ? err.message : "Could not retract"))}
+                      >
+                        Retract this bid (within 1 hour)
+                      </button>
+                    ) : null}
                     <p className="mt-2 text-[11.5px] leading-snug text-[#8a94a6]">
                       By placing a bid, you agree to Nexlo&apos;s Terms of Service and Privacy Policy.
                     </p>
                     <ul className="mt-3 space-y-1 text-[12px] text-[#5b6780]">
-                      {bids.slice(0, 4).map((b, i) => (
+                      {bids.slice(0, 6).map((b, i) => (
                         <li key={`${b.created_at}-${i}`}>{money(b.amount)} · {b.bidder}</li>
                       ))}
                     </ul>
+                    {bids.length > 6 ? (
+                      <button type="button" className="mt-2 text-[12.5px] font-semibold text-[#3665f3]" onClick={() => setTab("overview")}>
+                        See all {bidCount} bids
+                      </button>
+                    ) : null}
                   </form>
                 ) : null}
 
@@ -766,14 +1059,14 @@ export function LiveListing({ listing }: { listing: Listing }) {
 
                 {listing.allow_best_offer && live ? (
                   <form
-                    className="mt-4 flex gap-2"
+                    className="mt-3 flex gap-2"
                     onSubmit={(e) => {
                       e.preventDefault();
                       sendOffer().catch((err) => setNotice(err instanceof Error ? err.message : "Offer failed"));
                     }}
                   >
-                    <input value={offer} onChange={(e) => setOffer(e.target.value)} placeholder="Best offer" className="h-10 flex-1 rounded-full border px-4" />
-                    <button className="h-10 rounded-full border border-[#3665f3] px-4 text-[13px] font-semibold text-[#3665f3]">Make offer</button>
+                    <input value={offer} onChange={(e) => setOffer(e.target.value)} placeholder="Best offer" className="h-11 flex-1 rounded-full border border-[#e2e8f0] px-4 text-[14px]" />
+                    <button className="h-11 rounded-full border border-[#3665f3] px-5 text-[13.5px] font-semibold text-[#3665f3]">Make offer</button>
                   </form>
                 ) : null}
               </div>
@@ -787,7 +1080,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
               >
                 <p className="flex items-center gap-2 text-[13.5px] font-semibold text-[#0f1c3f]">
                   <span className="text-[#3665f3]"><Icon name="chat" /></span>
-                  {isOwner ? "Buyer messages" : "Have a question?"}
+                  {isOwner ? "Buyer messages" : "Private message"}
                 </p>
                 {isOwner ? (
                   <Link href="/account?tab=messages" className="mt-2 inline-block text-[13px] font-semibold text-[#3665f3]">
@@ -798,7 +1091,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                     <textarea
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
-                      placeholder="Message the seller before buying."
+                      placeholder="Send a private message. Public questions go in Q&A."
                       className="mt-2 min-h-16 w-full rounded-xl border border-[#e2e8f0] px-3 py-2 text-[13px]"
                     />
                     <button type="submit" disabled={messageBusy} className="mt-2 text-[13px] font-semibold text-[#3665f3] disabled:opacity-60">
@@ -810,6 +1103,27 @@ export function LiveListing({ listing }: { listing: Listing }) {
             </aside>
           </div>
         </div>
+        {similar.length ? (
+          <section className="page-shell pb-10">
+            <h2 className="mb-3 text-[18px] font-bold text-[#0f1c3f]">Similar items</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+              {similar.map((item) => (
+                <Link key={item.id} href={`/listing/${item.id}`} className="overflow-hidden rounded-xl border border-[#e7eef6] bg-white hover:shadow-sm">
+                  {item.primary_photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.primary_photo} alt="" className="aspect-square w-full object-cover" />
+                  ) : (
+                    <span className="flex aspect-square items-center justify-center bg-[#f4f8fd] text-[11px] text-[#8a94a6]">No image</span>
+                  )}
+                  <span className="block p-2">
+                    <span className="line-clamp-2 text-[12px] text-[#0f1c3f]">{item.title}</span>
+                    <span className="mt-1 block text-[13px] font-bold">{money(Number(item.auction_current_price || item.price || 0))}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </main>
       <SiteFooter />
     </>

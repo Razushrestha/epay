@@ -1,5 +1,7 @@
 import { query } from "./db.mjs";
 import { bestMatchScore, expandQueryWithSynonyms } from "./commerce-rules.mjs";
+import { completedRequested, listingFacets, statusClause } from "./m2-listings.mjs";
+import { cdnifyListing } from "./cdn.mjs";
 
 function osUrl() {
   return process.env.OPENSEARCH_URL || "";
@@ -82,7 +84,7 @@ function listingSelect() {
   return `
     l.id, l.title, l.subtitle, l.format, l.price, l.quantity,
     l.auction_current_price, l.auction_bid_count, l.auction_ends_at,
-    l.shipping_free, l.shipping_cost, l.item_location, l.watch_count, l.published_at, l.specifics,
+    l.shipping_free, l.shipping_cost, l.item_location, l.watch_count, l.view_count, l.published_at, l.specifics, l.status, l.compare_at,
     c.name as category_name, c.slug as category_slug,
     (SELECT url FROM listing_photos WHERE listing_id = l.id AND is_primary = true LIMIT 1) as primary_photo,
     u.username as seller_username,
@@ -121,7 +123,7 @@ export async function searchListingsAdvanced(params) {
 
   const values = [];
   let n = 1;
-  let where = `l.status = 'active' AND l.moderation_status = 'approved'
+  let where = `${statusClause(completedRequested(params))}
       AND NOT EXISTS (
         SELECT 1 FROM vacation_mode v
         WHERE v.seller_id = l.seller_id AND v.active = TRUE AND v.hide_listings = TRUE
@@ -181,6 +183,8 @@ export async function searchListingsAdvanced(params) {
     where += ` AND CASE WHEN COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0) = 0 THEN 0 ELSE 100.0 * COALESCE(fs.positive_count,0) / (COALESCE(fs.positive_count,0)+COALESCE(fs.neutral_count,0)+COALESCE(fs.negative_count,0)) END >= $${n++}`;
     values.push(Number(minSellerRating));
   }
+  const facetWhere = where;
+  const facetValues = [...values];
   if (specifics) {
     try {
       const spec = JSON.parse(specifics);
@@ -215,22 +219,25 @@ export async function searchListingsAdvanced(params) {
   values.push(limit, offset);
 
   const result = await query(sql, values);
-  const listings = result.rows.map((row) => ({
+  const listings = result.rows.map((row) => cdnifyListing({
     ...row,
     match_score: bestMatchScore({
       textRank: row.text_rank,
       sellerScore: row.seller_feedback_score,
-      soldCount: row.watch_count,
+      soldCount: Number(row.watch_count || 0) + Number(row.view_count || 0) / 8,
       publishedAt: row.published_at,
       freeShipping: row.shipping_free,
     }),
   }));
   if (sort === "best_match") listings.sort((a, b) => b.match_score - a.match_score);
+  const facets = await listingFacets(facetWhere, facetValues);
 
   return {
     status: 200,
     body: {
       listings,
+      facets,
+      total: listings.length + offset,
       query: q,
       expanded: expanded !== q ? expanded : undefined,
       engine: osUrl() ? "opensearch+postgres" : "postgres",

@@ -267,11 +267,52 @@ async function getCategoryBySlug(slug) {
 /**
  * Get item specifics for a category (by slug)
  */
-async function getCategorySpecifics(slug) {
-  const catResult = await query('SELECT id FROM categories WHERE slug = $1', [slug]);
+async function ensureDefaultSpecifics(categoryId) {
+  const existing = await query('SELECT COUNT(*)::int AS c FROM category_specifics WHERE category_id = $1', [categoryId]);
+  if (Number(existing.rows[0]?.c || 0) > 0) return;
+
+  const defaults = [
+    { name: 'Brand', slug: 'brand', input_type: 'text', required: false, options: [] },
+    { name: 'Model', slug: 'model', input_type: 'text', required: false, options: [] },
+    { name: 'Color', slug: 'color', input_type: 'select', required: false, options: ['Black', 'White', 'Blue', 'Red', 'Green', 'Gold', 'Silver', 'Other'] },
+    { name: 'Size', slug: 'size', input_type: 'select', required: false, options: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'One size', 'Other'] },
+    { name: 'Storage', slug: 'storage', input_type: 'select', required: false, options: ['64GB', '128GB', '256GB', '512GB', '1TB', 'Other'] },
+  ];
+
+  for (const spec of defaults) {
+    let row = await query('SELECT id FROM item_specifics WHERE slug = $1 LIMIT 1', [spec.slug]);
+    if (!row.rows[0]) {
+      row = await query(
+        `INSERT INTO item_specifics (name, slug, input_type, is_required, is_active)
+         VALUES ($1, $2, $3, $4, true) RETURNING id`,
+        [spec.name, spec.slug, spec.input_type, spec.required],
+      );
+      for (let i = 0; i < spec.options.length; i += 1) {
+        await query(
+          `INSERT INTO item_specific_options (specific_id, value, sort_order, is_active) VALUES ($1, $2, $3, true)`,
+          [row.rows[0].id, spec.options[i], i],
+        );
+      }
+    }
+    await query(
+      `INSERT INTO category_specifics (category_id, specific_id, is_required, sort_order)
+       VALUES ($1, $2, $3, $4) ON CONFLICT (category_id, specific_id) DO NOTHING`,
+      [categoryId, row.rows[0].id, spec.required, spec.slug === 'brand' ? 1 : 10],
+    );
+  }
+}
+
+async function getCategorySpecifics(key) {
+  const isId = /^\d+$/.test(String(key));
+  const catResult = await query(
+    isId ? 'SELECT id FROM categories WHERE id = $1' : 'SELECT id FROM categories WHERE slug = $1',
+    [key],
+  );
   if (!catResult.rows[0]) {
     return { status: 404, body: { error: 'Category not found' } };
   }
+
+  await ensureDefaultSpecifics(catResult.rows[0].id);
 
   const result = await query(
     `SELECT 

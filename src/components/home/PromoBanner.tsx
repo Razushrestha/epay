@@ -53,7 +53,7 @@ export function PromoBanner() {
           </p>
           <Link
             href="/deals"
-            className="mt-5 inline-flex w-fit items-center gap-2 rounded-full bg-white px-5 py-[9px] text-[13.5px] font-semibold text-[#1a1a1a] hover:bg-[#f4f4f4]"
+            className="mt-5 inline-flex w-fit items-center gap-2 rounded-full bg-white px-5 py-[9px] text-[13.5px] font-semibold text-[#0f1c3f] hover:bg-[#eef4ff]"
           >
             Explore now
             <span aria-hidden>→</span>

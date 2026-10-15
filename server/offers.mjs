@@ -2,6 +2,13 @@ import { query } from "./db.mjs";
 import { nextOrderNumber } from "./commerce-auth.mjs";
 import { notify } from "./notify.mjs";
 
+let offerCols;
+async function ensureOfferColumns() {
+  if (offerCols) return;
+  await query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS offered_by TEXT NOT NULL DEFAULT 'buyer'`).catch(() => undefined);
+  offerCols = true;
+}
+
 async function listingForOffer(listingId) {
   const { rows } = await query(
     `SELECT id, title, seller_id, price, allow_best_offer, auto_accept_price, auto_decline_price, status, format
@@ -40,6 +47,7 @@ export async function expireOffers() {
 export async function handleOffers(method, pathParts, auth, body) {
   if (pathParts[0] !== "offers") return null;
   if (!auth) return { status: 401, body: { error: "Sign in required" } };
+  await ensureOfferColumns();
 
   if (method === "GET" && !pathParts[1]) {
     const { rows } = await query(
@@ -47,7 +55,21 @@ export async function handleOffers(method, pathParts, auth, body) {
        WHERE o.buyer_id = $1 OR o.seller_id = $1 ORDER BY o.created_at DESC LIMIT 50`,
       [auth.user_id],
     );
-    return { status: 200, body: { data: rows } };
+    return {
+      status: 200,
+      body: {
+        data: rows.map((row) => ({
+          ...row,
+          youAreSeller: Number(row.seller_id) === Number(auth.user_id),
+          youAreBuyer: Number(row.buyer_id) === Number(auth.user_id),
+          awaitingYou:
+            row.status === "pending" &&
+            ((row.offered_by || "buyer") === "buyer"
+              ? Number(row.seller_id) === Number(auth.user_id)
+              : Number(row.buyer_id) === Number(auth.user_id)),
+        })),
+      },
+    };
   }
 
   if (method === "POST" && !pathParts[1]) {
@@ -71,8 +93,8 @@ export async function handleOffers(method, pathParts, auth, body) {
     if (listing.auto_accept_price && amount >= Number(listing.auto_accept_price)) status = "auto_accepted";
 
     const inserted = await query(
-      `INSERT INTO offers (listing_id, buyer_id, seller_id, amount, status, round, message, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() + INTERVAL '48 hours') RETURNING *`,
+      `INSERT INTO offers (listing_id, buyer_id, seller_id, amount, status, round, message, expires_at, offered_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7, NOW() + INTERVAL '48 hours', 'buyer') RETURNING *`,
       [listing.id, auth.user_id, listing.seller_id, amount, status, rounds.rows[0].c + 1, body.message || null],
     );
     const offer = inserted.rows[0];
@@ -85,10 +107,17 @@ export async function handleOffers(method, pathParts, auth, body) {
   if (method === "POST" && pathParts[1] && pathParts[2] === "decide") {
     const { rows } = await query(`SELECT * FROM offers WHERE id = $1`, [pathParts[1]]);
     const offer = rows[0];
-    if (!offer || Number(offer.seller_id) !== Number(auth.user_id)) return { status: 404, body: { error: "Offer not found" } };
+    if (!offer) return { status: 404, body: { error: "Offer not found" } };
+    const isSeller = Number(offer.seller_id) === Number(auth.user_id);
+    const isBuyer = Number(offer.buyer_id) === Number(auth.user_id);
+    if (!isSeller && !isBuyer) return { status: 404, body: { error: "Offer not found" } };
     if (offer.status !== "pending") return { status: 400, body: { error: "Offer is no longer pending" } };
+    const awaitingSeller = (offer.offered_by || "buyer") === "buyer";
+    if (awaitingSeller && !isSeller) return { status: 403, body: { error: "Waiting for the seller" } };
+    if (!awaitingSeller && !isBuyer) return { status: 403, body: { error: "Waiting for the buyer" } };
     const listing = await listingForOffer(offer.listing_id);
     const action = body.action;
+    const other = isSeller ? offer.buyer_id : offer.seller_id;
     if (action === "accept") {
       await query(`UPDATE offers SET status = 'accepted', decided_at = NOW() WHERE id = $1`, [offer.id]);
       await acceptOffer(offer, listing);
@@ -96,7 +125,7 @@ export async function handleOffers(method, pathParts, auth, body) {
     }
     if (action === "decline") {
       await query(`UPDATE offers SET status = 'declined', decided_at = NOW() WHERE id = $1`, [offer.id]);
-      await notify(offer.buyer_id, "offer_declined", "Offer declined", `The seller declined your offer on ${listing.title}.`, `/listing/${listing.id}`);
+      await notify(other, "offer_declined", "Offer declined", `The ${isSeller ? "seller" : "buyer"} declined the offer on ${listing.title}.`, `/account?tab=activity`);
       return { status: 200, body: { data: { status: "declined" } } };
     }
     if (action === "counter") {
@@ -104,12 +133,13 @@ export async function handleOffers(method, pathParts, auth, body) {
       if (!(amount > 0)) return { status: 400, body: { error: "Enter a counter amount" } };
       if (offer.round >= 6) return { status: 400, body: { error: "No more counters on this thread" } };
       await query(`UPDATE offers SET status = 'countered', decided_at = NOW() WHERE id = $1`, [offer.id]);
+      const offeredBy = isSeller ? "seller" : "buyer";
       const counter = await query(
-        `INSERT INTO offers (listing_id, buyer_id, seller_id, amount, status, round, parent_id, expires_at)
-         VALUES ($1,$2,$3,$4,'pending',$5,$6, NOW() + INTERVAL '48 hours') RETURNING *`,
-        [offer.listing_id, offer.buyer_id, offer.seller_id, amount, offer.round + 1, offer.id],
+        `INSERT INTO offers (listing_id, buyer_id, seller_id, amount, status, round, parent_id, expires_at, offered_by)
+         VALUES ($1,$2,$3,$4,'pending',$5,$6, NOW() + INTERVAL '48 hours', $7) RETURNING *`,
+        [offer.listing_id, offer.buyer_id, offer.seller_id, amount, offer.round + 1, offer.id, offeredBy],
       );
-      await notify(offer.buyer_id, "offer_counter", "Seller countered", `New price NPR ${amount} on ${listing.title}.`, `/listing/${listing.id}`);
+      await notify(other, "offer_counter", isSeller ? "Seller countered" : "Buyer countered", `New price NPR ${amount} on ${listing.title}.`, `/account?tab=activity`);
       return { status: 200, body: { data: counter.rows[0] } };
     }
     return { status: 400, body: { error: "Choose accept, decline, or counter" } };

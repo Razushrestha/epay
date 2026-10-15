@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import { accountApi } from "@/lib/account-api";
 
-type Kyc = { public_id: string; doc_type: string; status: string; email: string; display_name: string | null };
+type Kyc = {
+  public_id: string;
+  doc_type: string;
+  status: string;
+  email: string;
+  display_name: string | null;
+  files?: { front?: string; back?: string; selfie?: string };
+};
 type Appeal = { public_id: string; message: string; email: string; display_name: string | null; created_at?: string };
 type Settings = { siteName: string; currency: string; country: string; supportEmail: string; maintenance: boolean };
 
@@ -66,7 +73,7 @@ export default function AdminSettingsPage() {
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Staff</h2>
         <ul className="mt-3 space-y-2 text-[14px]">
           {staff.map((person) => (
-            <li key={person.public_id} className="flex justify-between rounded-xl bg-[#f7f7f7] px-3 py-2">
+            <li key={person.public_id} className="flex justify-between rounded-xl bg-[#f4f8fd] px-3 py-2">
               <span className="font-medium text-[#0f1c3f]">{person.name}</span>
               <span className="text-[#6b7587]">{person.email}</span>
             </li>
@@ -80,7 +87,16 @@ export default function AdminSettingsPage() {
         <ul className="mt-3 space-y-2">
           {kyc.map((item) => (
             <li key={item.public_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#eef2f7] px-3 py-3 text-[13px]">
-              <span>{item.display_name || item.email} · {item.doc_type} · {item.status}</span>
+              <span className="min-w-0">
+                <span>{item.display_name || item.email} · {item.doc_type} · {item.status}</span>
+                {item.files?.front || item.files?.selfie ? (
+                  <span className="mt-1 flex flex-wrap gap-2">
+                    {item.files.front ? <a href={item.files.front} target="_blank" rel="noreferrer" className="text-[#3665f3]">ID photo</a> : null}
+                    {item.files.back ? <a href={item.files.back} target="_blank" rel="noreferrer" className="text-[#3665f3]">Back</a> : null}
+                    {item.files.selfie ? <a href={item.files.selfie} target="_blank" rel="noreferrer" className="text-[#3665f3]">Address proof</a> : null}
+                  </span>
+                ) : null}
+              </span>
               {item.status === "pending" ? (
                 <span className="flex gap-2">
                   <button type="button" className="text-[#12a37e]" onClick={() => accountApi(`/api/v1/admin/kyc/${item.public_id}`, { method: "POST", body: JSON.stringify({ decision: "approved" }) }).then(load)}>Approve</button>

@@ -221,7 +221,7 @@ export default function AdminDashboardPage() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={row.thumbnail_url || row.photo_url || ""} alt="" className="h-8 w-8 rounded-lg object-cover" />
                         ) : (
-                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f7f7f7] text-[#9aa3b2]">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f4f8fd] text-[#9aa3b2]">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m8 14 2.5-3 2.5 3 3-4 3 4" /></svg>
                           </span>
                         )}

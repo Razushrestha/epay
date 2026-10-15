@@ -6,7 +6,7 @@ export function TrendingRow() {
   return (
     <section className="page-shell pt-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-[22px] font-bold tracking-tight text-[#1a2744]">Trending on Nexlo</h2>
+        <h2 className="text-[22px] font-extrabold tracking-tight text-[#0f1c3f]">Trending on Nexlo</h2>
         <Link href="/deals" className="text-[13.5px] font-medium text-[#3665f3] hover:underline">
           View all →
         </Link>

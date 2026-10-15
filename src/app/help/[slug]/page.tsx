@@ -40,9 +40,16 @@ export default function HelpArticlePage() {
         {page ? (
           <article className="nexlo-card mt-4 max-w-3xl p-6 sm:p-8">
             <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-[#333]">{page.body}</p>
+            {params.slug === "returns" ? (
+              <p className="mt-5 text-[14px]">
+                File from the <Link href="/resolution" className="font-semibold text-[#3665f3]">Resolution Center</Link>
+                {" "}·{" "}
+                <Link href="/buyer-protection" className="font-semibold text-[#3665f3]">Buyer Protection</Link>
+              </p>
+            ) : null}
           </article>
         ) : !error ? (
-          <p className="mt-6 text-[14px] text-[#707070]">Loading…</p>
+          <p className="mt-6 text-[14px] text-[#6b7587]">Loading…</p>
         ) : (
           <p className="mt-6 text-[14px] text-[#e53238]">{error}</p>
         )}

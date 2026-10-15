@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { similarProducts, type ProductDetail } from "@/lib/product-detail";
 import { addToCart, loadWatchIds, toggleWatch } from "@/lib/commerce";
+import { WatchlistIcon } from "@/components/commerce/WatchlistIcon";
 
 const blue = "#3665f3";
 
@@ -563,12 +564,12 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
               <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
-                  aria-label={saved ? "Remove from wishlist" : "Add to wishlist"}
+                  aria-label={saved ? "Remove from watchlist" : "Add to watchlist"}
                   onClick={() => setSaved((current) => !current)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border bg-white text-[#667085]"
-                  style={{ borderColor: tone.line, color: saved ? "#ef3b3b" : undefined }}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border bg-white"
+                  style={{ borderColor: tone.line, color: saved ? "#e53238" : "#0f1c3f" }}
                 >
-                  <Icon name="heart" size={16} />
+                  <WatchlistIcon saved={saved} size={18} />
                 </button>
                 <button
                   type="button"
@@ -714,7 +715,7 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
               className="flex w-full items-center justify-center gap-2 text-[14px] font-medium"
               style={{ color: tone.accent }}
             >
-              <Icon name="heart" size={16} />
+              <WatchlistIcon saved={saved} size={16} />
               {saved ? "Saved to watchlist" : "Add to watchlist"}
             </button>
             <div className="mt-3 grid grid-cols-3 gap-2 rounded-2xl border bg-white/70 px-2 py-3" style={{ borderColor: tone.line }}>
@@ -764,10 +765,10 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
                           localOnly: true,
                         });
                       }}
-                      className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#98a2b3]"
-                      style={{ color: wished ? "#ef3b3b" : undefined }}
+                      className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white"
+                      style={{ color: wished ? "#e53238" : "#0f1c3f" }}
                     >
-                      <Icon name="heart" size={15} />
+                      <WatchlistIcon saved={wished} size={15} />
                     </button>
                     <Link href={`/listing/${item.id}`} className="block">
                       <span className="relative block h-[132px]">

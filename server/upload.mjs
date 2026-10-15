@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { query } from './db.mjs';
 import { Files } from 'files-sdk';
 import { neon } from 'files-sdk/neon';
+import { publicObjectUrl } from './cdn.mjs';
 
 // Neon Object Storage configuration
 const storage = new Files({ 
@@ -229,10 +230,8 @@ export async function uploadPhoto(req, listingId, userId) {
       cacheControl: 'public, max-age=31536000'
     });
 
-    // Generate public URLs (since bucket is public_read)
-    const baseUrl = process.env.AWS_ENDPOINT_URL_S3 || '';
-    const photoUrl = `${baseUrl}/uploads/listings/${filename}`;
-    const thumbnailUrl = `${baseUrl}/uploads/listings/${thumbnailFilename}`;
+    const photoUrl = publicObjectUrl(`listings/${filename}`);
+    const thumbnailUrl = publicObjectUrl(`listings/${thumbnailFilename}`);
 
     // Get current photo count to determine position
     const countResult = await query(
@@ -285,11 +284,6 @@ export async function uploadPhoto(req, listingId, userId) {
 }
 
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
-
-function publicObjectUrl(key) {
-  const baseUrl = String(process.env.AWS_ENDPOINT_URL_S3 || "").replace(/\/$/, "");
-  return baseUrl ? `${baseUrl}/uploads/${key}` : `/uploads/${key}`;
-}
 
 function storageKeyFromUrl(url, folder) {
   const value = String(url || "");

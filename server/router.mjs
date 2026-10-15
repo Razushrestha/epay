@@ -107,6 +107,7 @@ export async function handleRequest(req, res) {
       service: "nexlo",
       runtime: "node",
       database: db ? "connected" : "unavailable",
+      cdn: Boolean(process.env.CDN_PUBLIC_URL || process.env.NEXT_PUBLIC_CDN_URL),
     });
   }
 

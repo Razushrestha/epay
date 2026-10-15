@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PageHero } from "@/components/ui/PageHero";
 import { WATCH_EVENT, loadWatchlist, toggleWatch, type WatchSnapshot } from "@/lib/commerce";
+import { WatchlistIcon } from "@/components/commerce/WatchlistIcon";
 
 export default function WatchlistPage() {
   const [items, setItems] = useState<WatchSnapshot[]>([]);
@@ -33,12 +34,12 @@ export default function WatchlistPage() {
       />
       <main className="page-shell py-8">
         {loading ? (
-          <p className="text-[14px] text-[#707070]">Loading watchlist…</p>
+          <p className="text-[14px] text-[#6b7587]">Loading watchlist…</p>
         ) : items.length === 0 ? (
           <div className="nexlo-card p-10 text-center">
-            <p className="text-[16px] font-bold text-[#191919]">Nothing saved yet</p>
-            <p className="mt-1 text-[14px] text-[#707070]">Tap the heart on a listing or deal to keep it here.</p>
-            <Link href="/" className="nexlo-btn mt-5">
+            <p className="text-[16px] font-bold text-[#0f1c3f]">Nothing saved yet</p>
+            <p className="mt-1 text-[14px] text-[#6b7587]">Tap the heart on a listing or deal to keep it here.</p>
+            <Link href="/" className="nexlo-btn nexlo-btn-blue mt-5">
               Browse deals
             </Link>
           </div>
@@ -47,16 +48,16 @@ export default function WatchlistPage() {
             {items.map((item) => (
               <article key={item.listing_id} className="nexlo-card relative overflow-hidden">
                 <Link href={item.href || `/listing/${item.listing_id}`} className="block">
-                  <span className="relative block aspect-[4/3] bg-[#f7f7f7]">
+                  <span className="relative block aspect-[4/3] bg-[#f4f8fd]">
                     {item.photo_url ? (
                       <Image src={item.photo_url} alt={item.title} fill className="object-cover" sizes="240px" />
                     ) : (
-                      <span className="flex h-full items-center justify-center text-[12px] text-[#707070]">No image</span>
+                      <span className="flex h-full items-center justify-center text-[12px] text-[#6b7587]">No image</span>
                     )}
                   </span>
                   <span className="block p-3">
-                    <span className="clamp-2 block min-h-[36px] text-[13px] font-medium text-[#191919]">{item.title}</span>
-                    <span className="mt-2 block text-[15px] font-bold text-[#191919]">
+                    <span className="clamp-2 block min-h-[36px] text-[13px] font-medium text-[#0f1c3f]">{item.title}</span>
+                    <span className="mt-2 block text-[15px] font-bold text-[#0f1c3f]">
                       {item.price ? `NPR ${item.price.toLocaleString("en-NP")}` : "View listing"}
                     </span>
                   </span>
@@ -70,7 +71,7 @@ export default function WatchlistPage() {
                     await refresh();
                   }}
                 >
-                  ♥
+                  <WatchlistIcon saved size={16} />
                 </button>
               </article>
             ))}

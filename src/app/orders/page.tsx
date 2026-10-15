@@ -37,23 +37,23 @@ function OrdersContent() {
         body={success
           ? "Funds are held in escrow until delivery. You can request a return within 30 days."
           : "Shipping, returns, invoices, and feedback, with the same buyer protection as the rest of Nexlo."}
-        cta="Continue shopping"
-        href="/shop"
+        cta={success ? "Open Resolution Center" : "Continue shopping"}
+        href={success ? "/resolution" : "/shop"}
       />
       <main className="page-shell py-8">
         <div className="flex items-end justify-between">
           <div>
-            <h2 className="text-[19px] font-bold text-[#191919]">Order history</h2>
-            <p className="mt-[2px] text-[12px] text-[#707070]">Paid orders stay in escrow until you confirm delivery.</p>
+            <h2 className="text-[20px] font-extrabold text-[#0f1c3f]">Order history</h2>
+            <p className="mt-[2px] text-[12px] text-[#6b7587]">Paid orders stay in escrow until you confirm delivery.</p>
           </div>
         </div>
 
         {loading ? (
-          <p className="mt-8 text-[14px] text-[#707070]">Loading orders…</p>
+          <p className="mt-8 text-[14px] text-[#6b7587]">Loading orders…</p>
         ) : orders.length === 0 ? (
           <div className="nexlo-card mt-6 px-6 py-12 text-center">
-            <h3 className="text-[20px] font-bold text-[#191919]">No orders yet</h3>
-            <p className="mt-2 text-[14px] text-[#707070]">When you win an auction or check out, it will show up here.</p>
+            <h3 className="text-[20px] font-bold text-[#0f1c3f]">No orders yet</h3>
+            <p className="mt-2 text-[14px] text-[#6b7587]">When you win an auction or check out, it will show up here.</p>
             <Link href="/shop" className="nexlo-btn mt-5">Start shopping</Link>
           </div>
         ) : (
@@ -62,11 +62,11 @@ function OrdersContent() {
               <li key={order.id}>
                 <Link href={`/orders/${order.order_number}`} className="nexlo-card flex flex-wrap items-center justify-between gap-3 p-4 hover:shadow-md">
                   <div>
-                    <p className="text-[14px] font-bold text-[#191919]">Order {order.order_number}</p>
-                    <p className="mt-0.5 text-[12.5px] text-[#707070]">Placed {new Date(order.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    <p className="text-[14px] font-bold text-[#0f1c3f]">Order {order.order_number}</p>
+                    <p className="mt-0.5 text-[12.5px] text-[#6b7587]">Placed {new Date(order.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[15px] font-bold text-[#191919]">{money(order.total_amount)}</p>
+                    <p className="text-[15px] font-bold text-[#0f1c3f]">{money(order.total_amount)}</p>
                     <p className="mt-0.5 text-[12px] font-semibold capitalize text-[#3665f3]">{String(order.status).replace(/_/g, " ")}</p>
                   </div>
                 </Link>
@@ -82,7 +82,7 @@ function OrdersContent() {
 
 export default function OrdersPage() {
   return (
-    <Suspense fallback={<main className="page-shell py-16 text-[14px] text-[#707070]">Loading orders…</main>}>
+    <Suspense fallback={<main className="page-shell py-16 text-[14px] text-[#6b7587]">Loading orders…</main>}>
       <OrdersContent />
     </Suspense>
   );

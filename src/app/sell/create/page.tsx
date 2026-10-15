@@ -34,6 +34,17 @@ interface Photo {
   preview: string;
 }
 
+interface Specific {
+  id: number;
+  name: string;
+  slug: string;
+  input_type: string;
+  is_required: boolean;
+  unit?: string | null;
+  help_text?: string | null;
+  options?: { id: number; value: string }[] | null;
+}
+
 function Hint({ children }: { children: ReactNode }) {
   return (
     <p className="mt-1.5 flex items-start gap-1.5 text-[12.5px] leading-snug text-[#8a94a6]">
@@ -60,6 +71,9 @@ export default function CreateListingPage() {
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [colorPhotos, setColorPhotos] = useState<Record<string, File>>({});
+  const [specifics, setSpecifics] = useState<Specific[]>([]);
+  const [specificValues, setSpecificValues] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     category_id: "",
@@ -80,6 +94,8 @@ export default function CreateListingPage() {
     auto_decline_price: "",
     shipping_free: false,
     shipping_cost: "",
+    shipping_additional: "",
+    compare_at: "",
     shipping_international: false,
     shipping_international_cost: "",
     item_location: "",
@@ -93,6 +109,21 @@ export default function CreateListingPage() {
   useEffect(() => {
     loadFormData();
   }, []);
+
+  useEffect(() => {
+    if (!formData.category_id) {
+      setSpecifics([]);
+      setSpecificValues({});
+      return;
+    }
+    fetch(`${apiBase}/api/v1/catalog/categories/${formData.category_id}/specifics`)
+      .then((res) => res.json())
+      .then((body) => {
+        setSpecifics(body.specifics || []);
+        setSpecificValues({});
+      })
+      .catch(() => setSpecifics([]));
+  }, [formData.category_id]);
 
   async function loadFormData() {
     try {
@@ -221,9 +252,12 @@ export default function CreateListingPage() {
           auto_accept_price: formData.auto_accept_price ? parseFloat(formData.auto_accept_price) : null,
           auto_decline_price: formData.auto_decline_price ? parseFloat(formData.auto_decline_price) : null,
           shipping_cost: formData.shipping_cost ? parseFloat(formData.shipping_cost) : null,
+          shipping_additional: formData.shipping_additional ? parseFloat(formData.shipping_additional) : null,
+          compare_at: formData.compare_at ? parseFloat(formData.compare_at) : null,
           shipping_international_cost: formData.shipping_international_cost
             ? parseFloat(formData.shipping_international_cost)
             : null,
+          specifics: specificValues,
           variations: [
             formData.size_options
               ? { name: "Size", options: formData.size_options.split(",").map((s) => s.trim()).filter(Boolean) }
@@ -263,6 +297,31 @@ export default function CreateListingPage() {
         }
       }
 
+      const colorEntries = Object.entries(colorPhotos).filter(([, file]) => file);
+      if (colorEntries.length) {
+        const variation_photos: { name: string; value: string; url: string }[] = [];
+        for (const [value, file] of colorEntries) {
+          const body = new FormData();
+          body.append("photo", file);
+          const res = await fetch(`${apiBase}/api/v1/listings/${listingId}/photos/upload`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.photo?.url) {
+            variation_photos.push({ name: "Color", value, url: data.photo.url });
+          }
+        }
+        if (variation_photos.length) {
+          await fetch(`${apiBase}/api/v1/listings/${listingId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ variation_photos }),
+          });
+        }
+      }
+
       if (formData.publish_immediately) {
         router.push(`/listing/${listingId}`);
       } else {
@@ -284,6 +343,11 @@ export default function CreateListingPage() {
       setError("Fill in category, title, description, and condition first.");
       return false;
     }
+    const missing = specifics.find((item) => item.is_required && !String(specificValues[item.slug] ?? "").trim());
+    if (missing) {
+      setError(`Fill in ${missing.name} for this category.`);
+      return false;
+    }
     setError(null);
     return true;
   }
@@ -297,7 +361,7 @@ export default function CreateListingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f3f6fa] py-8">
+    <div className="min-h-screen bg-[#f4f8fd] py-8">
       <div className="page-shell mx-auto max-w-[920px]">
         {error && (
           <div className="mb-5 rounded-2xl border border-[#f5c2c7] bg-[#fff5f5] px-4 py-3 text-[14px] text-[#e53238]">
@@ -446,6 +510,54 @@ export default function CreateListingPage() {
                 </div>
               </div>
 
+              {specifics.length ? (
+                <div>
+                  <h2 className="mb-3 text-[15px] font-bold text-[#0f1c3f]">Item specifics</h2>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {specifics.map((spec) => (
+                      <label key={spec.id} className="block text-[13.5px] font-semibold text-[#0f1c3f]">
+                        {spec.name}
+                        {spec.is_required ? <span className="text-[#e11d48]"> *</span> : null}
+                        {spec.unit ? <span className="font-normal text-[#8a94a6]"> ({spec.unit})</span> : null}
+                        {spec.input_type === "select" || spec.input_type === "dropdown" ? (
+                          <select
+                            required={spec.is_required}
+                            value={specificValues[spec.slug] ?? ""}
+                            onChange={(e) => setSpecificValues((prev) => ({ ...prev, [spec.slug]: e.target.value }))}
+                            className={`${field} mt-1.5 font-normal`}
+                          >
+                            <option value="">Select</option>
+                            {(spec.options || []).map((opt) => (
+                              <option key={opt.id} value={opt.value}>
+                                {opt.value}
+                              </option>
+                            ))}
+                          </select>
+                        ) : spec.input_type === "boolean" || spec.input_type === "yes_no" ? (
+                          <select
+                            value={specificValues[spec.slug] ?? ""}
+                            onChange={(e) => setSpecificValues((prev) => ({ ...prev, [spec.slug]: e.target.value }))}
+                            className={`${field} mt-1.5 font-normal`}
+                          >
+                            <option value="">Select</option>
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                          </select>
+                        ) : (
+                          <input
+                            required={spec.is_required}
+                            value={specificValues[spec.slug] ?? ""}
+                            onChange={(e) => setSpecificValues((prev) => ({ ...prev, [spec.slug]: e.target.value }))}
+                            className={`${field} mt-1.5 font-normal`}
+                          />
+                        )}
+                        {spec.help_text ? <Hint>{spec.help_text}</Hint> : null}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   type="submit"
@@ -522,6 +634,19 @@ export default function CreateListingPage() {
                     />
                   </div>
                   <div>
+                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Was price (NPR)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.compare_at}
+                      onChange={(e) => updateField("compare_at", e.target.value)}
+                      placeholder="Optional compare-at for Daily Deals"
+                      className={field}
+                    />
+                    <Hint>If this is higher than the sale price, the listing can appear in Today&apos;s Deals.</Hint>
+                  </div>
+                  <div>
                     <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Quantity</label>
                     <input
                       type="number"
@@ -535,27 +660,59 @@ export default function CreateListingPage() {
               )}
 
               {formData.format === "fixed" ? (
-                <div className="grid gap-5 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Sizes (optional)</label>
-                    <input
-                      type="text"
-                      value={formData.size_options}
-                      onChange={(e) => updateField("size_options", e.target.value)}
-                      placeholder="S, M, L, XL"
-                      className={field}
-                    />
+                <div className="space-y-4">
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Sizes (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.size_options}
+                        onChange={(e) => updateField("size_options", e.target.value)}
+                        placeholder="S, M, L, XL"
+                        className={field}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Colors (optional)</label>
+                      <input
+                        type="text"
+                        value={formData.color_options}
+                        onChange={(e) => updateField("color_options", e.target.value)}
+                        placeholder="Black, White"
+                        className={field}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Colors (optional)</label>
-                    <input
-                      type="text"
-                      value={formData.color_options}
-                      onChange={(e) => updateField("color_options", e.target.value)}
-                      placeholder="Black, White"
-                      className={field}
-                    />
-                  </div>
+                  {formData.color_options.split(",").map((s) => s.trim()).filter(Boolean).length ? (
+                    <div>
+                      <p className="mb-2 text-[13.5px] font-semibold text-[#0f1c3f]">Color photos</p>
+                      <Hint>Each color can have its own photo. Buyers see it when they pick that variation.</Hint>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        {formData.color_options.split(",").map((s) => s.trim()).filter(Boolean).map((color) => (
+                          <label key={color} className="rounded-2xl border border-[#e4eaf2] px-3 py-2 text-[13px] font-medium text-[#0f1c3f]">
+                            {color}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="mt-1 block w-full text-[12px] font-normal"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                setColorPhotos((current) => {
+                                  const next = { ...current };
+                                  if (file) next[color] = file;
+                                  else delete next[color];
+                                  return next;
+                                });
+                              }}
+                            />
+                            {colorPhotos[color] ? (
+                              <span className="mt-1 block text-[12px] font-normal text-[#16a34a]">{colorPhotos[color].name}</span>
+                            ) : null}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -640,7 +797,7 @@ export default function CreateListingPage() {
                       <img
                         src={photo.preview}
                         alt={`Photo ${index + 1}`}
-                        className="h-full w-full rounded-lg border-2 border-[#e7e7e7] object-cover"
+                        className="h-full w-full rounded-lg border-2 border-[#e7eef6] object-cover"
                       />
                       <button
                         type="button"
@@ -661,11 +818,11 @@ export default function CreateListingPage() {
 
                   {/* Add Photo Button */}
                   {photos.length < 12 && (
-                    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#e7e7e7] bg-[#f7f7f7] hover:border-[#3665f3] hover:bg-[#eef3ff]">
-                      <svg className="h-8 w-8 text-[#707070]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#e7eef6] bg-[#f4f8fd] hover:border-[#3665f3] hover:bg-[#eef3ff]">
+                      <svg className="h-8 w-8 text-[#6b7587]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
-                      <span className="mt-2 text-sm text-[#707070]">Add Photo</span>
+                      <span className="mt-2 text-sm text-[#6b7587]">Add Photo</span>
                       <input
                         type="file"
                         accept="image/jpeg,image/jpg,image/png,image/webp"
@@ -696,7 +853,7 @@ export default function CreateListingPage() {
                         Remove background from photos (recommended for products)
                       </span>
                     </label>
-                    <p className="mt-1 text-xs text-[#707070]">
+                    <p className="mt-1 text-xs text-[#6b7587]">
                       Automatically removes white backgrounds to make your products stand out.
                       Works best with items photographed on plain backgrounds.
                     </p>
@@ -728,6 +885,19 @@ export default function CreateListingPage() {
                     />
                   </div>
                   <div>
+                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Additional item shipping (NPR)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.shipping_additional}
+                      onChange={(e) => updateField("shipping_additional", e.target.value)}
+                      placeholder="Combined shipping add-on"
+                      className={field}
+                    />
+                    <Hint>Charged for extra items from you in the same cart. Defaults to half the first-item rate.</Hint>
+                  </div>
+                  <div className="md:col-span-2">
                     <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Item location</label>
                     <input
                       type="text"

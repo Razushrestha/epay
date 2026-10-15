@@ -59,7 +59,7 @@ export default function OrderDetailPage() {
     );
   }
   if (!data) {
-    return <main className="page-shell py-16 text-[14px] text-[#707070]">Loading order…</main>;
+    return <main className="page-shell py-16 text-[14px] text-[#6b7587]">Loading order…</main>;
   }
   const order = data.order;
 
@@ -77,16 +77,16 @@ export default function OrderDetailPage() {
         <section className="nexlo-card p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-[19px] font-bold text-[#191919]">Items</h2>
-              <p className="mt-1 text-[13px] text-[#707070]">{order.shipping_name} {order.shipping_address_line1 ? `· ${order.shipping_address_line1}` : ""}</p>
+              <h2 className="text-[19px] font-bold text-[#0f1c3f]">Items</h2>
+              <p className="mt-1 text-[13px] text-[#6b7587]">{order.shipping_name} {order.shipping_address_line1 ? `· ${order.shipping_address_line1}` : ""}</p>
             </div>
             <Link href={`/orders/${order.order_number}/invoice`} className="nexlo-link text-[13px]">VAT invoice →</Link>
           </div>
           <ul className="mt-4 space-y-2">
             {(order.items || []).filter(Boolean).map((item) => (
-              <li key={item.id} className="rounded-xl bg-[#f7f7f7] px-4 py-3 text-[14px] text-[#191919]">
+              <li key={item.id} className="rounded-xl bg-[#f4f8fd] px-4 py-3 text-[14px] text-[#0f1c3f]">
                 {item.title} × {item.quantity} · {money(item.price)}
-                {item.tracking_number ? <span className="mt-1 block text-[12px] text-[#707070]">{item.carrier} {item.tracking_number}</span> : null}
+                {item.tracking_number ? <span className="mt-1 block text-[12px] text-[#6b7587]">{item.carrier} {item.tracking_number}</span> : null}
               </li>
             ))}
           </ul>
@@ -94,8 +94,8 @@ export default function OrderDetailPage() {
 
         {order.status === "pending_payment" ? (
           <section className="nexlo-card p-5 sm:p-6">
-            <h2 className="text-[19px] font-bold text-[#191919]">Pay now</h2>
-            <p className="mt-1 text-[13px] text-[#707070]">Auction and Best Offer winners have 48 hours. Funds are held in escrow until delivery.</p>
+            <h2 className="text-[19px] font-bold text-[#0f1c3f]">Pay now</h2>
+            <p className="mt-1 text-[13px] text-[#6b7587]">Auction and Best Offer winners have 48 hours. Funds are held in escrow until delivery.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {(["esewa", "khalti"] as const).map((gateway) => (
                 <button
@@ -131,11 +131,11 @@ export default function OrderDetailPage() {
               }
             }}
           >
-            <h2 className="text-[19px] font-bold text-[#191919]">Mark shipped</h2>
-            <p className="mt-1 text-[13px] text-[#707070]">Buyer payment stays in escrow until they confirm received.</p>
+            <h2 className="text-[19px] font-bold text-[#0f1c3f]">Mark shipped</h2>
+            <p className="mt-1 text-[13px] text-[#6b7587]">Buyer payment stays in escrow until they confirm received.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} className="h-10 rounded-full border border-[#e7e7e7] px-4 text-[14px]" />
-              <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking number" className="h-10 rounded-full border border-[#e7e7e7] px-4 text-[14px]" />
+              <input value={carrier} onChange={(e) => setCarrier(e.target.value)} className="h-10 rounded-full border border-[#e7eef6] px-4 text-[14px]" />
+              <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking number" className="h-10 rounded-full border border-[#e7eef6] px-4 text-[14px]" />
               <button className="nexlo-btn">Ship</button>
             </div>
           </form>
@@ -143,15 +143,15 @@ export default function OrderDetailPage() {
 
         {["paid", "processing"].includes(order.status) && data.you?.isBuyer && !data.you?.isSeller ? (
           <section className="nexlo-card p-5 sm:p-6">
-            <h2 className="text-[19px] font-bold text-[#191919]">Waiting on the seller</h2>
-            <p className="mt-1 text-[13px] text-[#707070]">Your payment is in escrow. You can confirm received after this order ships.</p>
+            <h2 className="text-[19px] font-bold text-[#0f1c3f]">Waiting on the seller</h2>
+            <p className="mt-1 text-[13px] text-[#6b7587]">Your payment is in escrow. You can confirm received after this order ships.</p>
           </section>
         ) : null}
 
         {order.status === "shipped" && (data.you?.isBuyer || data.you?.isStaff) ? (
           <section className="nexlo-card p-5 sm:p-6">
-            <h2 className="text-[19px] font-bold text-[#191919]">Confirm received</h2>
-            <p className="mt-1 text-[13px] text-[#707070]">This releases escrow to the seller wallet so they can request a payout.</p>
+            <h2 className="text-[19px] font-bold text-[#0f1c3f]">Confirm received</h2>
+            <p className="mt-1 text-[13px] text-[#6b7587]">This releases escrow to the seller wallet so they can request a payout.</p>
             <button
               type="button"
               className="nexlo-btn mt-3"
@@ -172,15 +172,15 @@ export default function OrderDetailPage() {
 
         {order.status === "shipped" && data.you?.isSeller && !data.you?.isBuyer ? (
           <section className="nexlo-card p-5 sm:p-6">
-            <h2 className="text-[19px] font-bold text-[#191919]">In transit</h2>
-            <p className="mt-1 text-[13px] text-[#707070]">Escrow releases when the buyer confirms received.</p>
+            <h2 className="text-[19px] font-bold text-[#0f1c3f]">In transit</h2>
+            <p className="mt-1 text-[13px] text-[#6b7587]">Escrow releases when the buyer confirms received.</p>
           </section>
         ) : null}
 
         {order.status === "completed" && data.escrow?.status === "released" ? (
           <section className="nexlo-card p-5 sm:p-6">
-            <h2 className="text-[19px] font-bold text-[#191919]">Escrow released</h2>
-            <p className="mt-1 text-[13px] text-[#707070]">
+            <h2 className="text-[19px] font-bold text-[#0f1c3f]">Escrow released</h2>
+            <p className="mt-1 text-[13px] text-[#6b7587]">
               {money(data.escrow.net_to_seller ?? data.escrow.amount)} is in the seller wallet and ready for payout.
             </p>
             {data.you?.isSeller ? (
@@ -210,19 +210,19 @@ export default function OrderDetailPage() {
               await load();
             }}
           >
-            <h2 className="text-[19px] font-bold text-[#191919]">Leave feedback</h2>
-            <select value={stars} onChange={(e) => setStars(Number(e.target.value))} className="h-10 rounded-full border border-[#e7e7e7] px-3 text-[14px]">
+            <h2 className="text-[19px] font-bold text-[#0f1c3f]">Leave feedback</h2>
+            <select value={stars} onChange={(e) => setStars(Number(e.target.value))} className="h-10 rounded-full border border-[#e7eef6] px-3 text-[14px]">
               {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} stars</option>)}
             </select>
             <div className="grid gap-2 text-[13px] sm:grid-cols-2">
               {([["item", "Item as described"], ["comms", "Communication"], ["ship", "Shipping time"], ["cost", "Shipping cost"]] as const).map(([key, label]) => (
-                <label key={key} className="flex items-center justify-between gap-2 rounded-xl bg-[#f7f7f7] px-3 py-2">
+                <label key={key} className="flex items-center justify-between gap-2 rounded-xl bg-[#f4f8fd] px-3 py-2">
                   {label}
-                  <input type="number" min={1} max={5} value={dsr[key]} onChange={(e) => setDsr({ ...dsr, [key]: Number(e.target.value) })} className="w-14 rounded border border-[#e7e7e7] px-2" />
+                  <input type="number" min={1} max={5} value={dsr[key]} onChange={(e) => setDsr({ ...dsr, [key]: Number(e.target.value) })} className="w-14 rounded border border-[#e7eef6] px-2" />
                 </label>
               ))}
             </div>
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} className="min-h-20 w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[14px]" placeholder="How did it go?" />
+            <textarea value={comment} onChange={(e) => setComment(e.target.value)} className="min-h-20 w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[14px]" placeholder="How did it go?" />
             <button className="nexlo-btn nexlo-btn-blue">Save feedback</button>
           </form>
         ) : null}
@@ -242,19 +242,19 @@ export default function OrderDetailPage() {
                   resolution: "refund",
                 }),
               });
-              window.location.href = "/account?tab=returns";
+              window.location.href = "/resolution";
             }}
           >
-            <h2 className="text-[19px] font-bold text-[#191919]">Request a return</h2>
-            <p className="text-[13px] text-[#707070]">Not as described, damaged, or wrong item. Escrow stays frozen until the case is closed.</p>
-            <select name="reason" className="h-10 rounded-full border border-[#e7e7e7] px-3 text-[14px]">
+            <h2 className="text-[19px] font-bold text-[#0f1c3f]">Request a return</h2>
+            <p className="text-[13px] text-[#6b7587]">Not as described, damaged, or wrong item. Escrow stays frozen until the case is closed.</p>
+            <select name="reason" className="h-10 rounded-full border border-[#e7eef6] px-3 text-[14px]">
               <option value="not_as_described">Item not as described</option>
               <option value="damaged">Damaged</option>
               <option value="wrong_item">Wrong item</option>
               <option value="changed_mind">Changed mind</option>
               <option value="other">Other / not received</option>
             </select>
-            <textarea name="detail" className="min-h-20 w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[14px]" placeholder="What happened?" />
+            <textarea name="detail" className="min-h-20 w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[14px]" placeholder="What happened?" />
             <button className="h-10 rounded-full border border-[#3665f3] px-5 text-[13.5px] font-semibold text-[#3665f3]">Open return</button>
           </form>
         ) : null}
@@ -262,7 +262,7 @@ export default function OrderDetailPage() {
         {["pending_payment", "paid", "processing"].includes(order.status) ? (
           <button
             type="button"
-            className="h-10 rounded-full border border-[#e7e7e7] px-5 text-[13.5px] font-semibold text-[#191919]"
+            className="h-10 rounded-full border border-[#e7eef6] px-5 text-[13.5px] font-semibold text-[#0f1c3f]"
             onClick={async () => {
               await accountApi(`/api/v1/orders/${order.id}/cancel`, { method: "POST", body: JSON.stringify({ reason: "Cancelled by user" }) });
               await load();
@@ -273,8 +273,8 @@ export default function OrderDetailPage() {
         ) : null}
 
         <section className="nexlo-card p-5 sm:p-6">
-          <h2 className="text-[19px] font-bold text-[#191919]">History</h2>
-          <ul className="mt-3 space-y-2 text-[13px] text-[#707070]">
+          <h2 className="text-[19px] font-bold text-[#0f1c3f]">History</h2>
+          <ul className="mt-3 space-y-2 text-[13px] text-[#6b7587]">
             {data.history.map((h, i) => (
               <li key={i}>{h.status_to.replace(/_/g, " ")} · {h.notes} · {new Date(h.created_at).toLocaleString()}</li>
             ))}

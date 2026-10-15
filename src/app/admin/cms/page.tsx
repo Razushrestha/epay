@@ -73,7 +73,7 @@ export default function AdminCmsPage() {
         <h2 className="text-[16px] font-extrabold">Site settings</h2>
         <ul className="mt-3 space-y-1 text-[13px]">
           {settings.map((s) => (
-            <li key={s.key} className="flex justify-between gap-3 rounded-xl bg-[#f7f7f7] px-3 py-2">
+            <li key={s.key} className="flex justify-between gap-3 rounded-xl bg-[#f4f8fd] px-3 py-2">
               <span>{s.key}</span>
               <span className="font-mono text-[#3665f3]">{JSON.stringify(s.value)}</span>
             </li>

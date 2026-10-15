@@ -269,7 +269,7 @@ export default function CatalogAdminPage() {
               key={id}
               onClick={() => setView(id)}
               className={`h-9 rounded-full px-4 text-[13px] font-semibold capitalize ${
-                view === id ? "bg-[#0f1c3f] text-white" : "border border-[#e7e7e7] text-[#191919] hover:bg-[#f7f7f7]"
+                view === id ? "bg-[#0f1c3f] text-white" : "border border-[#e7eef6] text-[#0f1c3f] hover:bg-[#f4f8fd]"
               }`}
             >
               {id}
@@ -295,7 +295,7 @@ export default function CatalogAdminPage() {
                 <h3 className="mb-4 text-lg font-semibold">New Category</h3>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Name *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Name *</label>
                     <input
                       type="text"
                       required
@@ -307,21 +307,21 @@ export default function CatalogAdminPage() {
                           slug: generateSlug(e.target.value),
                         });
                       }}
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Slug *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Slug *</label>
                     <input
                       type="text"
                       required
                       value={categoryForm.slug}
                       onChange={(e) => setCategoryForm({ ...categoryForm, slug: e.target.value })}
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Parent Category</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Parent Category</label>
                     <select
                       value={categoryForm.parent_id || ""}
                       onChange={(e) =>
@@ -331,7 +331,7 @@ export default function CatalogAdminPage() {
                           level: e.target.value ? 2 : 1,
                         })
                       }
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                     >
                       <option value="">None (Root Category)</option>
                       {categories
@@ -344,21 +344,21 @@ export default function CatalogAdminPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Icon (emoji)</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Icon (emoji)</label>
                     <input
                       type="text"
                       value={categoryForm.icon}
                       onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                       placeholder="⚡"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Description</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Description</label>
                     <textarea
                       value={categoryForm.description}
                       onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                       rows={2}
                     />
                   </div>
@@ -397,7 +397,7 @@ export default function CatalogAdminPage() {
             ) : (
               <div className="nexlo-card overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-[#f7f7f7]">
+                  <thead className="bg-[#f4f8fd]">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                         Category
@@ -483,7 +483,7 @@ export default function CatalogAdminPage() {
                 <h3 className="mb-4 text-lg font-semibold">New Brand</h3>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Name *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Name *</label>
                     <input
                       type="text"
                       required
@@ -491,43 +491,43 @@ export default function CatalogAdminPage() {
                       onChange={(e) =>
                         setBrandForm({ ...brandForm, name: e.target.value, slug: generateSlug(e.target.value) })
                       }
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Slug *</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Slug *</label>
                     <input
                       type="text"
                       required
                       value={brandForm.slug}
                       onChange={(e) => setBrandForm({ ...brandForm, slug: e.target.value })}
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Logo URL</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Logo URL</label>
                     <input
                       type="url"
                       value={brandForm.logo_url}
                       onChange={(e) => setBrandForm({ ...brandForm, logo_url: e.target.value })}
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Website</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Website</label>
                     <input
                       type="url"
                       value={brandForm.website}
                       onChange={(e) => setBrandForm({ ...brandForm, website: e.target.value })}
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-[#191919]">Description</label>
+                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Description</label>
                     <textarea
                       value={brandForm.description}
                       onChange={(e) => setBrandForm({ ...brandForm, description: e.target.value })}
-                      className="w-full rounded border border-[#e7e7e7] px-3 py-2"
+                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
                       rows={2}
                     />
                   </div>

@@ -28,14 +28,14 @@ export function BrowsePage({
         href="/search"
       />
       <main className="page-shell py-5">
-        <p className="text-[12px] text-[#707070]">
+        <p className="text-[12px] text-[#6b7587]">
           <Link href="/" className="hover:underline">Home</Link>
           <span className="mx-1.5">›</span>
-          <span className="text-[#191919]">{crumb}</span>
+          <span className="text-[#0f1c3f]">{crumb}</span>
         </p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-[13px] text-[#707070]">{items.length.toLocaleString()} listings</p>
+            <p className="text-[13px] text-[#6b7587]">{items.length.toLocaleString()} listings</p>
           </div>
           <label className="flex items-center gap-2 text-[12.5px] text-[#333]">
             Sort
@@ -48,8 +48,8 @@ export function BrowsePage({
         </div>
 
         <div className="mt-5 grid gap-6 lg:grid-cols-[220px_1fr]">
-          <aside className="h-fit rounded-xl border border-[#e7e7e7] bg-white p-4 text-[13px]">
-            <p className="font-bold text-[#191919]">Format</p>
+          <aside className="nexlo-card h-fit p-4 text-[13px]">
+            <p className="font-bold text-[#0f1c3f]">Format</p>
             <ul className="mt-2 space-y-1.5 text-[#333]">
               {formats.map((f) => (
                 <li key={f}>
@@ -60,7 +60,7 @@ export function BrowsePage({
                 </li>
               ))}
             </ul>
-            <p className="mt-5 font-bold text-[#191919]">Condition</p>
+            <p className="mt-5 font-bold text-[#0f1c3f]">Condition</p>
             <ul className="mt-2 space-y-1.5 text-[#333]">
               {["New", "Used", "Refurbished"].map((c) => (
                 <li key={c}>
@@ -71,7 +71,7 @@ export function BrowsePage({
                 </li>
               ))}
             </ul>
-            <p className="mt-5 font-bold text-[#191919]">Price (NPR)</p>
+            <p className="mt-5 font-bold text-[#0f1c3f]">Price (NPR)</p>
             <div className="mt-2 flex gap-2">
               <input placeholder="Min" className="w-full rounded-lg border border-[#ddd] px-2 py-1.5 text-[12px] outline-none" />
               <input placeholder="Max" className="w-full rounded-lg border border-[#ddd] px-2 py-1.5 text-[12px] outline-none" />

@@ -9,7 +9,7 @@ export default function TermsPage() {
         title="Terms of service"
         body="The rules for buying, bidding, and selling on Nexlo, including escrow, fees, and returns."
         cta="Buyer protection"
-        href="/help/buyer-protection"
+        href="/buyer-protection"
       />
       <main className="page-shell py-8">
         <article className="nexlo-card max-w-3xl space-y-4 p-6 text-[14px] leading-relaxed text-[#333] sm:p-8">

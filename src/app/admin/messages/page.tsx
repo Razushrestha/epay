@@ -49,7 +49,7 @@ export default function AdminMessagesPage() {
               </span>
             </div>
             <p className="mt-3 text-[14px] text-[#0f1c3f]">{row.question}</p>
-            {row.answer ? <p className="mt-2 rounded-xl bg-[#f7f7f7] px-3 py-2 text-[13.5px] text-[#3a4a66]">{row.answer}</p> : (
+            {row.answer ? <p className="mt-2 rounded-xl bg-[#f4f8fd] px-3 py-2 text-[13.5px] text-[#3a4a66]">{row.answer}</p> : (
               <form
                 className="mt-3 flex gap-2"
                 onSubmit={async (e) => {

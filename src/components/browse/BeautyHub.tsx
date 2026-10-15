@@ -33,7 +33,7 @@ export function BeautyHub() {
       <div className="grid items-stretch gap-6 lg:grid-cols-[1.05fr_1.15fr]">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
           <div>
-            <h2 className="border-b border-[#e6e6e6] pb-2 text-[15px] font-bold text-[#191919]">
+            <h2 className="border-b border-[#e6e6e6] pb-2 text-[15px] font-bold text-[#0f1c3f]">
               Most popular categories
             </h2>
             <ul className="mt-3 space-y-3">
@@ -47,7 +47,7 @@ export function BeautyHub() {
             </ul>
           </div>
           <div>
-            <h2 className="border-b border-[#e6e6e6] pb-2 text-[15px] font-bold text-[#191919]">
+            <h2 className="border-b border-[#e6e6e6] pb-2 text-[15px] font-bold text-[#0f1c3f]">
               More categories
             </h2>
             <ul className="mt-3 space-y-3">

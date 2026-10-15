@@ -1,4 +1,4 @@
-import { closeExpiredAuctions, expireUnpaidWinners } from "./auctions.mjs";
+import { closeExpiredAuctions, expireSecondChanceOffers, expireUnpaidWinners } from "./auctions.mjs";
 import { expireOffers } from "./offers.mjs";
 import { autoCompleteOrders } from "./fulfillment.mjs";
 import { escalateSilentCases } from "./returns.mjs";
@@ -103,6 +103,7 @@ async function tick() {
   try {
     await closeExpiredAuctions();
     await expireUnpaidWinners();
+    await expireSecondChanceOffers();
     await expireOffers();
     await autoCompleteOrders();
     await escalateSilentCases();

@@ -6,7 +6,7 @@ export function CategoryGrid() {
   return (
     <section className="page-shell pt-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-[22px] font-bold tracking-tight text-[#1a2744]">
+        <h2 className="text-[22px] font-extrabold tracking-tight text-[#0f1c3f]">
           Shop by category
         </h2>
         <Link

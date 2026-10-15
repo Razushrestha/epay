@@ -87,7 +87,7 @@ export default function AdminProductsPage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={row.thumbnail_url || row.photo_url || ""} alt="" className="h-10 w-10 rounded-lg object-cover" />
                       ) : (
-                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#f7f7f7] text-[#8a94a6]">▢</span>
+                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#f4f8fd] text-[#8a94a6]">▢</span>
                       )}
                       <span>
                         <span className="block font-semibold text-[#0f1c3f]">{row.title}</span>

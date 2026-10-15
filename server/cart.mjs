@@ -6,6 +6,7 @@
 import { query } from './db.mjs';
 import { randomBytes } from 'node:crypto';
 import { taxAmount, vatRateForCategory, shippingRateForSeller } from './commerce-rules.mjs';
+import { combinedShippingForSeller } from './m2-listings.mjs';
 
 /**
  * Main cart & checkout router
@@ -208,6 +209,7 @@ async function getCart(userId, sessionId) {
       l.quantity as stock,
       l.shipping_free,
       l.shipping_cost,
+      l.shipping_additional,
       u.username as seller_username,
       v.id as variation_sku_id,
       v.combination as variation_combo,
@@ -252,18 +254,13 @@ async function getCart(userId, sessionId) {
       price_changed: item.price_snapshot !== item.current_price,
       stock: item.stock,
       in_stock: item.stock >= item.quantity,
-      subtotal: itemTotal
+      subtotal: itemTotal,
+      shipping_free: item.shipping_free,
+      shipping_cost: item.shipping_cost,
+      shipping_additional: item.shipping_additional,
     });
 
     sellers[item.seller_id].subtotal += itemTotal;
-    
-    // Calculate shipping (take highest if multiple items from same seller)
-    if (!item.shipping_free && item.shipping_cost) {
-      sellers[item.seller_id].shipping_cost = Math.max(
-        sellers[item.seller_id].shipping_cost,
-        parseFloat(item.shipping_cost)
-      );
-    }
 
     totalItems += item.quantity;
     subtotal += itemTotal;
@@ -271,7 +268,11 @@ async function getCart(userId, sessionId) {
 
   const sellersArray = Object.values(sellers);
   for (const seller of sellersArray) {
-    seller.shipping_cost = await shippingRateForSeller(seller.seller_id, seller.subtotal, seller.shipping_cost);
+    const combined = combinedShippingForSeller(seller.items);
+    const rate = await shippingRateForSeller(seller.seller_id, seller.subtotal, combined.shipping_cost);
+    seller.shipping_cost = combined.combined ? combined.shipping_cost : rate;
+    seller.combined_shipping = combined.combined;
+    seller.shipping_note = combined.note;
   }
   const totalShipping = sellersArray.reduce((sum, s) => sum + s.shipping_cost, 0);
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { WATCH_EVENT, loadWatchIds, toggleWatch } from "@/lib/commerce";
+import { WatchlistIcon } from "@/components/commerce/WatchlistIcon";
 
 export function SaveButton({
   listingId,
@@ -47,9 +48,9 @@ export function SaveButton({
           setSaved(!next);
         }
       }}
-      className={`flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[16px] shadow-sm ${saved ? "text-[#e53238]" : "text-[#333]"} ${className}`}
+      className={`flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-sm ${saved ? "text-[#e53238]" : "text-[#0f1c3f]"} ${className}`}
     >
-      {saved ? "♥" : "♡"}
+      <WatchlistIcon saved={saved} size={16} />
     </button>
   );
 }

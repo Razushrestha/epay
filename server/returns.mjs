@@ -50,7 +50,7 @@ async function openCaseFromReturn(ret, type = "return") {
     [ret.order_id, ret.id, ret.buyer_id, ret.seller_id, type, ret.amount],
   );
   await freezeEscrow(ret.order_id);
-  await notify(ret.seller_id, "case", "Return / case opened", `Order ${ret.order_number || ret.order_id} needs a response within 3 days.`, "/account?tab=selling");
+    await notify(ret.seller_id, "case", "Return / case opened", `Order ${ret.order_number || ret.order_id} needs a response within 3 days.`, "/resolution");
   return inserted.rows[0];
 }
 
@@ -62,8 +62,8 @@ export async function escalateSilentCases() {
   );
   for (const row of silent.rows) {
     await query(`UPDATE returns SET status = 'escalated' WHERE order_id = $1 AND status IN ('requested','seller_declined')`, [row.order_id]);
-    await notify(row.buyer_id, "case", "Case escalated", "The seller did not respond in time. Nexlo staff will review.", "/account?tab=returns");
-    await notify(row.seller_id, "case", "Case escalated", "You missed the response window. Staff will decide.", "/account?tab=selling");
+    await notify(row.buyer_id, "case", "Case escalated", "The seller did not respond in time. Nexlo staff will review.", "/resolution");
+    await notify(row.seller_id, "case", "Case escalated", "You missed the response window. Staff will decide.", "/resolution");
   }
 }
 
@@ -154,12 +154,12 @@ export async function handleReturns(method, pathParts, auth, body) {
         `INSERT INTO return_shipments (return_id, carrier, tracking_number, label_code) VALUES ($1,'Nexlo Returns',$2,$2)`,
         [row.id, code],
       );
-      await notify(row.buyer_id, "return", "Return approved", `Use label ${code} to ship the item back.`, `/account?tab=returns`);
+      await notify(row.buyer_id, "return", "Return approved", `Use label ${code} to ship the item back.`, `/resolution`);
       return { status: 200, body: { data: { approved: true, labelCode: code } } };
     }
     await query(`UPDATE returns SET status = 'seller_declined', decided_at = NOW() WHERE id = $1`, [row.id]);
     await query(`UPDATE cases SET status = 'escalated', escalated_at = NOW() WHERE return_id = $1`, [row.id]);
-    await notify(row.buyer_id, "return", "Return declined", "The seller declined. This case was sent to Nexlo staff.", "/account?tab=returns");
+    await notify(row.buyer_id, "return", "Return declined", "The seller declined. This case was sent to Nexlo staff.", "/resolution");
     return { status: 200, body: { data: { approved: false, escalated: true } } };
   }
 
@@ -242,7 +242,7 @@ export async function handleReturns(method, pathParts, auth, body) {
       await query(`UPDATE cases SET status = 'awaiting_buyer' WHERE id = $1`, [row.id]);
     }
     const other = Number(row.buyer_id) === Number(auth.user_id) ? row.seller_id : row.buyer_id;
-    await notify(other, "case", "Case update", text.slice(0, 120), "/account?tab=returns");
+    await notify(other, "case", "Case update", text.slice(0, 120), "/resolution");
     return { status: 201, body: { data: { saved: true } } };
   }
 
@@ -281,7 +281,7 @@ export async function handleReturns(method, pathParts, auth, body) {
     }
     await query(`UPDATE cases SET status = 'resolved', closed_at = NOW() WHERE id = $1`, [row.id]);
     await audit(auth, "case.decide", "case", row.id, { outcome, amount });
-    await notify(row.buyer_id, "case", "Case decided", `Outcome: ${outcome.replace(/_/g, " ")}`, "/account?tab=returns");
+    await notify(row.buyer_id, "case", "Case decided", `Outcome: ${outcome.replace(/_/g, " ")}`, "/resolution");
     await notify(row.seller_id, "case", "Case decided", `Outcome: ${outcome.replace(/_/g, " ")}`, "/account?tab=selling");
     return { status: 200, body: { data: { outcome, amount } } };
   }

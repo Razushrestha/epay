@@ -43,7 +43,7 @@ export function SellerWallet() {
           ["In escrow", money(data.wallet?.pending_balance ?? 0)],
           ["Lifetime", money(data.wallet?.lifetime_earnings ?? 0)],
         ].map(([labelText, value]) => (
-          <div key={labelText} className="rounded-2xl bg-[#f7f7f7] p-4">
+          <div key={labelText} className="rounded-2xl bg-[#f4f8fd] p-4">
             <p className="text-[12px] text-[#7a8496]">{labelText}</p>
             <p className="mt-1 text-[18px] font-extrabold text-[#0f1c3f]">{value}</p>
           </div>

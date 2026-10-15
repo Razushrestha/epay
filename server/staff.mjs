@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "./passwords.mjs";
 import { pool, initDb } from "./db.mjs";
+import { cdnOrigin, storageOrigin } from "./cdn.mjs";
 
 const API = "/api/v1";
 
@@ -363,6 +364,33 @@ export async function handleStaffExtras(req, res, ctx, actor) {
       ],
     );
     return json(req, res, 200, { data: { saved: true } });
+  }
+
+  if (pathname === `${API}/admin/uat` && method === "GET") {
+    const [listings, orders, returns, cases, tickets] = await Promise.all([
+      safe(`SELECT COUNT(*)::int AS c FROM listings WHERE status = 'active' AND moderation_status = 'approved'`),
+      safe(`SELECT COUNT(*)::int AS c FROM orders`),
+      safe(`SELECT COUNT(*)::int AS c FROM returns`),
+      safe(`SELECT COUNT(*)::int AS c FROM cases`),
+      safe(`SELECT COUNT(*)::int AS c FROM support_tickets`),
+    ]);
+    return json(req, res, 200, {
+      goLive: {
+        cdnConfigured: Boolean(cdnOrigin()),
+        storageConfigured: Boolean(storageOrigin()),
+        apiP95TargetMs: 300,
+        searchP95TargetMs: 400,
+      },
+      counts: {
+        activeListings: n(listings.rows[0]?.c),
+        orders: n(orders.rows[0]?.c),
+        returns: n(returns.rows[0]?.c),
+        cases: n(cases.rows[0]?.c),
+        tickets: n(tickets.rows[0]?.c),
+      },
+      commands: { load: "npm run test:load", uat: "npm run test:uat" },
+      outOfFee: ["prepaid return labels", "Authenticity Guarantee", "VeRO", "Terapeak"],
+    });
   }
 
   if (pathname === `${API}/admin/users` && method === "POST") {

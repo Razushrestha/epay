@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CART_EVENT, WATCH_EVENT, cartCount, watchCount } from "@/lib/commerce";
+import { WatchlistIcon } from "@/components/commerce/WatchlistIcon";
 
 function Badge({ count }: { count: number }) {
   if (!count) return null;
@@ -52,10 +53,8 @@ export function HeaderIcons() {
 
   return (
     <>
-      <Link href="/watchlist" aria-label="Watchlist" className="relative text-[#333] hover:text-[#3665f3]">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill={watch ? "#e53238" : "none"} stroke="currentColor" strokeWidth="1.7">
-          <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z" />
-        </svg>
+      <Link href="/watchlist" aria-label="Watchlist" className={`relative hover:text-[#3665f3] ${watch ? "text-[#e53238]" : "text-[#0f1c3f]"}`}>
+        <WatchlistIcon saved={watch > 0} size={22} />
         <Badge count={watch} />
       </Link>
       <Link href="/cart" aria-label="Cart" className="relative text-[#333] hover:text-[#3665f3]">

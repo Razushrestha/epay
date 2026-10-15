@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { accountApi } from "@/lib/account-api";
 
 type Thread = {
@@ -8,30 +10,36 @@ type Thread = {
   subject: string | null;
   counterpart_name: string | null;
   counterpart_email: string | null;
+  counterpart_username?: string | null;
   last_message: string | null;
   last_message_at: string;
   unread: number;
   listing_id: number | null;
+  listing_title?: string | null;
 };
 
 type Msg = { id: number; sender_id: number; body: string; created_at: string; read_at: string | null };
 
 export function MessagesInbox() {
+  const searchParams = useSearchParams();
   const [threads, setThreads] = useState<Thread[]>([]);
-  const [active, setActive] = useState<number | null>(null);
+  const [active, setActive] = useState<number | null>(Number(searchParams.get("thread")) || null);
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [youId, setYouId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function loadThreads() {
     const body = await accountApi<{ data: Thread[] }>("/api/v1/conversations");
     setThreads(body.data);
-    if (!active && body.data[0]) setActive(body.data[0].id);
+    const wanted = Number(searchParams.get("thread")) || active || body.data[0]?.id || null;
+    if (wanted) setActive(wanted);
   }
 
   async function loadMessages(id: number) {
-    const body = await accountApi<{ messages: Msg[] }>(`/api/v1/conversations/${id}/messages`);
+    const body = await accountApi<{ messages: Msg[]; youId?: number }>(`/api/v1/conversations/${id}/messages`);
     setMessages(body.messages);
+    if (body.youId) setYouId(Number(body.youId));
   }
 
   useEffect(() => {
@@ -56,11 +64,11 @@ export function MessagesInbox() {
     <section className="overflow-hidden nexlo-card">
       <div className="border-b border-[#eef2f7] px-6 py-5">
         <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Messages</h1>
-        <p className="mt-1 text-[14px] text-[#6b7587]">Buyer and seller conversations stay in one inbox.</p>
+        <p className="mt-1 text-[14px] text-[#6b7587]">Member-to-member conversations, including listing questions sent privately.</p>
       </div>
       {error ? <p className="px-6 py-3 text-[13px] text-red-700">{error}</p> : null}
       {threads.length === 0 ? (
-        <p className="px-6 py-12 text-center text-[14px] text-[#6b7587]">No conversations yet. Message a seller from a listing.</p>
+        <p className="px-6 py-12 text-center text-[14px] text-[#6b7587]">No conversations yet. Message a member from a listing or seller page.</p>
       ) : (
         <div className="grid min-h-[420px] lg:grid-cols-[280px_minmax(0,1fr)]">
           <ul className="border-r border-[#eef2f7]">
@@ -72,7 +80,7 @@ export function MessagesInbox() {
                   className={`w-full border-b border-[#f3f6fa] px-4 py-3 text-left ${active === t.id ? "bg-[#eaf1ff]" : "hover:bg-[#f7faff]"}`}
                 >
                   <p className="flex items-center justify-between text-[13px] font-semibold text-[#0f1c3f]">
-                    <span>{t.counterpart_name || t.counterpart_email || "Member"}</span>
+                    <span>{t.counterpart_name || t.counterpart_username || t.counterpart_email || "Member"}</span>
                     {t.unread > 0 ? <span className="rounded-full bg-[#3665f3] px-1.5 text-[10px] text-white">{t.unread}</span> : null}
                   </p>
                   <p className="mt-1 line-clamp-1 text-[12px] text-[#6b7587]">{t.last_message || t.subject || "No messages"}</p>
@@ -81,16 +89,31 @@ export function MessagesInbox() {
             ))}
           </ul>
           <div className="flex flex-col">
-            <div className="border-b border-[#eef2f7] px-4 py-3 text-[14px] font-semibold text-[#0f1c3f]">
-              {current?.counterpart_name || current?.counterpart_email || "Conversation"}
+            <div className="border-b border-[#eef2f7] px-4 py-3">
+              <p className="text-[14px] font-semibold text-[#0f1c3f]">
+                {current?.counterpart_name || current?.counterpart_username || current?.counterpart_email || "Conversation"}
+              </p>
+              {current?.listing_id ? (
+                <Link href={`/listing/${current.listing_id}`} className="text-[12px] text-[#3665f3] hover:underline">
+                  {current.listing_title || `Listing #${current.listing_id}`}
+                </Link>
+              ) : null}
             </div>
             <div className="flex-1 space-y-2 overflow-auto p-4">
-              {messages.map((m) => (
-                <div key={m.id} className="rounded-xl bg-[#f7f7f7] px-3 py-2 text-[13px] text-[#0f1c3f]">
-                  <p>{m.body}</p>
-                  <p className="mt-1 text-[11px] text-[#8a94a6]">{new Date(m.created_at).toLocaleString()}</p>
-                </div>
-              ))}
+              {messages.map((m) => {
+                const mine = youId != null && Number(m.sender_id) === youId;
+                return (
+                  <div
+                    key={m.id}
+                    className={`max-w-[85%] rounded-xl px-3 py-2 text-[13px] ${mine ? "ml-auto bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#0f1c3f]"}`}
+                  >
+                    <p>{m.body}</p>
+                    <p className={`mt-1 text-[11px] ${mine ? "text-white/70" : "text-[#8a94a6]"}`}>
+                      {new Date(m.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
             <form
               className="flex gap-2 border-t border-[#eef2f7] p-3"

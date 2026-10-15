@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { accountApi } from "@/lib/account-api";
 
@@ -23,7 +24,7 @@ export function TicketsBoard() {
     <section className="space-y-4">
       <div>
         <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Support</h1>
-        <p className="mt-1 text-[14px] text-[#6b7587]">Open a ticket for orders, payouts, or account issues. Staff reply from the admin desk.</p>
+        <p className="mt-1 text-[14px] text-[#6b7587]">Open a ticket for orders, payouts, or account issues. Returns and cases live in the <Link href="/resolution" className="font-semibold text-[#3665f3]">Resolution Center</Link>.</p>
       </div>
       {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
       {notice ? <p className="rounded-xl bg-[#eaf1ff] px-4 py-3 text-[13px] text-[#2a4fa8]">{notice}</p> : null}

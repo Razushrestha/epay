@@ -196,7 +196,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
         <section className="nexlo-card px-5 py-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Feedback Profile</h2>
-            <button type="button" aria-label="Profile options" onClick={() => setProfileOpen((v) => !v)} className="rounded-full p-1 text-[#8a94a6] hover:bg-[#f7f7f7]">
+            <button type="button" aria-label="Profile options" onClick={() => setProfileOpen((v) => !v)} className="rounded-full p-1 text-[#8a94a6] hover:bg-[#f4f8fd]">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={profileOpen ? "rotate-180" : ""}>
                 <path d="m6 9 6 6 6-6" />
               </svg>
@@ -222,7 +222,7 @@ export function FeedbackBoard({ user }: { user: FeedbackUser }) {
             </div>
           </div>
           {profileOpen ? (
-            <p className="mt-3 rounded-xl bg-[#f7f7f7] px-3 py-2 text-[13px] text-[#5b6780]">
+            <p className="mt-3 rounded-xl bg-[#f4f8fd] px-3 py-2 text-[13px] text-[#5b6780]">
               This is how other members see your public feedback profile.
             </p>
           ) : null}

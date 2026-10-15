@@ -13,7 +13,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test server/*.test.mjs",
-    "test:load": "node scripts/load-smoke.mjs"
+    "test:load": "node scripts/load-test.mjs",
+    "test:uat": "node scripts/uat.mjs"
   },
   "engines": {
     "node": ">=18.18.0"

@@ -84,7 +84,7 @@ export function CategoryMenu() {
                       <Link
                         href={categorySearchHref(group.id)}
                         onClick={() => setOpen(false)}
-                        className="text-[14px] font-bold text-[#191919] hover:underline"
+                        className="text-[14px] font-bold text-[#0f1c3f] hover:underline"
                       >
                         {group.name}
                       </Link>
@@ -110,7 +110,7 @@ export function CategoryMenu() {
                 </div>
               ))
             ) : (
-              <p className="col-span-3 text-[13px] text-[#707070]">Loading categories…</p>
+              <p className="col-span-3 text-[13px] text-[#6b7587]">Loading categories…</p>
             )}
           </div>
         </div>

@@ -25,7 +25,7 @@ const slides = [
     title: "Shop with confidence, every order",
     body: "Escrow payments, easy returns and 24/7 support across Nepal.",
     cta: "How it works",
-    href: "/help/buyer-protection",
+    href: "/buyer-protection",
   },
 ];
 
@@ -36,20 +36,22 @@ export function HeroSection() {
 
   return (
     <section className="page-shell pt-3">
-      <div className="hero-bg relative min-h-[300px] overflow-hidden rounded-[16px] lg:min-h-[340px]">
+      <div className="hero-bg relative min-h-[300px] overflow-hidden rounded-[20px] lg:min-h-[340px]">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/35" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-20 left-[38%] h-40 w-40 rounded-full bg-[#08c4a6]/15" />
         <div className="relative z-10 max-w-[520px] px-6 py-8 sm:px-10 lg:py-9">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f1c3f]">
+            <p className="nexlo-kicker">
               {slide.eyebrow}
             </p>
-            <h1 className="mt-2 text-[32px] font-bold leading-[1.08] tracking-tight text-[#0f1c3f] sm:text-[40px]">
+            <h1 className="mt-2 text-[32px] font-extrabold leading-[1.08] tracking-tight text-[#0f1c3f] sm:text-[40px]">
               {slide.title}
             </h1>
-            <p className="mt-3 text-[14px] leading-relaxed text-[#333]">
+            <p className="mt-3 text-[14px] leading-relaxed text-[#4b5563]">
               {slide.body}
             </p>
             <Link
               href={slide.cta ? slide.href : "#"}
-              className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#0f1c3f] px-5 py-2.5 text-[13.5px] font-semibold text-white hover:bg-[#1d2f63]"
+              className="nexlo-btn nexlo-btn-blue relative mt-4"
             >
               {slide.cta}
               <span aria-hidden>→</span>

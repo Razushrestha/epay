@@ -14,8 +14,19 @@ import { pool, initDb } from "./db.mjs";
 import { rateLimit, RateLimitConfig, clearRateLimit } from "./security/rate-limit.mjs";
 import { deliverCode, maskDestination } from "./mail.mjs";
 import { handleStaffExtras } from "./staff.mjs";
+import { cdnify } from "./cdn.mjs";
 import { evaluateUser, recordDevice } from "./trust.mjs";
 import { clearAvatar, uploadAvatar } from "./upload.mjs";
+import {
+  ensureM1Tables,
+  handleM1Account,
+  handleM1Public,
+  listConsents,
+  recordConsents,
+  signedKycFiles,
+  verifyAppleIdToken,
+  verifyFacebookToken,
+} from "./m1-identity.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
@@ -180,7 +191,7 @@ function publicUser(user, score, kyc) {
     lastName: blankToNull(user.last_name),
     country: user.country,
     bio: user.bio,
-    avatarUrl: user.avatar_url || null,
+    avatarUrl: cdnify(user.avatar_url) || null,
     buyerOnly: user.buyer_only,
     business: user.legal_name
       ? {
@@ -206,12 +217,18 @@ function publicUser(user, score, kyc) {
 }
 
 async function loadPublic(user) {
-  const [score, kyc, social] = await Promise.all([
+  const [score, kyc, social, consents] = await Promise.all([
     feedbackFor(user.id),
     latestKyc(user.id),
     (await db()).query(`SELECT provider FROM social_accounts WHERE user_id = $1`, [user.id]),
+    listConsents(user.id).catch(() => null),
   ]);
-  return { ...publicUser(user, score, kyc), social: social.rows.map((row) => row.provider) };
+  return {
+    ...publicUser(user, score, kyc),
+    social: social.rows.map((row) => row.provider),
+    consents: consents?.currentAccepted ?? null,
+    policyVersions: consents?.current ?? null,
+  };
 }
 
 function deliveryFields(delivery, code) {
@@ -226,12 +243,22 @@ function deliveryFields(delivery, code) {
 
 async function issueCode(user, purpose, destination, channel) {
   const code = String(randomInt(100000, 1000000));
-  await (await db()).query(
+  const pool = await db();
+  await pool.query(
+    `UPDATE verification_codes
+     SET expires_at = NOW()
+     WHERE user_id = $1 AND purpose = $2 AND verified_at IS NULL AND expires_at > NOW()`,
+    [user.id, purpose],
+  );
+  await pool.query(
     `INSERT INTO verification_codes (user_id, channel, purpose, destination, code_hash, expires_at)
      VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '10 minutes')`,
     [user.id, channel, purpose, destination, hashCode(code)],
   );
   const delivery = await deliverCode(channel, destination, code, purpose);
+  if (!delivery?.sent) {
+    console.error("[auth] code email did not send", purpose, delivery?.userMessage || delivery?.skipped);
+  }
   return { code, delivery };
 }
 
@@ -411,11 +438,68 @@ async function promoteAdmin() {
   );
 }
 
+async function findSocialUser(provider, sub, email) {
+  const linked = await (await db()).query(
+    `SELECT user_id FROM social_accounts WHERE provider = $1 AND provider_user_id = $2`,
+    [provider, sub],
+  );
+  if (linked.rows[0]) {
+    const { rows } = await (await db()).query(
+      `SELECT email, phone, public_id FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [linked.rows[0].user_id],
+    );
+    if (rows[0]) return findUser(rows[0].email || rows[0].phone || rows[0].public_id);
+  }
+  if (email) return findUser(email);
+  return null;
+}
+
+async function finishSocial(req, res, json, provider, sub, email, name) {
+  if (!sub) return json(req, res, 400, { error: `${provider} sign-in did not include an account id` });
+  let user = await findSocialUser(provider, sub, email);
+  if (!user) {
+    if (!email || !email.includes("@")) {
+      return json(req, res, 400, { error: `${provider} did not share an email. Grant email access or register with email.` });
+    }
+    const { rows } = await (await db()).query(
+      `INSERT INTO users (public_id, email, status, email_verified_at, account_type)
+       VALUES ($1, $2, 'active', NOW(), 'individual') RETURNING id, public_id, email`,
+      [randomUUID(), email],
+    );
+    await (await db()).query(`INSERT INTO user_profiles (user_id, display_name) VALUES ($1, $2)`, [
+      rows[0].id,
+      name || email.split("@")[0],
+    ]);
+    await (await db()).query(`INSERT INTO feedback_scores (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [rows[0].id]);
+    await recordConsents(rows[0].id, ["privacy", "terms"], req).catch(() => {});
+    user = await findUser(email);
+  }
+  await (await db()).query(
+    `INSERT INTO social_accounts (user_id, provider, provider_user_id, email)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (provider, provider_user_id) DO NOTHING`,
+    [user.id, provider, sub, email || user.email],
+  );
+  if (user.status === "suspended") return json(req, res, 403, { error: "This account is suspended" });
+  if ((user.is_seller || user.is_staff) && !user.two_factor_enabled) {
+    const challengeToken = await createChallenge(user, "enroll_2fa", 20);
+    return json(req, res, 200, { step: "enroll", challengeToken });
+  }
+  const token = await openSession(user, req, true);
+  return json(req, res, 200, { token, user: await loadPublic(user) });
+}
+
 export async function handleIdentity(req, res, ctx) {
   const { json, readJson, pathname, method } = ctx;
-  if (!pathname.startsWith(`${API}/auth`) && !pathname.startsWith(`${API}/account`) && !pathname.startsWith(`${API}/admin`)) {
-    return false;
-  }
+  const inIdentity =
+    pathname.startsWith(`${API}/auth`) ||
+    pathname.startsWith(`${API}/account`) ||
+    pathname.startsWith(`${API}/admin`) ||
+    pathname.startsWith(`${API}/kyc`) ||
+    pathname.startsWith(`${API}/members`);
+  if (!inIdentity) return false;
+  await ensureM1Tables();
+  if (await handleM1Public(req, res, ctx)) return true;
   await promoteAdmin();
 
   if (pathname === `${API}/auth/register` && method === "POST") {
@@ -477,18 +561,11 @@ export async function handleIdentity(req, res, ctx) {
         [user.id, channel, destination, hashCode(code)],
       );
       await client.query("COMMIT");
-      const pending = deliverCode(channel, destination, code, "verify");
-      const fallback = {
-        sent: false,
-        skipped: false,
-        masked: maskDestination(destination, channel),
-        userMessage: "We are sending your code now. Tap Resend if it does not arrive within a minute.",
-      };
-      const delivery = await Promise.race([
-        pending,
-        new Promise((resolve) => setTimeout(() => resolve(fallback), 1500)),
-      ]);
-      pending.catch((err) => console.error("[mail] background deliver", err?.message || err));
+      await recordConsents(user.id, ["privacy", "terms"], req).catch(() => {});
+      const delivery = await deliverCode(channel, destination, code, "verify");
+      if (!delivery?.sent) {
+        console.error("[auth] register code email did not send", delivery?.userMessage || delivery?.skipped);
+      }
       const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
       const risk = await evaluateUser(user.id, { kind: "register", ip, email, phone }).catch(() => null);
       if (risk?.blocked) {
@@ -734,6 +811,32 @@ export async function handleIdentity(req, res, ctx) {
     return json(req, res, 200, { token, user: await loadPublic(user) });
   }
 
+  if (pathname === `${API}/auth/apple` && method === "POST") {
+    const body = await readJson(req);
+    if (!body.idToken) return json(req, res, 400, { error: "Apple sign-in requires an identity token" });
+    try {
+      const profile = await verifyAppleIdToken(body.idToken);
+      const email = String(profile.email || body.email || "").trim().toLowerCase();
+      const name = String(body.name || profile.email || "Apple user").trim();
+      return await finishSocial(req, res, json, "apple", String(profile.sub), email, name);
+    } catch (err) {
+      return json(req, res, 401, { error: err instanceof Error ? err.message : "Apple could not confirm that sign-in" });
+    }
+  }
+
+  if (pathname === `${API}/auth/facebook` && method === "POST") {
+    const body = await readJson(req);
+    if (!body.accessToken) return json(req, res, 400, { error: "Facebook sign-in requires an access token" });
+    try {
+      const profile = await verifyFacebookToken(body.accessToken);
+      const email = String(profile.email || "").trim().toLowerCase();
+      const name = String(profile.name || email || "Facebook user").trim();
+      return await finishSocial(req, res, json, "facebook", String(profile.id), email, name);
+    } catch (err) {
+      return json(req, res, 401, { error: err instanceof Error ? err.message : "Facebook could not confirm that sign-in" });
+    }
+  }
+
   if (pathname === `${API}/auth/forgot` && method === "POST") {
     // Rate limit check
     const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_FORGOT_PASSWORD);
@@ -774,6 +877,10 @@ export async function handleIdentity(req, res, ctx) {
   const actor = await sessionUser(req);
   if (!actor && pathname.startsWith(`${API}/account`)) return json(req, res, 401, { error: "Sign in required" });
   if (!actor && pathname.startsWith(`${API}/admin`)) return json(req, res, 401, { error: "Sign in required" });
+  if (actor) {
+    await handleM1Account(req, res, ctx, actor);
+    if (res.headersSent) return true;
+  }
 
   if (pathname === `${API}/account` && method === "GET") {
     await refreshStanding(actor);
@@ -1227,13 +1334,22 @@ export async function handleIdentity(req, res, ctx) {
   if (pathname === `${API}/admin/kyc` && method === "GET") {
     const { rows } = await (await db()).query(
       `SELECT k.public_id, k.doc_type, k.status, k.rejection_reason, k.created_at,
+              k.front_url, k.back_url, k.selfie_url,
               u.email, u.public_id AS user_id, p.display_name
        FROM kyc_documents k
        JOIN users u ON u.id = k.user_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
        ORDER BY k.created_at DESC LIMIT 50`,
     );
-    return json(req, res, 200, { data: rows });
+    return json(req, res, 200, {
+      data: rows.map((row) => ({
+        ...row,
+        files: signedKycFiles(row.public_id, { front: row.front_url, back: row.back_url, selfie: row.selfie_url }),
+        front_url: undefined,
+        back_url: undefined,
+        selfie_url: undefined,
+      })),
+    });
   }
 
   const kycDecision = pathname.match(new RegExp(`^${API}/admin/kyc/([^/]+)$`));

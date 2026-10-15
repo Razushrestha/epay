@@ -25,7 +25,7 @@ export function RecentlyViewed({ compact = false }: { compact?: boolean }) {
 
   return (
     <section className={compact ? "mt-4 nexlo-card p-6" : "page-shell pt-8"}>
-      <h2 className={compact ? "text-[16px] font-bold" : "text-[22px] font-bold tracking-tight text-[#1a2744]"}>
+      <h2 className={compact ? "text-[16px] font-extrabold text-[#0f1c3f]" : "text-[22px] font-extrabold tracking-tight text-[#0f1c3f]"}>
         Recently viewed
       </h2>
       <div className={`mt-4 grid gap-3 ${compact ? "sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-4 xl:grid-cols-8"}`}>
@@ -39,7 +39,7 @@ export function RecentlyViewed({ compact = false }: { compact?: boolean }) {
                 <span className="flex h-full items-center justify-center text-[11px] text-[#8a94a6]">No photo</span>
               )}
             </span>
-            <span className="mt-2 line-clamp-2 block text-[13px] text-[#191919]">{item.title}</span>
+            <span className="mt-2 line-clamp-2 block text-[13px] text-[#0f1c3f]">{item.title}</span>
             {item.price != null ? (
               <span className="text-[12px] text-[#6b7587]">NPR {Number(item.price).toLocaleString("en-NP")}</span>
             ) : null}

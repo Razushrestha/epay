@@ -76,13 +76,14 @@ export default function ShopPage() {
   return (
     <main className="min-h-screen bg-white">
       <section className="page-shell pt-4">
-        <div className="hero-bg flex flex-col justify-center gap-6 overflow-hidden rounded-[16px] px-6 py-8 sm:px-8 lg:h-[300px] lg:flex-row lg:items-center lg:justify-between lg:px-12">
-          <div className="max-w-[420px] shrink-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#0f1c3f]">Shop</p>
-            <h1 className="mt-2 text-[34px] font-bold leading-[1.05] tracking-tight text-[#0f1c3f] sm:text-[40px]">
+        <div className="hero-bg relative flex flex-col justify-center gap-6 overflow-hidden rounded-[20px] px-6 py-8 sm:px-8 lg:h-[300px] lg:flex-row lg:items-center lg:justify-between lg:px-12">
+          <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/40" />
+          <div className="relative max-w-[420px] shrink-0">
+            <p className="nexlo-kicker">Shop</p>
+            <h1 className="mt-2 text-[34px] font-extrabold leading-[1.05] tracking-tight text-[#0f1c3f] sm:text-[40px]">
               Direct to you, for free
             </h1>
-            <p className="mt-3 text-[15px] text-[#333]">Free shipping on these favourite items, with escrow on every order.</p>
+            <p className="mt-3 text-[15px] leading-relaxed text-[#4b5563]">Free shipping on these favourite items, with escrow on every order.</p>
           </div>
           <div className="grid w-full max-w-[560px] grid-cols-4 gap-2.5 lg:w-[560px]">
             {bannerTiles.map((tile) => (
@@ -101,7 +102,7 @@ export default function ShopPage() {
           className="page-shell pt-8"
         >
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-[22px] font-bold tracking-tight text-[#10245c] sm:text-[26px]">{section.title}</h2>
+            <h2 className="text-[22px] font-extrabold tracking-tight text-[#0f1c3f] sm:text-[26px]">{section.title}</h2>
             <Link href={section.href} className="shrink-0 text-[14px] font-medium text-[#3665f3] hover:underline">
               Shop all ›
             </Link>

@@ -50,6 +50,7 @@ const NAV = [
   { id: "analytics", href: "/admin/analytics", label: "Analytics", icon: "M4 19V9m6 10V5m6 14v-7m6 7V3" },
   { id: "roles", href: "/admin/roles", label: "Roles", icon: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2 19c.6-3 2.8-5 6-5s5.4 2 6 5M14 19c.4-2 1.6-3.5 4-4.2 2.2.6 3.6 2 4 4.2" },
   { id: "settings", href: "/admin/settings", label: "Settings", icon: "M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM4 12a8 8 0 0 1 .3-2.2l-2-1.2 2-3.4 2.3.6A8 8 0 0 1 9 4.3L9.2 2h5.6L15 4.3a8 8 0 0 1 2.4 1.5l2.3-.6 2 3.4-2 1.2A8 8 0 0 1 20 12a8 8 0 0 1-.3 2.2l2 1.2-2 3.4-2.3-.6A8 8 0 0 1 15 19.7L14.8 22H9.2L9 19.7a8 8 0 0 1-2.4-1.5l-2.3.6-2-3.4 2-1.2A8 8 0 0 1 4 12Z" },
+  { id: "uat", href: "/admin/uat", label: "Go-live UAT", icon: "M9 11l3 3L22 4M4 20h16" },
 ];
 
 function Rocket() {
@@ -132,9 +133,9 @@ export function AdminChrome({
               </button>
               {menuOpen ? (
                 <div className="absolute right-0 mt-2 w-44 rounded-xl border border-[#e7eef6] bg-white py-1 shadow-lg">
-                  <Link href="/" className="block px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f7f7f7]" onClick={() => setMenuOpen(false)}>Storefront</Link>
-                  <Link href="/account" className="block px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f7f7f7]" onClick={() => setMenuOpen(false)}>Account</Link>
-                  <button type="button" onClick={onSignOut} className="block w-full px-3 py-2 text-left text-[13px] text-[#0f1c3f] hover:bg-[#f7f7f7]">Sign out</button>
+                  <Link href="/" className="block px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f4f8fd]" onClick={() => setMenuOpen(false)}>Storefront</Link>
+                  <Link href="/account" className="block px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f4f8fd]" onClick={() => setMenuOpen(false)}>Account</Link>
+                  <button type="button" onClick={onSignOut} className="block w-full px-3 py-2 text-left text-[13px] text-[#0f1c3f] hover:bg-[#f4f8fd]">Sign out</button>
                 </div>
               ) : null}
             </div>

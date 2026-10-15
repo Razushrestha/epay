@@ -14,12 +14,12 @@ export default function PaymentFailedPage() {
       />
       <main className="page-shell py-8">
         <div className="nexlo-card mx-auto max-w-xl p-8 text-center">
-          <p className="text-[14px] text-[#707070]">Your order is still unpaid. Escrow only holds funds after a successful payment.</p>
+          <p className="text-[14px] text-[#6b7587]">Your order is still unpaid. Escrow only holds funds after a successful payment.</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link href="/cart" className="nexlo-btn">
+            <Link href="/cart" className="nexlo-btn nexlo-btn-blue">
               Back to cart
             </Link>
-            <Link href="/search" className="h-10 rounded-full border border-[#e7e7e7] px-5 text-[13.5px] font-semibold leading-10 text-[#191919]">
+            <Link href="/search" className="nexlo-btn nexlo-btn-ghost">
               Continue shopping
             </Link>
             <Link href="/help" className="nexlo-link text-[13.5px] leading-10">

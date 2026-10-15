@@ -138,7 +138,7 @@ export function VerifyForm() {
         </span>
       </h1>
       <p className="mt-1.5 text-[13.5px] text-[#6b7587]">
-        Enter the 6-digit code we sent. If it is delayed, wait a moment and tap Resend.
+        Enter the latest 6-digit code we emailed. Check spam. If it is delayed, wait a few seconds before Resend.
       </p>
 
       <div className="mt-4" aria-live="polite">

@@ -192,10 +192,10 @@ export default function CheckoutPage() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
             <section className="nexlo-card p-5 sm:p-6">
-              <h2 className="text-[17px] font-bold text-[#191919]">Shipping address</h2>
+              <h2 className="text-[17px] font-bold text-[#0f1c3f]">Shipping address</h2>
               {addresses.length === 0 ? (
                 <div className="mt-4 text-center">
-                  <p className="mb-4 text-[13px] text-[#707070]">No addresses yet.</p>
+                  <p className="mb-4 text-[13px] text-[#6b7587]">No addresses yet.</p>
                   <button onClick={() => router.push("/account?tab=preferences")} className="nexlo-btn nexlo-btn-blue">
                     Add address
                   </button>
@@ -206,7 +206,7 @@ export default function CheckoutPage() {
                     <label
                       key={addr.public_id}
                       className={`block cursor-pointer rounded-xl border p-4 transition ${
-                        selectedAddressId === addr.public_id ? "border-[#3665f3] bg-[#eef3ff]" : "border-[#e7e7e7] hover:border-[#ccc]"
+                        selectedAddressId === addr.public_id ? "border-[#3665f3] bg-[#eef3ff]" : "border-[#e7eef6] hover:border-[#ccc]"
                       }`}
                     >
                       <input
@@ -218,15 +218,15 @@ export default function CheckoutPage() {
                         className="mr-3 accent-[#3665f3]"
                       />
                       <div className="inline-block text-[13px]">
-                        <div className="font-semibold text-[#191919]">{addr.full_name}</div>
-                        <div className="text-[#707070]">
+                        <div className="font-semibold text-[#0f1c3f]">{addr.full_name}</div>
+                        <div className="text-[#6b7587]">
                           {addr.line1}
                           {addr.line2 ? `, ${addr.line2}` : ""}
                         </div>
-                        <div className="text-[#707070]">
+                        <div className="text-[#6b7587]">
                           {addr.city}{addr.region ? `, ${addr.region}` : ""} {addr.postal_code || ""}
                         </div>
-                        {addr.phone ? <div className="text-[#707070]">{addr.phone}</div> : null}
+                        {addr.phone ? <div className="text-[#6b7587]">{addr.phone}</div> : null}
                         {addr.is_default_shipping ? (
                           <span className="mt-1 inline-block rounded-full bg-[#d1fae5] px-2 py-0.5 text-[11px] font-semibold text-[#0d9488]">
                             Default
@@ -240,14 +240,14 @@ export default function CheckoutPage() {
             </section>
 
             <section className="nexlo-card p-5 sm:p-6">
-              <h2 className="text-[17px] font-bold text-[#191919]">Coupon</h2>
+              <h2 className="text-[17px] font-bold text-[#0f1c3f]">Coupon</h2>
               <div className="mt-3 flex gap-2">
                 <input
                   type="text"
                   value={couponCode}
                   onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                   placeholder="Enter coupon code"
-                  className="h-10 flex-1 rounded-full border border-[#e7e7e7] px-4 text-[14px]"
+                  className="nexlo-field flex-1"
                   disabled={couponApplied}
                 />
                 <button onClick={applyCoupon} disabled={!couponCode.trim() || couponApplied} className="nexlo-btn nexlo-btn-blue disabled:opacity-50">
@@ -258,18 +258,18 @@ export default function CheckoutPage() {
             </section>
 
             <section className="nexlo-card p-5 sm:p-6">
-              <h2 className="text-[17px] font-bold text-[#191919]">Order notes</h2>
+              <h2 className="text-[17px] font-bold text-[#0f1c3f]">Order notes</h2>
               <textarea
                 value={buyerNotes}
                 onChange={(e) => setBuyerNotes(e.target.value)}
                 placeholder="Special instructions for the seller…"
                 rows={3}
-                className="mt-3 w-full rounded-xl border border-[#e7e7e7] px-3 py-2 text-[14px]"
+                className="mt-3 w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[14px]"
               />
             </section>
 
             <section className="nexlo-card p-5 sm:p-6">
-              <h2 className="text-[17px] font-bold text-[#191919]">Payment method</h2>
+              <h2 className="text-[17px] font-bold text-[#0f1c3f]">Payment method</h2>
               <div className="mt-3 space-y-3">
                 {([
                   ["esewa", "eSewa", "Pay with your eSewa wallet"],
@@ -278,7 +278,7 @@ export default function CheckoutPage() {
                   <label
                     key={id}
                     className={`block cursor-pointer rounded-xl border p-4 transition ${
-                      selectedGateway === id ? "border-[#3665f3] bg-[#eef3ff]" : "border-[#e7e7e7] hover:border-[#ccc]"
+                      selectedGateway === id ? "border-[#3665f3] bg-[#eef3ff]" : "border-[#e7eef6] hover:border-[#ccc]"
                     }`}
                   >
                     <input
@@ -290,8 +290,8 @@ export default function CheckoutPage() {
                       className="mr-3 accent-[#3665f3]"
                     />
                     <div className="inline-block">
-                      <div className="text-[14px] font-semibold text-[#191919]">{title}</div>
-                      <div className="text-[13px] text-[#707070]">{sub}</div>
+                      <div className="text-[14px] font-semibold text-[#0f1c3f]">{title}</div>
+                      <div className="text-[13px] text-[#6b7587]">{sub}</div>
                     </div>
                   </label>
                 ))}
@@ -300,11 +300,11 @@ export default function CheckoutPage() {
           </div>
 
           <aside className="nexlo-card h-fit p-5 sm:sticky sm:top-4 sm:p-6">
-            <h3 className="text-[17px] font-bold text-[#191919]">Order summary</h3>
-            <div className="mt-4 space-y-2 border-b border-[#e7e7e7] pb-4 text-[13px]">
+            <h3 className="text-[17px] font-bold text-[#0f1c3f]">Order summary</h3>
+            <div className="mt-4 space-y-2 border-b border-[#e7eef6] pb-4 text-[13px]">
               <div className="flex justify-between">
-                <span className="text-[#707070]">Subtotal</span>
-                <span className="text-[#191919]">{formatPrice(totals.subtotal)}</span>
+                <span className="text-[#6b7587]">Subtotal</span>
+                <span className="text-[#0f1c3f]">{formatPrice(totals.subtotal)}</span>
               </div>
               {parseFloat(totals.discount) > 0 ? (
                 <div className="flex justify-between text-[#0d9488]">
@@ -313,22 +313,22 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
               <div className="flex justify-between">
-                <span className="text-[#707070]">Shipping</span>
-                <span className="text-[#191919]">{parseFloat(totals.shipping) === 0 ? "FREE" : formatPrice(totals.shipping)}</span>
+                <span className="text-[#6b7587]">Shipping</span>
+                <span className="text-[#0f1c3f]">{parseFloat(totals.shipping) === 0 ? "FREE" : formatPrice(totals.shipping)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#707070]">Tax (13% VAT)</span>
-                <span className="text-[#191919]">{formatPrice(totals.tax)}</span>
+                <span className="text-[#6b7587]">Tax (13% VAT)</span>
+                <span className="text-[#0f1c3f]">{formatPrice(totals.tax)}</span>
               </div>
             </div>
-            <div className="mt-4 flex justify-between text-[18px] font-bold text-[#191919]">
+            <div className="mt-4 flex justify-between text-[18px] font-bold text-[#0f1c3f]">
               <span>Total</span>
               <span className="text-[#3665f3]">{formatPrice(totals.total)}</span>
             </div>
-            <button onClick={placeOrder} disabled={loading || !selectedAddressId} className="nexlo-btn mt-6 h-11 w-full disabled:opacity-50">
+            <button onClick={placeOrder} disabled={loading || !selectedAddressId} className="nexlo-btn nexlo-btn-blue mt-6 h-11 w-full disabled:opacity-50">
               {loading ? "Processing…" : "Place order"}
             </button>
-            <p className="mt-4 text-center text-[12px] text-[#707070]">
+            <p className="mt-4 text-center text-[12px] text-[#6b7587]">
               By placing your order you agree to our Terms and Privacy Policy. Escrow holds funds until delivery.
             </p>
           </aside>

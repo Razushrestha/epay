@@ -170,7 +170,7 @@ export const categoryBrowse: Record<string, CategoryBrowseConfig> = {
       text: "Engines, wheels, and accessories checked and ready for the road.",
     },
     cards: [
-      { title: "Car and truck parts", text: "Engines, brakes, and exterior", img: "/categories/motor-pistons.jpg", group: "car", bg: "bg-[#f7f7f7]" },
+      { title: "Car and truck parts", text: "Engines, brakes, and exterior", img: "/categories/motor-pistons.jpg", group: "car", bg: "bg-[#f4f8fd]" },
       { title: "Motorcycle parts", text: "Wheels, frames, and gear", img: "/categories/motor-wheel.jpg", group: "moto", bg: "bg-[#eef3fb]" },
       { title: "Lighting and electrics", text: "Headlights and workshop tools", img: "/categories/motor-light.jpg", group: "car", sub: "Exterior", bg: "bg-[#f4f6f8]" },
     ],

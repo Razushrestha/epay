@@ -24,7 +24,7 @@ export function SellHub() {
       <div className="grid items-stretch gap-6 lg:grid-cols-[1.05fr_1.15fr]">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
           <div>
-            <h2 className="border-b border-[#e6e6e6] pb-2 text-[15px] font-bold text-[#191919]">Start selling</h2>
+            <h2 className="border-b border-[#e6e6e6] pb-2 text-[15px] font-bold text-[#0f1c3f]">Start selling</h2>
             <ul className="mt-3 space-y-3">
               {start.map((item) => (
                 <li key={item.name}>
@@ -36,7 +36,7 @@ export function SellHub() {
             </ul>
           </div>
           <div>
-            <h2 className="border-b border-[#e6e6e6] pb-2 text-[15px] font-bold text-[#191919]">
+            <h2 className="border-b border-[#e6e6e6] pb-2 text-[15px] font-bold text-[#0f1c3f]">
               Run your business with confidence
             </h2>
             <ul className="mt-3 space-y-3">

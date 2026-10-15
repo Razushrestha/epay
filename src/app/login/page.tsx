@@ -43,7 +43,7 @@ const features = [
 
 export default function LoginPage() {
   return (
-    <main className="auth-lock grid h-dvh overflow-hidden bg-[#f7f7f7] lg:grid-cols-2">
+    <main className="auth-lock grid h-dvh overflow-hidden bg-[#f4f8fd] lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-[#eef4fb] lg:block">
         <Image
           src="/auth/signin-scene.jpg"
@@ -55,7 +55,7 @@ export default function LoginPage() {
         />
         <div
           aria-hidden
-          className="absolute inset-0 bg-gradient-to-b from-[#f7f7f7] from-0% via-[#f7f7f7]/88 via-[38%] to-transparent to-[58%]"
+          className="absolute inset-0 bg-gradient-to-b from-[#f4f8fd] from-0% via-[#f4f8fd]/88 via-[38%] to-transparent to-[58%]"
         />
 
         <div className="relative z-10 flex h-full flex-col px-10 pt-7 xl:px-14 xl:pt-8">

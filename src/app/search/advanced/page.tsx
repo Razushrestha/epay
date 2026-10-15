@@ -25,17 +25,17 @@ export default function AdvancedSearchPage() {
       />
       <form action="/search" method="get" className="page-shell max-w-3xl space-y-5 py-8">
         <div className="nexlo-card space-y-4 p-6">
-          <label className="block text-[13px] font-semibold text-[#191919]">
+          <label className="block text-[13px] font-semibold text-[#0f1c3f]">
             Keywords
-            <input name="q" type="search" placeholder="What are you looking for?" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal" />
+            <input name="q" type="search" placeholder="What are you looking for?" className="nexlo-field mt-1 h-11 font-normal" />
           </label>
-          <label className="block text-[13px] font-semibold text-[#191919]">
+          <label className="block text-[13px] font-semibold text-[#0f1c3f]">
             Exclude words
-            <input name="exclude" type="text" placeholder="Words that must not appear in the title" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal" />
+            <input name="exclude" type="text" placeholder="Words that must not appear in the title" className="nexlo-field mt-1 h-11 font-normal" />
           </label>
-          <label className="block text-[13px] font-semibold text-[#191919]">
+          <label className="block text-[13px] font-semibold text-[#0f1c3f]">
             Category
-            <select name="category_id" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal">
+            <select name="category_id" className="nexlo-field mt-1 h-11 font-normal">
               <option value="">All categories</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
@@ -44,9 +44,9 @@ export default function AdvancedSearchPage() {
               ))}
             </select>
           </label>
-          <label className="block text-[13px] font-semibold text-[#191919]">
+          <label className="block text-[13px] font-semibold text-[#0f1c3f]">
             Buying format
-            <select name="format" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal">
+            <select name="format" className="nexlo-field mt-1 h-11 font-normal">
               <option value="">Any</option>
               <option value="fixed">Buy It Now</option>
               <option value="auction">Auction</option>
@@ -54,35 +54,39 @@ export default function AdvancedSearchPage() {
             </select>
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-[13px] font-semibold text-[#191919]">
+            <label className="block text-[13px] font-semibold text-[#0f1c3f]">
               Min price (NPR)
-              <input name="min_price" type="number" min="0" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal" />
+              <input name="min_price" type="number" min="0" className="nexlo-field mt-1 h-11 font-normal" />
             </label>
-            <label className="block text-[13px] font-semibold text-[#191919]">
+            <label className="block text-[13px] font-semibold text-[#0f1c3f]">
               Max price (NPR)
-              <input name="max_price" type="number" min="0" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal" />
+              <input name="max_price" type="number" min="0" className="nexlo-field mt-1 h-11 font-normal" />
             </label>
           </div>
-          <label className="block text-[13px] font-semibold text-[#191919]">
+          <label className="block text-[13px] font-semibold text-[#0f1c3f]">
             Item location
-            <input name="location" type="text" placeholder="Kathmandu" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal" />
+            <input name="location" type="text" placeholder="Kathmandu" className="nexlo-field mt-1 h-11 font-normal" />
           </label>
-          <label className="flex items-center gap-2 text-[13px] text-[#191919]">
+          <label className="flex items-center gap-2 text-[13px] text-[#0f1c3f]">
             <input type="checkbox" name="free_shipping" value="1" />
             Free shipping
           </label>
-          <label className="block text-[13px] font-semibold text-[#191919]">
+          <label className="flex items-center gap-2 text-[13px] text-[#0f1c3f]">
+            <input type="checkbox" name="completed" value="1" />
+            Sold / completed listings
+          </label>
+          <label className="block text-[13px] font-semibold text-[#0f1c3f]">
             Min seller rating
-            <select name="seller_rating" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal">
+            <select name="seller_rating" className="nexlo-field mt-1 h-11 font-normal">
               <option value="">Any</option>
               <option value="80">80%+</option>
               <option value="90">90%+</option>
               <option value="98">98%+</option>
             </select>
           </label>
-          <label className="block text-[13px] font-semibold text-[#191919]">
+          <label className="block text-[13px] font-semibold text-[#0f1c3f]">
             Sort
-            <select name="sort" className="mt-1 h-11 w-full rounded-full border border-[#e7e7e7] px-4 text-[14px] font-normal">
+            <select name="sort" className="nexlo-field mt-1 h-11 font-normal">
               <option value="best_match">Best Match</option>
               <option value="newest">Newest</option>
               <option value="price_low">Price: low to high</option>

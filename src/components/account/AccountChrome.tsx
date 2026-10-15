@@ -51,10 +51,11 @@ const NAV = [
   { id: "messages", label: "Messages", href: "/account?tab=messages", icon: <Icon d="M4 6h16v12H7l-3 3V6Z" /> },
   { id: "activity", label: "Activity", href: "/account?tab=activity", icon: <Icon d="M8 4h8v4H8V4Zm-3 6h14v10H5V10Zm5 3h4" /> },
   { id: "tickets", label: "Support", href: "/account?tab=tickets", icon: <Icon d="M4 7h16v3l-1.5 1.5L20 13v4H4v-4l1.5-1.5L4 10V7Z" /> },
+  { id: "resolution", label: "Resolution Center", href: "/resolution", icon: <Icon d="M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" /> },
   { id: "payment", label: "Payment Information", href: "/account?tab=payment", icon: <Icon d="M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9ZM3 10h18" /> },
 ];
 
-const PERSONAL_TABS = new Set(["account", "security", "preferences"]);
+const PERSONAL_TABS = new Set(["account", "security", "preferences", "collections", "following"]);
 
 export function AccountChrome({
   user,
@@ -122,10 +123,10 @@ export function AccountChrome({
               </button>
               {menuOpen ? (
                 <div className="absolute right-0 mt-2 w-44 rounded-xl border border-[#e7eef6] bg-white py-1 shadow-lg">
-                  <Link href="/account" className="block px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f7f7f7]" onClick={() => setMenuOpen(false)}>
+                  <Link href="/account" className="block px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f4f8fd]" onClick={() => setMenuOpen(false)}>
                     Account
                   </Link>
-                  <button type="button" onClick={onSignOut} className="block w-full px-3 py-2 text-left text-[13px] text-[#0f1c3f] hover:bg-[#f7f7f7]">
+                  <button type="button" onClick={onSignOut} className="block w-full px-3 py-2 text-left text-[13px] text-[#0f1c3f] hover:bg-[#f4f8fd]">
                     Sign out
                   </button>
                 </div>
@@ -161,6 +162,8 @@ export function AccountChrome({
                 ["account", "Personal information"],
                 ["security", "Sign-in and security"],
                 ["preferences", "Addresses"],
+                ["collections", "Collections"],
+                ["following", "Followed sellers"],
               ].map(([id, label]) => (
                 <Link
                   key={id}
@@ -207,8 +210,8 @@ export function AccountChrome({
               <Link href="/account?tab=selling" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "selling" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
                 Seller tools
               </Link>
-              <Link href="/account?tab=returns" className={`ml-9 block rounded-lg px-3 py-2 text-[13px] ${tab === "returns" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
-                Returns and cases
+              <Link href="/resolution" className={`ml-9 block rounded-lg px-3 py-2 text-[13px] ${tab === "returns" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
+                Resolution Center
               </Link>
               <Link href="/sell/listings" className="ml-9 block rounded-lg px-3 py-2 text-[13px] text-[#5b6780] hover:text-[#3665f3]">
                 Your listings

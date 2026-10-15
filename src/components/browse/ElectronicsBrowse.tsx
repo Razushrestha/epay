@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   discount,
   npr,
@@ -20,6 +20,42 @@ const priceBands = [
   { id: "over-100", label: "Over NPR 100,000" },
 ] as const;
 const citiesFallback = ["Kathmandu", "Pokhara", "Lalitpur"];
+
+function Chevron() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="shrink-0 opacity-55" aria-hidden>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function ChipButton({
+  active,
+  onClick,
+  children,
+  icon,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  icon?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex h-10 max-w-[220px] shrink-0 items-center gap-1.5 rounded-full border px-4 text-[13px] leading-none transition ${
+        active
+          ? "border-[#3665f3] bg-[#eef3ff] font-semibold text-[#3665f3]"
+          : "border-[#e7eef6] bg-white font-medium text-[#0f1c3f] hover:border-[#c9d8ff]"
+      }`}
+    >
+      {icon}
+      <span className="truncate">{children}</span>
+      <Chevron />
+    </button>
+  );
+}
 
 type Filters = {
   group: string;
@@ -168,17 +204,17 @@ function ProductCard({ item, saved, onSave, layout }: { item: ElecProduct; saved
           )}
           <span className="text-[12px] font-semibold text-[#159947]">{item.grade}</span>
         </div>
-        <Link href={item.href} className="clamp-2 mt-1.5 block min-h-[36px] text-[13.5px] font-semibold leading-snug text-[#191919] hover:underline">
+        <Link href={item.href} className="clamp-2 mt-1.5 block min-h-[36px] text-[13.5px] font-semibold leading-snug text-[#0f1c3f] hover:underline">
           {item.title}
         </Link>
         <p className="mt-1.5 flex items-center gap-1 text-[12px] text-[#667085]">
           <Stars rating={item.rating} />
-          <span className="font-semibold text-[#191919]">{item.rating.toFixed(1)}</span>
+          <span className="font-semibold text-[#0f1c3f]">{item.rating.toFixed(1)}</span>
           <span>({item.reviews.toLocaleString()} reviews)</span>
         </p>
         <p className="mt-1 text-[12.5px] font-medium text-[#159947]">{item.shipping}</p>
         <p className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-          <span className="text-[16px] font-bold text-[#191919]">{npr(item.price)}</span>
+          <span className="text-[16px] font-bold text-[#0f1c3f]">{npr(item.price)}</span>
           {item.was && <span className="text-[12px] text-[#98a0ab] line-through">{npr(item.was)}</span>}
           {off && <span className="text-[12px] font-bold text-[#159947]">{off}% OFF</span>}
         </p>
@@ -235,13 +271,14 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
     setFilters((current) => ({ ...current, group: id, sub: "" }));
   }
 
-  const chips: { id: string; label: string }[] = [
-    { id: "group", label: filters.group ? config.groups.find((g) => g.id === filters.group)?.name ?? "Category" : "Category" },
-    { id: "brand", label: filters.brand || "Brand" },
-    { id: "condition", label: filters.condition || "Condition" },
-    { id: "price", label: filters.price === "any" ? "Price" : priceBands.find((b) => b.id === filters.price)?.label ?? "Price" },
-    { id: "format", label: filters.format === "auction" ? "Auction" : filters.format === "fixed" ? "Buy It Now" : "Buying format" },
-    { id: "city", label: filters.city || "Location" },
+  const hasFilters = Boolean(filters.group || filters.brand || filters.condition || filters.price !== "any" || filters.format || filters.city || filters.sub);
+  const chips: { id: string; label: string; active: boolean }[] = [
+    { id: "group", label: filters.group ? config.groups.find((g) => g.id === filters.group)?.name ?? "Category" : "Category", active: Boolean(filters.group) },
+    { id: "brand", label: filters.brand || "Brand", active: Boolean(filters.brand) },
+    { id: "condition", label: filters.condition || "Condition", active: Boolean(filters.condition) },
+    { id: "price", label: filters.price === "any" ? "Price" : priceBands.find((b) => b.id === filters.price)?.label ?? "Price", active: filters.price !== "any" },
+    { id: "format", label: filters.format === "auction" ? "Auction" : filters.format === "fixed" ? "Buy It Now" : "Buying format", active: Boolean(filters.format) },
+    { id: "city", label: filters.city || "Location", active: Boolean(filters.city) },
   ];
 
   return (
@@ -293,7 +330,7 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
         </aside>
 
         <div className="min-w-0">
-          <h1 className="text-[28px] font-bold tracking-tight text-[#191919]">{config.title}</h1>
+          <h1 className="text-[28px] font-bold tracking-tight text-[#0f1c3f]">{config.title}</h1>
 
           <section className="relative mt-4 h-[200px] overflow-hidden rounded-[18px] border border-[#e6eaf0] bg-white sm:h-[214px]">
             <Image src={config.hero.image} alt="" fill className="object-cover object-[center_58%]" sizes="1100px" priority />
@@ -348,7 +385,7 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                   <Image src={card.img} alt="" fill className="object-cover object-center" sizes="220px" />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col justify-center px-3.5 py-3">
-                  <span className="block text-[15px] font-bold leading-snug text-[#191919]">{card.title}</span>
+                  <span className="block text-[15px] font-bold leading-snug text-[#0f1c3f]">{card.title}</span>
                   <span className="mt-1 block text-[12.5px] leading-snug text-[#667085]">{card.text}</span>
                   <span className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e]">
                     Shop now <span aria-hidden>→</span>
@@ -358,42 +395,39 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
             ))}
           </div>
 
-          <div className="no-scrollbar relative mt-4 flex items-center gap-2 overflow-x-auto">
+          <div className="relative mt-4 flex items-center gap-3">
+            <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-0.5">
             {chips.map((chip) => (
-              <div key={chip.id} className="relative">
-                <button
-                  type="button"
+              <div key={chip.id} className="relative shrink-0">
+                <ChipButton
+                  active={chip.active}
                   onClick={() => setMenu(menu === chip.id ? null : chip.id)}
-                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-[#e7ebf0] bg-white px-3.5 text-[13px] text-[#3d4654] hover:border-[#cfd6e0]"
                 >
                   {chip.label}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </button>
+                </ChipButton>
                 {menu === chip.id && (
-                  <div className="absolute left-0 top-[calc(100%+6px)] z-20 min-w-[180px] rounded-xl border border-[#e7e7e7] bg-white p-1.5 shadow-lg">
+                  <div className="absolute left-0 top-[calc(100%+8px)] z-20 min-w-[200px] rounded-2xl border border-[#e7eef6] bg-white p-1.5 shadow-[0_12px_32px_-16px_rgba(15,28,63,0.35)]">
                     {chip.id === "group" &&
                       [{ id: "", name: "All categories" }, ...config.groups].map((group) => (
-                        <button key={group.id || "all"} type="button" onClick={() => { setFilters((current) => ({ ...current, group: group.id, sub: "" })); setMenu(null); }} className="block w-full rounded-lg px-3 py-1.5 text-left text-[13px] hover:bg-[#f4f6f8]">
+                        <button key={group.id || "all"} type="button" onClick={() => { setFilters((current) => ({ ...current, group: group.id, sub: "" })); setMenu(null); }} className="block w-full rounded-xl px-3 py-2 text-left text-[13px] hover:bg-[#f4f8fd]">
                           {group.name}
                         </button>
                       ))}
                     {chip.id === "brand" &&
                       ["", ...brands].map((brand) => (
-                        <button key={brand || "all"} type="button" onClick={() => setFilter("brand", brand)} className="block w-full rounded-lg px-3 py-1.5 text-left text-[13px] hover:bg-[#f4f6f8]">
+                        <button key={brand || "all"} type="button" onClick={() => setFilter("brand", brand)} className="block w-full rounded-xl px-3 py-2 text-left text-[13px] hover:bg-[#f4f8fd]">
                           {brand || "All brands"}
                         </button>
                       ))}
                     {chip.id === "condition" &&
                       ["", ...conditions].map((condition) => (
-                        <button key={condition || "all"} type="button" onClick={() => setFilter("condition", condition)} className="block w-full rounded-lg px-3 py-1.5 text-left text-[13px] hover:bg-[#f4f6f8]">
+                        <button key={condition || "all"} type="button" onClick={() => setFilter("condition", condition)} className="block w-full rounded-xl px-3 py-2 text-left text-[13px] hover:bg-[#f4f8fd]">
                           {condition || "Any condition"}
                         </button>
                       ))}
                     {chip.id === "price" &&
                       priceBands.map((band) => (
-                        <button key={band.id} type="button" onClick={() => setFilter("price", band.id)} className="block w-full rounded-lg px-3 py-1.5 text-left text-[13px] hover:bg-[#f4f6f8]">
+                        <button key={band.id} type="button" onClick={() => setFilter("price", band.id)} className="block w-full rounded-xl px-3 py-2 text-left text-[13px] hover:bg-[#f4f8fd]">
                           {band.label}
                         </button>
                       ))}
@@ -403,13 +437,13 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                         { id: "fixed", label: "Buy It Now" },
                         { id: "auction", label: "Auction" },
                       ].map((format) => (
-                        <button key={format.id || "all"} type="button" onClick={() => setFilter("format", format.id)} className="block w-full rounded-lg px-3 py-1.5 text-left text-[13px] hover:bg-[#f4f6f8]">
+                        <button key={format.id || "all"} type="button" onClick={() => setFilter("format", format.id)} className="block w-full rounded-xl px-3 py-2 text-left text-[13px] hover:bg-[#f4f8fd]">
                           {format.label}
                         </button>
                       ))}
                     {chip.id === "city" &&
                       ["", ...(cities.length ? cities : citiesFallback)].map((city) => (
-                        <button key={city || "all"} type="button" onClick={() => setFilter("city", city)} className="block w-full rounded-lg px-3 py-1.5 text-left text-[13px] hover:bg-[#f4f6f8]">
+                        <button key={city || "all"} type="button" onClick={() => setFilter("city", city)} className="block w-full rounded-xl px-3 py-2 text-left text-[13px] hover:bg-[#f4f8fd]">
                           {city || "Any location"}
                         </button>
                       ))}
@@ -417,12 +451,15 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                 )}
               </div>
             ))}
+            <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setMenu(menu === "all" ? null : "all")}
-              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-[#e7ebf0] bg-white px-3.5 text-[13px] font-medium text-[#3d4654] hover:border-[#cfd6e0]"
+              className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-[13px] font-medium leading-none ${
+                menu === "all" ? "border-[#3665f3] bg-[#eef3ff] text-[#3665f3]" : "border-[#e7eef6] bg-white text-[#0f1c3f] hover:border-[#c9d8ff]"
+              }`}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
                 <path d="M4 6h16M4 12h16M4 18h16" />
                 <circle cx="8" cy="6" r="2" fill="white" stroke="currentColor" />
                 <circle cx="15" cy="12" r="2" fill="white" stroke="currentColor" />
@@ -431,54 +468,57 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
               All filters
             </button>
             {menu === "all" && (
-              <div className="absolute left-0 top-[42px] z-20 w-[280px] rounded-xl border border-[#e7e7e7] bg-white p-3 shadow-lg">
-                <p className="text-[12px] font-bold text-[#191919]">Condition</p>
+              <div className="absolute left-0 top-[calc(100%+8px)] z-20 w-[280px] rounded-2xl border border-[#e7eef6] bg-white p-4 shadow-[0_12px_32px_-16px_rgba(15,28,63,0.35)]">
+                <p className="text-[12px] font-bold text-[#0f1c3f]">Condition</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {conditions.map((condition) => (
-                    <button key={condition} type="button" onClick={() => setFilter("condition", filters.condition === condition ? "" : condition)} className={`rounded-full px-2.5 py-1 text-[12px] ${filters.condition === condition ? "bg-[#243056] text-white" : "bg-[#f4f6f8]"}`}>
+                    <button key={condition} type="button" onClick={() => setFilter("condition", filters.condition === condition ? "" : condition)} className={`rounded-full px-3 py-1.5 text-[12px] ${filters.condition === condition ? "bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#0f1c3f]"}`}>
                       {condition}
                     </button>
                   ))}
                 </div>
-                <p className="mt-3 text-[12px] font-bold text-[#191919]">Buying format</p>
+                <p className="mt-3 text-[12px] font-bold text-[#0f1c3f]">Buying format</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {[
                     { id: "fixed", label: "Buy It Now" },
                     { id: "auction", label: "Auction" },
                   ].map((format) => (
-                    <button key={format.id} type="button" onClick={() => setFilter("format", filters.format === format.id ? "" : format.id)} className={`rounded-full px-2.5 py-1 text-[12px] ${filters.format === format.id ? "bg-[#243056] text-white" : "bg-[#f4f6f8]"}`}>
+                    <button key={format.id} type="button" onClick={() => setFilter("format", filters.format === format.id ? "" : format.id)} className={`rounded-full px-3 py-1.5 text-[12px] ${filters.format === format.id ? "bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#0f1c3f]"}`}>
                       {format.label}
                     </button>
                   ))}
                 </div>
               </div>
             )}
-            {(filters.group || filters.brand || filters.condition || filters.price !== "any" || filters.format || filters.city || filters.sub) && (
-              <button type="button" onClick={() => setFilters(emptyFilters)} className="text-[12.5px] font-semibold text-[#3665f3] hover:underline">
-                Clear
-              </button>
-            )}
-            <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
+            </div>
+            <button
+              type="button"
+              onClick={() => setFilters(emptyFilters)}
+              disabled={!hasFilters}
+              className="h-10 shrink-0 px-2 text-[13px] font-semibold text-[#3665f3] hover:underline disabled:invisible"
+            >
+              Clear
+            </button>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setMenu(menu === "sort" ? null : "sort")}
-                  className="inline-flex h-9 items-center gap-2 rounded-full border border-[#e7ebf0] bg-white px-3.5 text-[13px] text-[#3d4654] hover:border-[#cfd6e0]"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[#e7eef6] bg-white px-4 text-[13px] font-medium leading-none text-[#0f1c3f] hover:border-[#c9d8ff]"
                 >
-                  <span className="text-[#8b939f]">Sort:</span>
+                  <span className="text-[#6b7587]">Sort:</span>
                   {sort}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  <Chevron />
                 </button>
                 {menu === "sort" && (
-                  <div className="absolute right-0 top-[calc(100%+6px)] z-20 min-w-[160px] rounded-xl border border-[#e7e7e7] bg-white p-1.5 shadow-lg">
+                  <div className="absolute right-0 top-[calc(100%+8px)] z-20 min-w-[180px] rounded-2xl border border-[#e7eef6] bg-white p-1.5 shadow-[0_12px_32px_-16px_rgba(15,28,63,0.35)]">
                     {["Best Match", "Price: low", "Price: high", "Top rated"].map((option) => (
                       <button
                         key={option}
                         type="button"
                         onClick={() => { setSort(option); setMenu(null); }}
-                        className={`block w-full rounded-lg px-3 py-1.5 text-left text-[13px] hover:bg-[#f4f6f8] ${sort === option ? "font-semibold text-[#3665f3]" : ""}`}
+                        className={`block w-full rounded-xl px-3 py-2 text-left text-[13px] hover:bg-[#f4f8fd] ${sort === option ? "font-semibold text-[#3665f3]" : "text-[#0f1c3f]"}`}
                       >
                         {option}
                       </button>
@@ -486,15 +526,15 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex h-10 overflow-hidden rounded-full border border-[#e7eef6] bg-white">
                 <button
                   type="button"
                   aria-label="Grid view"
                   aria-pressed={layout === "grid"}
                   onClick={() => setLayout("grid")}
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${layout === "grid" ? "bg-[#e7efff] text-[#3b6ef5]" : "border border-[#e7ebf0] bg-white text-[#98a2b3]"}`}
+                  className={`flex h-10 w-10 items-center justify-center ${layout === "grid" ? "bg-[#eef3ff] text-[#3665f3]" : "text-[#8a94a6] hover:text-[#0f1c3f]"}`}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                     <path d="M4 4h6.2v6.2H4V4zm9.8 0H20v6.2h-6.2V4zM4 13.8h6.2V20H4v-6.2zm9.8 0H20V20h-6.2v-6.2z" />
                   </svg>
                 </button>
@@ -503,9 +543,9 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                   aria-label="List view"
                   aria-pressed={layout === "list"}
                   onClick={() => setLayout("list")}
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${layout === "list" ? "bg-[#e7efff] text-[#3b6ef5]" : "border border-[#e7ebf0] bg-white text-[#98a2b3]"}`}
+                  className={`flex h-10 w-10 items-center justify-center ${layout === "list" ? "bg-[#eef3ff] text-[#3665f3]" : "text-[#8a94a6] hover:text-[#0f1c3f]"}`}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                     <path d="M4 6h16v2.2H4V6zm0 5h16v2.2H4V11zm0 5h16v2.2H4V16z" />
                   </svg>
                 </button>
@@ -515,7 +555,7 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
 
           <section className="mt-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-[16px] font-bold text-[#191919]">{config.trending}</h2>
+              <h2 className="text-[16px] font-bold text-[#0f1c3f]">{config.trending}</h2>
               <button type="button" onClick={() => setFilters(emptyFilters)} className="text-[13px] font-semibold text-[#3665f3] hover:underline">
                 View all →
               </button>
@@ -527,7 +567,7 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                     <Image src={item.img} alt="" fill className="object-contain" sizes="44px" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-semibold text-[#191919]">{item.short ?? item.title.split(",")[0]}</span>
+                    <span className="block truncate text-[13px] font-semibold text-[#0f1c3f]">{item.short ?? item.title.split(",")[0]}</span>
                     <span className="mt-0.5 block text-[11.5px] text-[#8b909a]">From {npr(item.price)}</span>
                   </span>
                 </Link>
@@ -536,7 +576,7 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
           </section>
 
           {visible.length === 0 ? (
-            <p className="mt-6 rounded-2xl border border-dashed border-[#ddd] bg-white px-6 py-16 text-center text-[14px] text-[#707070]">
+            <p className="mt-6 rounded-2xl border border-dashed border-[#ddd] bg-white px-6 py-16 text-center text-[14px] text-[#6b7587]">
               No listings match these filters yet.
             </p>
           ) : (

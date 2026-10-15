@@ -48,7 +48,7 @@ export function SearchCategoryMenu({
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen((next) => !next)}
-        className="flex max-w-[168px] items-center gap-1.5 bg-transparent pr-1 text-[14px] text-[#191919]"
+        className="flex max-w-[168px] items-center gap-1.5 bg-transparent pr-1 text-[14px] text-[#0f1c3f]"
       >
         <span className="truncate">{current?.name || "All Categories"}</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="shrink-0" aria-hidden>
@@ -73,7 +73,7 @@ export function SearchCategoryMenu({
                 setOpen(false);
               }}
               className={`block w-full px-3 py-[7px] text-left text-[14px] ${
-                !value ? "bg-[#3665f3] text-white" : "text-[#191919] hover:bg-[#3665f3] hover:text-white"
+                !value ? "bg-[#3665f3] text-white" : "text-[#0f1c3f] hover:bg-[#3665f3] hover:text-white"
               }`}
             >
               All Categories
@@ -92,7 +92,7 @@ export function SearchCategoryMenu({
                     setOpen(false);
                   }}
                   className={`block w-full px-3 py-[7px] text-left text-[14px] ${
-                    selected ? "bg-[#3665f3] text-white" : "text-[#191919] hover:bg-[#3665f3] hover:text-white"
+                    selected ? "bg-[#3665f3] text-white" : "text-[#0f1c3f] hover:bg-[#3665f3] hover:text-white"
                   }`}
                 >
                   {item.name}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { HideOnRoutes } from "@/components/HideOnRoutes";
+import { CookieConsent } from "@/components/legal/CookieConsent";
 import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
 
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <SiteHeader />
         </HideOnRoutes>
         {children}
+        <CookieConsent />
       </body>
     </html>
   );

@@ -1,14 +1,21 @@
-import { BrowsePage } from "@/components/browse/BrowsePage";
-import { listings } from "@/lib/home-data";
+import { SiteFooter } from "@/components/SiteFooter";
+import { PageHero } from "@/components/ui/PageHero";
+import { LiveDeals } from "@/components/home/LiveDeals";
 
 export default function DealsPage() {
-  const deals = listings.filter((l) => l.off);
   return (
-    <BrowsePage
-      title="Today's Deals"
-      crumb="Deals"
-      items={deals}
-      subtitle="Limited-time offers. Don't miss out!"
-    />
+    <>
+      <PageHero
+        eyebrow="Deals"
+        title="Today's Deals"
+        body="Live discounted and featured listings from Nexlo sellers. Escrow still applies."
+        cta="Browse all"
+        href="/search"
+      />
+      <main className="page-shell py-8">
+        <LiveDeals limit={24} />
+      </main>
+      <SiteFooter />
+    </>
   );
 }

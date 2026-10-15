@@ -5,6 +5,7 @@ import { applyProxyBid, softCloseEndsAt } from "./auctions-math.mjs";
 import { notify } from "./notify.mjs";
 import { enforceVerification, evaluateUser } from "./trust.mjs";
 import { redisPublish } from "./redis.mjs";
+import { publicBids } from "./m3-commerce.mjs";
 
 const rooms = new Map();
 
@@ -57,15 +58,67 @@ async function snapshot(listingId) {
     [listingId],
   );
   const bids = await query(
-    `SELECT b.amount, b.max_amount, b.created_at, COALESCE(p.display_name, u.username, 'Bidder') AS bidder
+    `SELECT b.amount, b.created_at, COALESCE(p.display_name, u.username, 'Bidder') AS bidder
      FROM bids b JOIN users u ON u.id = b.bidder_id
      LEFT JOIN user_profiles p ON p.user_id = u.id
-     WHERE b.listing_id = $1 AND b.retracted = FALSE ORDER BY b.created_at DESC LIMIT 20`,
+     JOIN listings l ON l.id = b.listing_id
+     WHERE b.listing_id = $1 AND b.retracted = FALSE
+       AND (l.published_at IS NULL OR b.created_at >= l.published_at)
+     ORDER BY b.created_at DESC LIMIT 100`,
     [listingId],
   );
   const state = await query(`SELECT * FROM auction_states WHERE listing_id = $1`, [listingId]);
   const inc = await incrementFor(listing.rows[0]?.auction_current_price || listing.rows[0]?.auction_start_price);
-  return { listing: listing.rows[0], bids: bids.rows, state: state.rows[0] || null, increment: inc };
+  return {
+    listing: listing.rows[0],
+    bids: publicBids(bids.rows),
+    bidCount: bids.rows.length,
+    state: state.rows[0] || null,
+    increment: inc,
+  };
+}
+
+export async function relistAfterUnpaid(listingId) {
+  const { rows } = await query(`SELECT * FROM listings WHERE id = $1`, [listingId]);
+  const listing = rows[0];
+  if (!listing || !["sold", "ended"].includes(listing.status)) return { relisted: false };
+  const duration = Math.max(1, Math.min(720, Number(listing.auction_duration) || 168));
+  const start = Number(listing.auction_start_price || listing.price || listing.auction_current_price || 0);
+  await query(
+    `UPDATE listings SET
+       status = 'active',
+       published_at = NOW(),
+       ended_at = NULL,
+       auction_winner_id = NULL,
+       auction_bid_count = 0,
+       auction_current_price = $2,
+       auction_starts_at = CASE WHEN format IN ('auction','both') THEN NOW() ELSE auction_starts_at END,
+       auction_ends_at = CASE WHEN format IN ('auction','both') THEN NOW() + ($3 || ' hours')::interval ELSE auction_ends_at END
+     WHERE id = $1`,
+    [listingId, start, String(duration)],
+  );
+  await query(
+    `INSERT INTO auction_states (listing_id, current_price, bid_count, reserve_met, updated_at)
+     VALUES ($1, $2, 0, FALSE, NOW())
+     ON CONFLICT (listing_id) DO UPDATE SET
+       high_bidder_id = NULL,
+       high_max = NULL,
+       current_price = EXCLUDED.current_price,
+       bid_count = 0,
+       payment_deadline = NULL,
+       unpaid_at = NULL,
+       winner_order_id = NULL,
+       updated_at = NOW()`,
+    [listingId, start],
+  );
+  await notify(
+    listing.seller_id,
+    "relist",
+    "Listing relisted",
+    `${listing.title} was automatically relisted after an unpaid winner.`,
+    `/listing/${listingId}`,
+  );
+  return { relisted: true };
 }
 
 async function placeProxy(listingId, bidderId, maxAmount) {
@@ -291,7 +344,25 @@ export async function expireUnpaidWinners() {
         [row.listing_id, next.rows[0].bidder_id, row.current_price],
       );
       await notify(next.rows[0].bidder_id, "second_chance", "Second-chance offer", `You can buy ${row.title} at NPR ${row.current_price}.`, `/listing/${row.listing_id}`);
+      await notify(row.seller_id, "unpaid", "Unpaid winner", `${row.title} was not paid. A second-chance offer was sent.`, `/listing/${row.listing_id}`);
+    } else {
+      await relistAfterUnpaid(row.listing_id);
     }
+  }
+}
+
+export async function expireSecondChanceOffers() {
+  const { rows } = await query(
+    `SELECT id, listing_id FROM second_chance_offers
+     WHERE status = 'pending' AND expires_at < NOW()`,
+  );
+  for (const row of rows) {
+    await query(`UPDATE second_chance_offers SET status = 'expired' WHERE id = $1`, [row.id]);
+    const pending = await query(
+      `SELECT 1 FROM second_chance_offers WHERE listing_id = $1 AND status = 'pending' AND expires_at > NOW()`,
+      [row.listing_id],
+    );
+    if (!pending.rows[0]) await relistAfterUnpaid(row.listing_id);
   }
 }
 
@@ -299,7 +370,8 @@ export async function handleAuctions(method, pathParts, auth, body) {
   if (pathParts[0] === "auctions" && method === "GET" && !pathParts[1]) {
     if (!auth) return { status: 401, body: { error: "Sign in required" } };
     const bids = await query(
-      `SELECT b.*, l.title, l.auction_ends_at, l.auction_current_price, l.status AS listing_status
+      `SELECT b.*, l.title, l.auction_ends_at, l.auction_current_price, l.status AS listing_status,
+              (b.created_at > NOW() - INTERVAL '1 hour' AND l.status = 'active') AS can_retract
        FROM bids b JOIN listings l ON l.id = b.listing_id
        WHERE b.bidder_id = $1 AND b.retracted = FALSE
        ORDER BY b.created_at DESC LIMIT 40`,
@@ -325,6 +397,16 @@ export async function handleAuctions(method, pathParts, auth, body) {
     try {
       const snap = await snapshot(pathParts[1]);
       if (!snap.listing) return { status: 404, body: { error: "Auction not found" } };
+      if (auth) {
+        const high = Number(snap.state?.high_bidder_id || 0) === Number(auth.user_id);
+        const mine = await query(
+          `SELECT created_at FROM bids WHERE listing_id = $1 AND bidder_id = $2 AND retracted = FALSE ORDER BY created_at DESC LIMIT 1`,
+          [pathParts[1], auth.user_id],
+        );
+        const placed = mine.rows[0]?.created_at;
+        snap.youLead = high;
+        snap.canRetract = Boolean(placed) && Date.now() - new Date(placed).getTime() <= 60 * 60 * 1000;
+      }
       return { status: 200, body: snap };
     } catch {
       return { status: 404, body: { error: "Auction not found" } };
@@ -406,6 +488,8 @@ export async function handleAuctions(method, pathParts, auth, body) {
       await query(`UPDATE listings SET status = 'sold', auction_winner_id = $2 WHERE id = $1`, [listing.id, auth.user_id]);
       await notify(auth.user_id, "won", "Second-chance accepted", `Pay NPR ${amount} within 48 hours.`, "/orders");
       await notify(listing.seller_id, "sold", "Second-chance sold", `${listing.title} sold via second-chance offer.`, "/account?tab=selling");
+    } else {
+      await relistAfterUnpaid(offer.rows[0].listing_id);
     }
     return { status: 200, body: { data: { status: decision } } };
   }

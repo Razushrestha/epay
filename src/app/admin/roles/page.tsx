@@ -34,7 +34,7 @@ export default function AdminRolesPage() {
         <h2 className="text-[16px] font-extrabold">Staff</h2>
         <ul className="mt-3 space-y-2">
           {staff.map((person) => (
-            <li key={person.public_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f7f7f7] px-3 py-2">
+            <li key={person.public_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f4f8fd] px-3 py-2">
               <span className="text-[14px] font-medium text-[#0f1c3f]">{person.name} · {person.email}</span>
               <select
                 defaultValue={person.staff_role || "super_admin"}
