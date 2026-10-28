@@ -50,21 +50,21 @@ export default function AdminProductsPage() {
           <p className="text-[14px] text-[#6b7587]">Moderate listings, feature items, and manage the catalog.</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/admin/catalog" className="h-10 rounded-full border border-[#e2e8f0] bg-white px-4 text-[14px] font-semibold leading-10 text-[#0f1c3f]">Catalog</Link>
-          <Link href="/sell/create" className="h-10 rounded-full bg-[#3665f3] px-4 text-[14px] font-semibold leading-10 text-white">Add Product</Link>
+          <Link href="/admin/catalog" className="nexlo-btn-ghost h-10 px-4 leading-10">Catalog</Link>
+          <Link href="/sell/create" className="nexlo-btn nexlo-btn-blue">Add Product</Link>
         </div>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <section className="nexlo-card p-5">
         <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); load(); }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or seller" className="h-10 min-w-[220px] flex-1 rounded-lg border border-[#e2e8f0] px-3" />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 rounded-lg border border-[#e2e8f0] px-3">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or seller" className="nexlo-field min-w-[220px] flex-1" />
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="nexlo-field w-auto">
             <option value="">All statuses</option>
             {["draft", "active", "sold", "ended", "removed", "suspended", "pending", "approved", "rejected"].map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <button className="h-10 rounded-full border px-4 text-[14px]">Filter</button>
+          <button className="nexlo-btn-ghost h-10 px-4">Filter</button>
         </form>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[860px] text-left text-[13.5px]">

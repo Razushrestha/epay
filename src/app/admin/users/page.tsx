@@ -57,12 +57,12 @@ function UsersBoard() {
           <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Users</h1>
           <p className="text-[14px] text-[#6b7587]">Every registered member, staff flag, and standing action.</p>
         </div>
-        <button type="button" onClick={() => setOpen((v) => !v)} className="h-10 rounded-full bg-[#3665f3] px-4 text-[14px] font-semibold text-white">
+        <button type="button" onClick={() => setOpen((v) => !v)} className="nexlo-btn nexlo-btn-blue">
           Add New User
         </button>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
-      {notice ? <p className="rounded-xl bg-[#eaf1ff] px-4 py-3 text-[13px] text-[#2a4fa8]">{notice}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
+      {notice ? <p className="nexlo-alert nexlo-alert-info">{notice}</p> : null}
 
       {open ? (
         <form
@@ -81,21 +81,21 @@ function UsersBoard() {
             }
           }}
         >
-          <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} placeholder="First name" className="h-10 rounded-lg border border-[#e2e8f0] px-3" />
-          <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} placeholder="Last name" className="h-10 rounded-lg border border-[#e2e8f0] px-3" />
-          <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" type="email" required className="h-10 rounded-lg border border-[#e2e8f0] px-3" />
-          <input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Password (optional)" className="h-10 rounded-lg border border-[#e2e8f0] px-3" />
+          <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} placeholder="First name" className="nexlo-field" />
+          <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} placeholder="Last name" className="nexlo-field" />
+          <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" type="email" required className="nexlo-field" />
+          <input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Password (optional)" className="nexlo-field" />
           <label className="flex items-center gap-2 text-[13px] text-[#3a4a66]"><input type="checkbox" checked={form.staff} onChange={(e) => setForm({ ...form, staff: e.target.checked })} /> Staff</label>
           <label className="flex items-center gap-2 text-[13px] text-[#3a4a66]"><input type="checkbox" checked={form.seller} onChange={(e) => setForm({ ...form, seller: e.target.checked })} /> Seller</label>
-          <button className="h-10 rounded-full bg-[#121826] px-4 text-[14px] font-semibold text-white sm:col-span-2">Create user</button>
+          <button className="nexlo-btn sm:col-span-2">Create user</button>
         </form>
       ) : null}
 
       <section className="nexlo-card p-5">
         <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); load(); }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search email, username, or name" className="h-10 min-w-[220px] flex-1 rounded-lg border border-[#e2e8f0] px-3" />
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Action reason" className="h-10 min-w-[180px] rounded-lg border border-[#e2e8f0] px-3" />
-          <button className="h-10 rounded-full border border-[#e2e8f0] px-4 text-[14px]">Search</button>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search email, username, or name" className="nexlo-field min-w-[220px] flex-1" />
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Action reason" className="nexlo-field min-w-[180px]" />
+          <button className="nexlo-btn-ghost h-10 px-4">Search</button>
         </form>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[860px] text-left text-[13.5px]">

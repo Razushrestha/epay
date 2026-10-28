@@ -18,6 +18,14 @@ import { cdnify } from "./cdn.mjs";
 import { evaluateUser, recordDevice } from "./trust.mjs";
 import { clearAvatar, uploadAvatar } from "./upload.mjs";
 import {
+  beginAuthentication,
+  beginRegistration,
+  deletePasskey,
+  finishAuthentication,
+  finishRegistration,
+  listPasskeys,
+} from "./passkeys.mjs";
+import {
   ensureM1Tables,
   handleM1Account,
   handleM1Public,
@@ -32,6 +40,22 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
 const API = "/api/v1";
 const devCodes = process.env.NODE_ENV !== "production";
+
+/** Personal and business storefront accounts skip OTP/2FA so QA can sign in with a password. Staff still use 2FA. */
+function skipStorefrontOtp(user) {
+  return Boolean(user) && !user.is_staff;
+}
+
+async function activatePendingStorefrontUser(user) {
+  if (user.status !== "pending") return user;
+  const verifiedCol = user.email ? "email_verified_at" : "phone_verified_at";
+  await (await db()).query(
+    `UPDATE users SET status = 'active', ${verifiedCol} = COALESCE(${verifiedCol}, NOW()), updated_at = NOW() WHERE id = $1`,
+    [user.id],
+  );
+  user.status = "active";
+  return user;
+}
 
 async function db() {
   if (!pool) await initDb();
@@ -481,7 +505,7 @@ async function finishSocial(req, res, json, provider, sub, email, name) {
     [user.id, provider, sub, email || user.email],
   );
   if (user.status === "suspended") return json(req, res, 403, { error: "This account is suspended" });
-  if ((user.is_seller || user.is_staff) && !user.two_factor_enabled) {
+  if (!skipStorefrontOtp(user) && (user.is_seller || user.is_staff) && !user.two_factor_enabled) {
     const challengeToken = await createChallenge(user, "enroll_2fa", 20);
     return json(req, res, 200, { step: "enroll", challengeToken });
   }
@@ -531,10 +555,10 @@ export async function handleIdentity(req, res, ctx) {
       await client.query("BEGIN");
       const isSeller = accountType === "business";
       const { rows } = await client.query(
-        `INSERT INTO users (public_id, email, phone, password_hash, status, account_type, is_seller)
-         VALUES ($1, $2, $3, $4, 'pending', $5, $6)
+        `INSERT INTO users (public_id, email, phone, password_hash, status, account_type, is_seller, email_verified_at, phone_verified_at)
+         VALUES ($1, $2, $3, $4, 'active', $5, $6, $7, $8)
          RETURNING id, public_id, email, phone`,
-        [randomUUID(), email, phone, await hashPassword(password), accountType, isSeller],
+        [randomUUID(), email, phone, await hashPassword(password), accountType, isSeller, email ? new Date() : null, phone ? new Date() : null],
       );
       const user = rows[0];
       await client.query(
@@ -552,34 +576,23 @@ export async function handleIdentity(req, res, ctx) {
         `INSERT INTO feedback_scores (user_id) VALUES ($1) ON CONFLICT DO NOTHING`,
         [user.id],
       );
-      const channel = email ? "email" : "phone";
-      const destination = email || phone;
-      const code = String(randomInt(100000, 1000000));
-      await client.query(
-        `INSERT INTO verification_codes (user_id, channel, purpose, destination, code_hash, expires_at)
-         VALUES ($1, $2, 'verify', $3, $4, NOW() + INTERVAL '10 minutes')`,
-        [user.id, channel, destination, hashCode(code)],
-      );
       await client.query("COMMIT");
       await recordConsents(user.id, ["privacy", "terms"], req).catch(() => {});
-      const delivery = await deliverCode(channel, destination, code, "verify");
-      if (!delivery?.sent) {
-        console.error("[auth] register code email did not send", delivery?.userMessage || delivery?.skipped);
-      }
       const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
       const risk = await evaluateUser(user.id, { kind: "register", ip, email, phone }).catch(() => null);
       if (risk?.blocked) {
         await (await db()).query(`UPDATE users SET status = 'restricted' WHERE id = $1`, [user.id]);
+        return json(req, res, 201, {
+          data: { id: user.public_id, skipVerify: true, review: true },
+        });
       }
       await recordDevice(user.id, body.deviceHash).catch(() => {});
+      const full = await findUser(email || phone);
+      const token = await openSession(full, req, true);
       return json(req, res, 201, {
-        data: {
-          id: user.public_id,
-          destination,
-          channel,
-          review: Boolean(risk?.flagged || risk?.blocked),
-          ...deliveryFields(delivery, code),
-        },
+        token,
+        user: await loadPublic(full),
+        data: { id: user.public_id, skipVerify: true, review: Boolean(risk?.flagged) },
       });
     } catch (err) {
       await client.query("ROLLBACK");
@@ -664,33 +677,79 @@ export async function handleIdentity(req, res, ctx) {
     
     await refreshStanding(user);
     if (user.status === "pending") {
-      return json(req, res, 403, {
-        error: "Verify the code we sent before signing in. Open Verify and tap Resend if it did not arrive.",
-      });
+      if (skipStorefrontOtp(user)) {
+        await activatePendingStorefrontUser(user);
+      } else {
+        return json(req, res, 403, {
+          error: "Verify the code we sent before signing in. Open Verify and tap Resend if it did not arrive.",
+        });
+      }
     }
     if (user.status === "suspended") {
       return json(req, res, 403, { error: "This account is suspended. You can appeal from the sign-in page after a reset, or contact support." });
     }
-    const must2fa = user.is_seller || user.is_staff;
-    if (must2fa && !user.two_factor_enabled && !(body.adminPortal && user.is_staff)) {
-      const challengeToken = await createChallenge(user, "enroll_2fa", 20);
-      return json(req, res, 200, { step: "enroll", challengeToken });
-    }
-    if (user.two_factor_enabled) {
-      const challengeToken = await createChallenge(user, "login_2fa");
-      let issued;
-      if (user.two_factor_method === "otp") {
-        const channel = user.email ? "email" : "phone";
-        issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
+    if (!skipStorefrontOtp(user)) {
+      const must2fa = user.is_seller || user.is_staff;
+      if (must2fa && !user.two_factor_enabled && !(body.adminPortal && user.is_staff)) {
+        const challengeToken = await createChallenge(user, "enroll_2fa", 20);
+        return json(req, res, 200, { step: "enroll", challengeToken });
       }
-      return json(req, res, 200, {
-        step: "challenge",
-        method: user.two_factor_method,
-        challengeToken,
-        ...(issued ? deliveryFields(issued.delivery, issued.code) : {}),
-      });
+      if (user.two_factor_enabled) {
+        const challengeToken = await createChallenge(user, "login_2fa");
+        let issued;
+        if (user.two_factor_method === "otp") {
+          const channel = user.email ? "email" : "phone";
+          issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
+        }
+        return json(req, res, 200, {
+          step: "challenge",
+          method: user.two_factor_method,
+          challengeToken,
+          ...(issued ? deliveryFields(issued.delivery, issued.code) : {}),
+        });
+      }
     }
     const token = await openSession(user, req, body.remember !== false);
+    return json(req, res, 200, { token, user: await loadPublic(user) });
+  }
+
+  if (pathname === `${API}/auth/passkeys/options` && method === "POST") {
+    const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_LOGIN);
+    if (rateLimitResult) {
+      if (rateLimitResult.headers) {
+        Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
+          res.setHeader(key, value);
+        });
+      }
+      return json(req, res, rateLimitResult.status, rateLimitResult.body);
+    }
+    const body = await readJson(req);
+    return json(req, res, 200, await beginAuthentication(req, body.identifier));
+  }
+
+  if (pathname === `${API}/auth/passkeys` && method === "POST") {
+    const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_LOGIN);
+    if (rateLimitResult) {
+      if (rateLimitResult.headers) {
+        Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
+          res.setHeader(key, value);
+        });
+      }
+      return json(req, res, rateLimitResult.status, rateLimitResult.body);
+    }
+    const body = await readJson(req);
+    const result = await finishAuthentication(req, body);
+    if (!result.ok) return json(req, res, 401, { error: result.error });
+    const user = result.user;
+    await refreshStanding(user);
+    if (user.status === "suspended") {
+      return json(req, res, 403, { error: "This account is suspended. You can appeal from the sign-in page after a reset, or contact support." });
+    }
+    if (user.status === "pending") {
+      if (skipStorefrontOtp(user)) await activatePendingStorefrontUser(user);
+      else return json(req, res, 403, { error: "Verify the code we sent before signing in." });
+    }
+    const token = await openSession(user, req, true);
     return json(req, res, 200, { token, user: await loadPublic(user) });
   }
 
@@ -803,7 +862,7 @@ export async function handleIdentity(req, res, ctx) {
       [user.id, sub, email],
     );
     if (user.status === "suspended") return json(req, res, 403, { error: "This account is suspended" });
-    if ((user.is_seller || user.is_staff) && !user.two_factor_enabled) {
+    if (!skipStorefrontOtp(user) && (user.is_seller || user.is_staff) && !user.two_factor_enabled) {
       const challengeToken = await createChallenge(user, "enroll_2fa", 20);
       return json(req, res, 200, { step: "enroll", challengeToken });
     }
@@ -1165,6 +1224,28 @@ export async function handleIdentity(req, res, ctx) {
       [sessionMatch[1], actor.id],
     );
     return json(req, res, 200, { data: { revoked: true } });
+  }
+
+  if (pathname === `${API}/account/passkeys` && method === "GET") {
+    return json(req, res, 200, { data: await listPasskeys(actor.id) });
+  }
+
+  if (pathname === `${API}/account/passkeys/options` && method === "POST") {
+    return json(req, res, 200, await beginRegistration(req, actor));
+  }
+
+  if (pathname === `${API}/account/passkeys` && method === "POST") {
+    const body = await readJson(req);
+    const result = await finishRegistration(req, actor, body);
+    if (!result.ok) return json(req, res, 400, { error: result.error });
+    return json(req, res, 201, { data: { saved: true } });
+  }
+
+  const passkeyMatch = pathname.match(new RegExp(`^${API}/account/passkeys/(\\d+)$`));
+  if (passkeyMatch && method === "DELETE") {
+    const removed = await deletePasskey(actor.id, passkeyMatch[1]);
+    if (!removed) return json(req, res, 404, { error: "Passkey not found" });
+    return json(req, res, 200, { data: { removed: true } });
   }
 
   if (pathname === `${API}/account/2fa/start` && method === "POST") {

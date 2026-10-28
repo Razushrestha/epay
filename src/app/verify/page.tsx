@@ -43,7 +43,7 @@ const features = [
 
 export default function VerifyPage() {
   return (
-    <main className="auth-lock grid h-dvh overflow-hidden bg-[#f4f8fd] lg:grid-cols-2">
+    <main className="auth-lock grid min-h-dvh overflow-y-auto bg-[#f4f8fd] lg:h-dvh lg:grid-cols-2 lg:overflow-hidden">
       <section className="relative hidden overflow-hidden bg-[#eef4fb] lg:block">
         <Image
           src="/auth/verify-scene.jpg"
@@ -113,7 +113,7 @@ export default function VerifyPage() {
         </div>
       </section>
 
-      <section className="relative flex h-full min-h-0 flex-col overflow-hidden">
+      <section className="relative flex min-h-dvh flex-col overflow-y-auto lg:h-full lg:min-h-0 lg:overflow-hidden">
         <svg
           viewBox="0 0 600 180"
           preserveAspectRatio="none"

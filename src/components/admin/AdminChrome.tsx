@@ -36,6 +36,7 @@ const NAV = [
   { id: "dashboard", href: "/admin", label: "Dashboard", icon: "M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" },
   { id: "users", href: "/admin/users", label: "Users", icon: "M16 19c0-2.8-2.2-5-6-5s-6 2.2-6 5M10 11a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4ZM20 19v-2.4c0-1.7-1-3.2-2.6-3.8M16.4 5.2a3.2 3.2 0 0 1 0 6.1" },
   { id: "products", href: "/admin/products", label: "Products", icon: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
+  { id: "catalog", href: "/admin/catalog", label: "Catalog", icon: "M4 6h7v7H4V6Zm9 0h7v7h-7V6ZM4 15h7v7H4v-7Zm9 0h7v7h-7v-7Z" },
   { id: "orders", href: "/admin/orders", label: "Orders", icon: "M7 4h10l2 4H5l2-4Zm-2 4h14v12H5V8Zm4 4h6" },
   { id: "payouts", href: "/admin/payouts", label: "Payouts", icon: "M4 7h16v10H4V7Zm0 4h16M8 15h4" },
   { id: "finance", href: "/admin/finance", label: "Finance", icon: "M4 19V8l8-4 8 4v11H4Zm4-2h2m4 0h2m4 0h2" },
@@ -86,15 +87,27 @@ export function AdminChrome({
 }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.displayName || "Admin";
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-[#f4f8fd]">
+    <div className="relative min-h-dvh overflow-x-clip bg-[#f4f8fd]">
       <div className="pointer-events-none absolute -left-24 bottom-0 h-[420px] w-[420px] rounded-full bg-[#d7ecff] opacity-70 blur-3xl" />
       <div className="pointer-events-none absolute -left-10 bottom-24 h-40 w-40 rounded-full bg-[#c8f3ea] opacity-50 blur-2xl" />
 
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur">
-        <div className="flex h-[72px] items-center gap-4 px-5 lg:px-7">
+        <div className="flex h-[60px] items-center gap-3 px-3 sm:h-[72px] sm:gap-4 sm:px-5 lg:px-7">
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-[#0f1c3f] hover:bg-[#f3f7fc] lg:hidden"
+            aria-expanded={navOpen}
+            aria-label={navOpen ? "Close admin menu" : "Open admin menu"}
+            onClick={() => setNavOpen((v) => !v)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+              {navOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+          </button>
           <Link href="/admin" className="shrink-0" aria-label="Nexlo admin">
             <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" priority />
           </Link>
@@ -143,8 +156,25 @@ export function AdminChrome({
         </div>
       </header>
 
-      <div className="relative mx-auto grid max-w-[1440px] gap-6 px-4 py-5 lg:grid-cols-[228px_minmax(0,1fr)] lg:px-6">
-        <aside className="relative flex flex-col">
+      <div className="relative mx-auto grid max-w-[1440px] gap-6 px-3 py-4 sm:px-4 lg:grid-cols-[228px_minmax(0,1fr)] lg:px-6 lg:py-5">
+        {navOpen ? (
+          <button
+            type="button"
+            aria-label="Close admin menu"
+            className="fixed inset-0 z-20 bg-[#0f1c3f]/30 lg:hidden"
+            onClick={() => setNavOpen(false)}
+          />
+        ) : null}
+        <aside
+          className={`relative flex-col ${
+            navOpen
+              ? "fixed inset-y-0 left-0 z-30 flex w-[min(100%,280px)] overflow-y-auto bg-[#f4f8fd] px-3 py-4 shadow-[8px_0_24px_-16px_rgba(15,28,63,0.35)] lg:static lg:w-auto lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none"
+              : "hidden lg:flex"
+          }`}
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest("a")) setNavOpen(false);
+          }}
+        >
           <nav className="space-y-1">
             {NAV.map((item) => {
               const active =

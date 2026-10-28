@@ -545,8 +545,8 @@ export function LiveListing({ listing }: { listing: Listing }) {
 
           <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)_minmax(300px,340px)]">
             <section>
-              <div className="grid grid-cols-[68px_minmax(0,1fr)] gap-3 sm:grid-cols-[76px_minmax(0,1fr)]">
-                <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[76px_minmax(0,1fr)]">
+                <div className="flex flex-row gap-2 overflow-x-auto sm:flex-col sm:overflow-visible">
                   {(visibleThumbs.length ? visibleThumbs : [hero]).map((src, i) => {
                     const last = i === visibleThumbs.length - 1 && extraThumbs > 0;
                     return (
@@ -554,7 +554,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                         key={`${src}-${i}`}
                         type="button"
                         onClick={() => setIndex(last ? 4 : i)}
-                        className={`relative h-[68px] w-[68px] overflow-hidden rounded-xl border-2 bg-white sm:h-[72px] sm:w-[72px] ${index === i ? "border-[#3665f3]" : "border-[#e6ebf2]"}`}
+                        className={`relative h-[64px] w-[64px] shrink-0 overflow-hidden rounded-xl border-2 bg-white sm:h-[72px] sm:w-[72px] ${index === i ? "border-[#3665f3]" : "border-[#e6ebf2]"}`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={src} alt="" className="h-full w-full object-contain p-1" />
@@ -568,7 +568,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
 
                 <div className="relative overflow-hidden rounded-2xl border border-[#e7eef8] bg-[linear-gradient(145deg,#f4f8ff_0%,#e7f0ff_42%,#f8fbff_100%)]">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={hero} alt={title} className="h-[420px] w-full object-contain p-6 sm:h-[460px]" />
+                  <img src={hero} alt={title} className="h-[240px] w-full object-contain p-4 sm:h-[420px] sm:p-6 lg:h-[460px]" />
                   <div className="absolute right-3 top-3 z-10 flex gap-2">
                     <button type="button" aria-label={saved ? "Remove from watchlist" : "Add to watchlist"} onClick={() => saveWatch().catch(() => undefined)} className={`flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md ${saved ? "text-[#e53238]" : "text-[#0f1c3f]"}`}>
                       <WatchlistIcon saved={saved} size={18} />
@@ -977,11 +977,12 @@ export function LiveListing({ listing }: { listing: Listing }) {
                     {isFixed && live ? (
                       <button
                         type="button"
-                        className={`${isAuction ? "mt-2" : "mt-4"} inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6]`}
+                        disabled={(variations.length > 0 && !selectedSku) || stock < 1}
+                        className={`${isAuction ? "mt-2" : "mt-4"} inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6] disabled:opacity-60`}
                         onClick={() => buyNow().catch((err) => setNotice(err instanceof Error ? err.message : "Could not add to cart"))}
                       >
                         <Icon name="cart" />
-                        Buy it now
+                        {stock < 1 ? "Out of stock" : variations.length && !selectedSku ? "Select options" : "Buy it now"}
                       </button>
                     ) : null}
                   </>

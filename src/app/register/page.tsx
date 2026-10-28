@@ -27,7 +27,7 @@ const floats = [
 
 export default function RegisterPage() {
   return (
-    <main className="auth-lock grid h-dvh overflow-hidden bg-[#f3f7fc] lg:grid-cols-2">
+    <main className="auth-lock grid min-h-dvh overflow-y-auto bg-[#f3f7fc] lg:h-dvh lg:grid-cols-2 lg:overflow-hidden">
       <section className="relative hidden overflow-hidden bg-[#e7f2fb] lg:block">
         <Image
           src="/auth/register-people.jpg"

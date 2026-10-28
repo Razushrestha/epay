@@ -17,7 +17,18 @@ async function check(name, url, ok = (res) => res.ok) {
   }
 }
 
-const listingId = process.env.UAT_LISTING_ID || "6";
+async function resolveListingId() {
+  if (process.env.UAT_LISTING_ID) return process.env.UAT_LISTING_ID;
+  try {
+    const res = await fetch(`${api}/api/v1/listings?limit=1`);
+    const body = await res.json();
+    return String(body.listings?.[0]?.id || "6");
+  } catch {
+    return "6";
+  }
+}
+
+const listingId = await resolveListingId();
 const checks = [
   check("API health", `${api}/health`),
   check("Catalog L1", `${api}/api/v1/catalog/categories?level=1`),

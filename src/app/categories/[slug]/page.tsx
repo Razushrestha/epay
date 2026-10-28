@@ -1,8 +1,9 @@
-import { BrowsePage, titleForSlug } from "@/components/browse/BrowsePage";
+import { redirect } from "next/navigation";
 import { CategoryBrowse } from "@/components/browse/ElectronicsBrowse";
 import { SiteFooter } from "@/components/SiteFooter";
 import { categoryBrowse } from "@/lib/category-catalogs";
-import { categoryAliases, listings } from "@/lib/home-data";
+import { categoryAliases, categoryNames } from "@/lib/home-data";
+import { categorySearchHref, fetchLevel1Categories } from "@/lib/catalog";
 
 export default async function CategoryPage({
   params,
@@ -11,10 +12,6 @@ export default async function CategoryPage({
 }) {
   const { slug } = await params;
   const key = categoryAliases[slug] ?? slug;
-  const items = listings.filter((l) => l.category === key);
-  const title = titleForSlug(slug);
-
-  const results = items.length > 0 ? items : listings;
 
   const browse = categoryBrowse[key];
   if (browse) {
@@ -26,16 +23,17 @@ export default async function CategoryPage({
     );
   }
 
-  return (
-    <BrowsePage
-      title={title}
-      crumb={title}
-      items={results}
-      subtitle={
-        items.length > 0
-          ? `${items.length} listings in ${title}`
-          : `Showing related listings for ${title}`
-      }
-    />
+  if (slug === "deals" || key === "deals") redirect("/deals");
+  if (slug === "saved") redirect("/watchlist");
+
+  const title = categoryNames[slug] ?? categoryNames[key] ?? slug.replace(/-/g, " ");
+  const cats = await fetchLevel1Categories().catch(() => []);
+  const match = cats.find(
+    (cat) =>
+      cat.slug === slug ||
+      cat.slug === key ||
+      cat.name.toLowerCase() === title.toLowerCase(),
   );
+  if (match) redirect(categorySearchHref(match.id));
+  redirect(`/search?q=${encodeURIComponent(title)}`);
 }

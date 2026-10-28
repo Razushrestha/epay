@@ -111,7 +111,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="grid gap-5 pb-8 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-5">
-        {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+        {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
 
         <div>
           <p className="text-[16px] text-[#6b7587]">{greeting()},</p>

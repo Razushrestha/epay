@@ -38,8 +38,8 @@ const tiles = [
 export function PromoBanner() {
   return (
     <section className="page-shell pt-6">
-      <div className="promo-bg flex min-h-[280px] items-center overflow-hidden rounded-[22px] lg:h-[300px]">
-        <div className="flex w-[38%] shrink-0 flex-col justify-center px-8 text-white sm:px-12">
+      <div className="promo-bg flex min-h-[240px] flex-col overflow-hidden rounded-[22px] sm:min-h-[280px] lg:h-[300px] lg:flex-row lg:items-center">
+        <div className="flex w-full shrink-0 flex-col justify-center px-5 py-6 text-white sm:px-10 lg:w-[38%] lg:px-12 lg:py-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/75">
             Trending now
           </p>

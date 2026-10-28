@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { accountApi } from "@/lib/account-api";
+import { AccountEmpty, AccountSection } from "@/components/account/AccountChrome";
+import { StatusPill } from "@/components/commerce/BuyShell";
 
 type Ticket = { id: number; public_id: string; subject: string; category: string; priority: string; status: string; created_at: string };
 
@@ -21,15 +23,20 @@ export function TicketsBoard() {
   }, []);
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Support</h1>
-        <p className="mt-1 text-[14px] text-[#6b7587]">Open a ticket for orders, payouts, or account issues. Returns and cases live in the <Link href="/resolution" className="font-semibold text-[#3665f3]">Resolution Center</Link>.</p>
-      </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
-      {notice ? <p className="rounded-xl bg-[#eaf1ff] px-4 py-3 text-[13px] text-[#2a4fa8]">{notice}</p> : null}
+    <AccountSection
+      title="Support"
+      body="Open a ticket for orders, payouts, or account issues. Returns and cases live in the Resolution Center."
+      aside={
+        <Link href="/resolution" className="text-[13px] font-semibold text-[#3665f3] hover:underline">
+          Resolution Center →
+        </Link>
+      }
+    >
+      {error ? <p className="nexlo-alert nexlo-alert-error mb-4">{error}</p> : null}
+      {notice ? <p className="nexlo-alert nexlo-alert-ok mb-4">{notice}</p> : null}
+
       <form
-        className="nexlo-card space-y-2 p-5"
+        className="nexlo-card space-y-3 p-5"
         onSubmit={async (e) => {
           e.preventDefault();
           await accountApi("/api/v1/tickets", { method: "POST", body: JSON.stringify(form) });
@@ -38,26 +45,56 @@ export function TicketsBoard() {
           await load();
         }}
       >
-        <input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Subject" required className="h-10 w-full rounded-full border px-4" />
-        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="h-10 rounded-full border px-3">
+        <p className="text-[16px] font-bold text-[#0f1c3f]">New ticket</p>
+        <input
+          value={form.subject}
+          onChange={(e) => setForm({ ...form, subject: e.target.value })}
+          placeholder="Subject"
+          required
+          className="nexlo-field"
+        />
+        <select
+          value={form.category}
+          onChange={(e) => setForm({ ...form, category: e.target.value })}
+          className="nexlo-field w-auto min-w-[180px]"
+        >
           <option value="general">General</option>
           <option value="order">Order</option>
           <option value="return">Return</option>
           <option value="payout">Payout</option>
           <option value="account">Account</option>
         </select>
-        <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} className="min-h-24 w-full rounded-xl border px-3 py-2" placeholder="Describe the issue" />
-        <button className="nexlo-btn nexlo-btn-blue">Submit ticket</button>
+        <textarea
+          value={form.body}
+          onChange={(e) => setForm({ ...form, body: e.target.value })}
+          className="nexlo-field h-auto min-h-24 rounded-2xl py-3"
+          placeholder="Describe the issue"
+          required
+        />
+        <button type="submit" className="nexlo-btn nexlo-btn-blue">
+          Submit ticket
+        </button>
       </form>
-      <ul className="space-y-2">
-        {rows.map((row) => (
-          <li key={row.public_id} className="rounded-2xl bg-white px-4 py-3">
-            <p className="font-semibold text-[#0f1c3f]">{row.subject}</p>
-            <p className="text-[13px] capitalize text-[#6b7587]">{row.category} · {row.status} · {new Date(row.created_at).toLocaleString()}</p>
-          </li>
-        ))}
-        {rows.length === 0 ? <li className="text-[13px] text-[#8a94a6]">No tickets yet.</li> : null}
-      </ul>
-    </section>
+
+      {rows.length === 0 ? (
+        <div className="mt-4">
+          <AccountEmpty title="No tickets yet" body="When you submit a ticket, it will appear here with its status." />
+        </div>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {rows.map((row) => (
+            <li key={row.public_id} className="nexlo-card flex flex-wrap items-center justify-between gap-3 p-4">
+              <div>
+                <p className="text-[14px] font-bold text-[#0f1c3f]">{row.subject}</p>
+                <p className="mt-0.5 text-[12.5px] capitalize text-[#6b7587]">
+                  {row.category} · {new Date(row.created_at).toLocaleString()}
+                </p>
+              </div>
+              <StatusPill status={row.status} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </AccountSection>
   );
 }

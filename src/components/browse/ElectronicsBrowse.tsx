@@ -283,8 +283,8 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
 
   return (
     <main className="bg-[#f6f7f9]">
-      <div className="page-shell grid gap-8 py-5 lg:grid-cols-[248px_minmax(0,1fr)]">
-        <aside className="h-fit lg:sticky lg:top-4">
+      <div className="page-shell grid gap-6 py-4 sm:py-5 lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-8">
+        <aside className="hidden h-fit lg:sticky lg:top-4 lg:block">
           <p className="px-1 text-[12.5px] text-[#98a2b3]">
             <Link href="/" className="hover:underline">Home</Link>
             <span className="mx-1.5">›</span>
@@ -358,7 +358,7 @@ export function CategoryBrowse({ config }: { config: CategoryBrowseConfig }) {
                 </span>
               </button>
             </div>
-            <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-2xl bg-white px-2.5 py-2 shadow-[0_8px_22px_rgba(16,24,40,0.12)]">
+            <div className="absolute right-3 top-3 z-10 hidden items-center gap-2 rounded-2xl bg-white px-2.5 py-2 shadow-[0_8px_22px_rgba(16,24,40,0.12)] sm:flex">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e7f8ee] text-[#16a34a]">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <path d="M12 3 5 6v6c0 4.2 2.8 7.2 7 9 4.2-1.8 7-4.8 7-9V6l-7-3z" />

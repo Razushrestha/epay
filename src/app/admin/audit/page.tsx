@@ -22,7 +22,7 @@ export default function AdminAuditPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Audit log</h1>
         <p className="text-[14px] text-[#6b7587]">Every staff write on users, listings, disputes, CMS, and settings.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <ul className="space-y-2">
         {rows.map((row) => (
           <li key={row.id} className="rounded-2xl border border-[#e7eef6] bg-white px-4 py-3 text-[13px]">

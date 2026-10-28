@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { accountApi } from "@/lib/account-api";
+import { AccountEmpty, AccountSection } from "@/components/account/AccountChrome";
+import { money } from "@/components/commerce/BuyShell";
 
 type Collection = { public_id: string; name: string; item_count: number };
 type Item = { id: number; title: string; price: number | null; primary_photo: string | null; status: string };
@@ -30,12 +32,19 @@ export function CollectionsBoard() {
   }
 
   return (
-    <section className="nexlo-card p-6">
-      <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Collections</h1>
-      <p className="mt-1 text-[13px] text-[#667085]">Named lists, like My eBay collections. Watchlist stays separate.</p>
-      {error ? <p className="mt-3 text-[13px] text-red-700">{error}</p> : null}
+    <AccountSection
+      title="Collections"
+      body="Named lists, like My eBay collections. Watchlist stays separate."
+      aside={
+        <Link href="/watchlist" className="text-[13px] font-semibold text-[#3665f3] hover:underline">
+          Open watchlist →
+        </Link>
+      }
+    >
+      {error ? <p className="nexlo-alert nexlo-alert-error mb-4">{error}</p> : null}
+
       <form
-        className="mt-4 flex flex-wrap gap-2"
+        className="nexlo-card flex flex-wrap gap-2 p-4"
         onSubmit={async (e) => {
           e.preventDefault();
           if (name.trim().length < 2) return;
@@ -48,54 +57,81 @@ export function CollectionsBoard() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="New collection name"
-          className="h-10 min-w-[200px] flex-1 rounded-full border border-[#e2e8f0] px-4 text-[14px]"
+          className="nexlo-field min-w-[200px] flex-1"
         />
-        <button className="h-10 rounded-full bg-[#3665f3] px-4 text-[13.5px] font-semibold text-white">Create</button>
+        <button type="submit" className="nexlo-btn nexlo-btn-blue h-10">
+          Create
+        </button>
       </form>
-      <ul className="mt-4 space-y-2">
-        {rows.map((row) => (
-          <li key={row.public_id} className="rounded-xl border border-[#eef2f7] px-3 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <button type="button" className="text-left font-semibold text-[#0f1c3f]" onClick={() => void open(row.public_id)}>
-                {row.name} <span className="font-normal text-[#6b7587]">({row.item_count})</span>
-              </button>
-              <button
-                type="button"
-                className="text-[12.5px] text-[#e5484d]"
-                onClick={async () => {
-                  await accountApi(`/api/v1/account/collections/${row.public_id}`, { method: "DELETE" });
-                  if (openId === row.public_id) {
-                    setOpenId(null);
-                    setItems([]);
-                  }
-                  await load();
-                }}
-              >
-                Delete
-              </button>
-            </div>
-            {openId === row.public_id ? (
-              <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {items.map((item) => (
-                  <li key={item.id} className="overflow-hidden rounded-lg border border-[#eef2f7]">
-                    <Link href={`/listing/${item.id}`} className="block">
-                      <span className="block aspect-square bg-[#f4f8fd]">
-                        {item.primary_photo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.primary_photo} alt="" className="h-full w-full object-cover" />
-                        ) : null}
-                      </span>
-                      <span className="block truncate px-2 py-1.5 text-[12px]">{item.title}</span>
-                    </Link>
-                  </li>
-                ))}
-                {!items.length ? <li className="col-span-full text-[12.5px] text-[#8a94a6]">This collection is empty.</li> : null}
-              </ul>
-            ) : null}
-          </li>
-        ))}
-        {!rows.length ? <li className="text-[13px] text-[#8a94a6]">No collections yet. Create one, then save items from a listing.</li> : null}
-      </ul>
-    </section>
+
+      {rows.length === 0 ? (
+        <div className="mt-4">
+          <AccountEmpty
+            title="No collections yet"
+            body="Create a list, then save items from a listing page."
+            action={
+              <Link href="/search" className="nexlo-btn nexlo-btn-blue">
+                Find items
+              </Link>
+            }
+          />
+        </div>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {rows.map((row) => (
+            <li key={row.public_id} className="nexlo-card p-4">
+              <div className="flex items-center justify-between gap-3">
+                <button type="button" className="text-left" onClick={() => void open(row.public_id)}>
+                  <span className="text-[15px] font-bold text-[#0f1c3f]">{row.name}</span>
+                  <span className="ml-2 text-[13px] text-[#6b7587]">
+                    · {row.item_count} item{row.item_count === 1 ? "" : "s"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="text-[12.5px] font-semibold text-[#e5484d]"
+                  onClick={async () => {
+                    await accountApi(`/api/v1/account/collections/${row.public_id}`, { method: "DELETE" });
+                    if (openId === row.public_id) {
+                      setOpenId(null);
+                      setItems([]);
+                    }
+                    await load();
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+              {openId === row.public_id ? (
+                items.length === 0 ? (
+                  <p className="mt-3 text-[13px] text-[#8a94a6]">This collection is empty.</p>
+                ) : (
+                  <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {items.map((item) => (
+                      <li key={item.id}>
+                        <Link href={`/listing/${item.id}`} className="block min-w-0">
+                          <span className="block overflow-hidden rounded-2xl bg-[#f4f8fd]">
+                            {item.primary_photo ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={item.primary_photo} alt="" className="aspect-[4/3] w-full object-cover" />
+                            ) : (
+                              <span className="flex aspect-[4/3] items-center justify-center text-[12px] text-[#6b7587]">No image</span>
+                            )}
+                          </span>
+                          <span className="mt-1.5 line-clamp-2 block text-[13px] text-[#0f1c3f]">{item.title}</span>
+                          {item.price != null ? (
+                            <span className="text-[12px] font-semibold text-[#0f1c3f]">{money(item.price)}</span>
+                          ) : null}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </AccountSection>
   );
 }

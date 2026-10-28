@@ -26,6 +26,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
@@ -33,12 +34,21 @@ body {
   color: #0f1c3f;
   font-family: var(--font-geist-sans), "Helvetica Neue", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
 }
 
-html:has(.auth-lock),
-body:has(.auth-lock) {
-  height: 100%;
-  overflow: hidden;
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+
+@media (min-width: 1024px) {
+  html:has(.auth-lock),
+  body:has(.auth-lock) {
+    height: 100%;
+    overflow: hidden;
+  }
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -61,8 +71,15 @@ body:has(.auth-lock) {
   max-width: 1440px;
   margin-left: auto;
   margin-right: auto;
-  padding-left: 16px;
-  padding-right: 16px;
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+}
+
+@media (min-width: 640px) {
+  .page-shell {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 }
 
 @media (min-width: 1280px) {

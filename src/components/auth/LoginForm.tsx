@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiBase, apiUnreachableMessage, digitsCode, setToken } from "@/lib/account-api";
 import { SocialSignIn } from "@/components/auth/SocialSignIn";
+import { authenticatePasskey, passkeysSupported } from "@/lib/webauthn";
 
 function MailIcon() {
   return (
@@ -48,6 +49,11 @@ export function LoginForm() {
   const [code, setCode] = useState("");
   const [secret, setSecret] = useState("");
   const [enrollMethod, setEnrollMethod] = useState<"" | "authenticator" | "otp">("");
+  const [passkeyOk, setPasskeyOk] = useState(false);
+
+  useEffect(() => {
+    setPasskeyOk(passkeysSupported());
+  }, []);
 
   function finish(token: string) {
     setToken(token);
@@ -353,6 +359,30 @@ export function LoginForm() {
             </svg>
           )}
         </button>
+        {passkeyOk ? (
+          <button
+            type="button"
+            disabled={loading}
+            onClick={async () => {
+              setLoading(true);
+              setError(null);
+              setNotice(null);
+              try {
+                const body = await authenticatePasskey(identifier.trim() || undefined);
+                finish(body.token);
+              } catch (err) {
+                const message = err instanceof Error ? err.message : "Passkey sign-in failed";
+                if (/not allowed|abort/i.test(message)) setError("Passkey prompt was cancelled.");
+                else setError(message);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="h-11 w-full rounded-full border border-[#dfe5ee] text-[14.5px] font-semibold text-[#0f1c3f] hover:bg-[#f7fafc] disabled:opacity-60"
+          >
+            Sign in with a passkey
+          </button>
+        ) : null}
       </form>
 
       <div className={`my-4 flex items-center gap-4 text-[13px] text-[#8a94a6] ${step === "password" ? "" : "hidden"}`}>

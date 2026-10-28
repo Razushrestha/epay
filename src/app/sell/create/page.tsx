@@ -1,9 +1,19 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { accountApi, apiBase } from "@/lib/account-api";
 import { useRouter } from "next/navigation";
 import { SiteFooter } from "@/components/SiteFooter";
+import { VariationMatrix } from "@/components/sell/VariationMatrix";
+import {
+  mergeSkuDrafts,
+  parseOptionList,
+  skuMinPrice,
+  skuPayload,
+  skuStockTotal,
+  type SkuDraft,
+  type VariationAxis,
+} from "@/lib/variations";
 
 interface Category {
   id: number;
@@ -72,6 +82,7 @@ export default function CreateListingPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [colorPhotos, setColorPhotos] = useState<Record<string, File>>({});
+  const [skuEdits, setSkuEdits] = useState<Record<string, Partial<SkuDraft>>>({});
   const [specifics, setSpecifics] = useState<Specific[]>([]);
   const [specificValues, setSpecificValues] = useState<Record<string, string>>({});
 
@@ -109,6 +120,32 @@ export default function CreateListingPage() {
   useEffect(() => {
     loadFormData();
   }, []);
+
+  const variationAxes = useMemo<VariationAxis[]>(() => {
+    if (formData.format !== "fixed" && formData.format !== "both") return [];
+    const sizes = parseOptionList(formData.size_options);
+    const colors = parseOptionList(formData.color_options);
+    return [
+      ...(sizes.length ? [{ name: "Size", values: sizes }] : []),
+      ...(colors.length ? [{ name: "Color", values: colors }] : []),
+    ];
+  }, [formData.format, formData.size_options, formData.color_options]);
+
+  const skuRows = useMemo(
+    () =>
+      mergeSkuDrafts([], variationAxes, { price: formData.price, quantity: formData.quantity }).map((row) => ({
+        ...row,
+        ...skuEdits[row.key],
+        key: row.key,
+        combination: row.combination,
+      })),
+    [variationAxes, formData.price, formData.quantity, skuEdits],
+  );
+
+  function setSkuRows(next: SkuDraft[] | ((current: SkuDraft[]) => SkuDraft[])) {
+    const rows = typeof next === "function" ? next(skuRows) : next;
+    setSkuEdits(Object.fromEntries(rows.map((row) => [row.key, { price: row.price, quantity: row.quantity, sku: row.sku }])));
+  }
 
   useEffect(() => {
     if (!formData.category_id) {
@@ -239,13 +276,16 @@ export default function CreateListingPage() {
 
       let listingId = createdListingId;
       if (!listingId) {
+        const skus = skuRows.length ? skuPayload(skuRows) : undefined;
+        const variationQty = skuRows.length ? skuStockTotal(skuRows) : parseInt(formData.quantity);
+        const variationPrice = skuRows.length ? skuMinPrice(skuRows) : null;
         const payload = {
           ...formData,
           category_id: parseInt(formData.category_id),
           brand_id: formData.brand_id ? parseInt(formData.brand_id) : null,
           condition_id: formData.condition_id ? parseInt(formData.condition_id) : null,
-          price: formData.price ? parseFloat(formData.price) : null,
-          quantity: parseInt(formData.quantity),
+          price: variationPrice ?? (formData.price ? parseFloat(formData.price) : null),
+          quantity: Number.isFinite(variationQty) ? variationQty : 1,
           auction_start_price: formData.auction_start_price ? parseFloat(formData.auction_start_price) : null,
           auction_reserve_price: formData.auction_reserve_price ? parseFloat(formData.auction_reserve_price) : null,
           auction_duration: parseInt(formData.auction_duration),
@@ -258,14 +298,8 @@ export default function CreateListingPage() {
             ? parseFloat(formData.shipping_international_cost)
             : null,
           specifics: specificValues,
-          variations: [
-            formData.size_options
-              ? { name: "Size", options: formData.size_options.split(",").map((s) => s.trim()).filter(Boolean) }
-              : null,
-            formData.color_options
-              ? { name: "Color", options: formData.color_options.split(",").map((s) => s.trim()).filter(Boolean) }
-              : null,
-          ].filter(Boolean),
+          variations: variationAxes.map((axis) => ({ name: axis.name, options: axis.values })),
+          skus,
         };
 
         const res = await fetch(`${apiBase}/api/v1/listings`, {
@@ -361,7 +395,7 @@ export default function CreateListingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f4f8fd] py-8">
+    <div className="min-h-screen bg-[#f4f8fd] py-5 sm:py-8">
       <div className="page-shell mx-auto max-w-[920px]">
         {error && (
           <div className="mb-5 rounded-2xl border border-[#f5c2c7] bg-[#fff5f5] px-4 py-3 text-[14px] text-[#e53238]">
@@ -382,7 +416,7 @@ export default function CreateListingPage() {
                 >
                   {item.n}
                 </span>
-                <span className={`truncate text-[13px] font-semibold sm:text-[14.5px] ${active || done ? "text-[#0f3d4c]" : "text-[#8a94a6]"}`}>
+                <span className={`hidden truncate text-[13px] font-semibold sm:inline sm:text-[14.5px] ${active || done ? "text-[#0f3d4c]" : "text-[#8a94a6]"}`}>
                   {item.label}
                 </span>
                 {i < steps.length - 1 ? (
@@ -647,7 +681,9 @@ export default function CreateListingPage() {
                     <Hint>If this is higher than the sale price, the listing can appear in Today&apos;s Deals.</Hint>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Quantity</label>
+                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
+                      {skuRows.length ? "Default quantity per combination" : "Quantity"}
+                    </label>
                     <input
                       type="number"
                       min="1"
@@ -655,11 +691,14 @@ export default function CreateListingPage() {
                       onChange={(e) => updateField("quantity", e.target.value)}
                       className={field}
                     />
+                    {skuRows.length ? (
+                      <Hint>Used for new size/color rows. Total stock is the sum of the matrix below.</Hint>
+                    ) : null}
                   </div>
                 </div>
               )}
 
-              {formData.format === "fixed" ? (
+              {formData.format === "fixed" || formData.format === "both" ? (
                 <div className="space-y-4">
                   <div className="grid gap-5 md:grid-cols-2">
                     <div>
@@ -713,6 +752,12 @@ export default function CreateListingPage() {
                       </div>
                     </div>
                   ) : null}
+                  <VariationMatrix
+                    axes={variationAxes}
+                    rows={skuRows}
+                    onChange={setSkuRows}
+                    defaultPrice={formData.price}
+                  />
                 </div>
               ) : null}
 

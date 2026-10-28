@@ -46,7 +46,7 @@ export default function AdminAnalyticsPage() {
           <option value={90}>Last 90 days</option>
         </select>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <div className="grid gap-3 sm:grid-cols-4">
         {[
           ["Users", data?.stats.users.total ?? 0],

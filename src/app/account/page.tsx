@@ -4,7 +4,8 @@ import Link from "next/link";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { accountApi, apiBase, digitsCode, getToken, setToken } from "@/lib/account-api";
-import { AccountChrome, fullName, initials } from "@/components/account/AccountChrome";
+import { AccountChrome, AccountSection, fullName, initials } from "@/components/account/AccountChrome";
+import { StatusPill, money } from "@/components/commerce/BuyShell";
 import { FeedbackBoard } from "@/components/account/FeedbackBoard";
 import { MessagesInbox } from "@/components/account/MessagesInbox";
 import { SellerHub } from "@/components/account/SellerHub";
@@ -13,6 +14,7 @@ import { TicketsBoard } from "@/components/account/TicketsBoard";
 import { RecentlyViewed } from "@/components/browse/RecentlyViewed";
 import { CollectionsBoard } from "@/components/account/CollectionsBoard";
 import { FollowedSellers } from "@/components/account/FollowedSellers";
+import { PasskeyManager } from "@/components/account/PasskeyManager";
 
 type User = {
   id: string;
@@ -807,18 +809,40 @@ function AccountScreen() {
       {tab === "messages" && <MessagesInbox />}
 
       {tab === "payment" && (
-        <section className="nexlo-card p-8">
-          <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Payment information</h1>
-          <p className="mt-2 text-[14px] text-[#6b7587]">Checkout uses eSewa and Khalti. Seller payout accounts live under Selling.</p>
-          <NotificationPrefs />
-        </section>
+        <AccountSection
+          title="Payment information"
+          body="Pay at checkout with eSewa or Khalti. Funds stay in escrow until delivery. No card numbers are stored on Nexlo."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="nexlo-card p-5">
+              <p className="text-[16px] font-bold text-[#0f1c3f]">eSewa</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-[#6b7587]">Pay with your eSewa wallet at checkout.</p>
+            </div>
+            <div className="nexlo-card p-5">
+              <p className="text-[16px] font-bold text-[#0f1c3f]">Khalti</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-[#6b7587]">Wallet, card, or bank through Khalti.</p>
+            </div>
+          </div>
+          <div className="nexlo-card mt-4 p-5">
+            <p className="text-[16px] font-bold text-[#0f1c3f]">Seller payouts</p>
+            <p className="mt-1 text-[13px] text-[#6b7587]">Bank, eSewa, or Khalti accounts live under Selling.</p>
+            <Link href="/account?tab=selling" className="mt-3 inline-block text-[13px] font-semibold text-[#3665f3] hover:underline">
+              Open Selling →
+            </Link>
+          </div>
+          <div className="nexlo-card mt-4 p-5">
+            <NotificationPrefs />
+          </div>
+        </AccountSection>
       )}
 
       {tab === "donations" && (
-        <section className="nexlo-card p-8">
-          <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Donation preferences</h1>
-          <p className="mt-2 text-[14px] text-[#6b7587]">Choose whether rounding up at checkout supports a charity. This setting is coming next.</p>
-        </section>
+        <AccountSection
+          title="Donation preferences"
+          body="Optionally round up at checkout. The extra amount goes to the charity you pick, not to Nexlo or the seller."
+        >
+          <DonationPrefs />
+        </AccountSection>
       )}
 
       {tab === "preferences" && (
@@ -944,7 +968,7 @@ function AccountScreen() {
               open={secPanel === "passkeys"}
               onToggle={() => setSecPanel(secPanel === "passkeys" ? null : "passkeys")}
             >
-              <p className="text-[13.5px] text-[#5b6780]">No passkeys are saved on this account yet. Passkey sign-in will be enabled after we finish the Nexlo app rollout.</p>
+              <PasskeyManager />
             </SecurityField>
 
             <SecurityField
@@ -1146,15 +1170,91 @@ function AccountScreen() {
       {tab === "following" && <FollowedSellers />}
 
       {tab === "activity" && (
-        <>
+        <AccountSection title="Activity" body="Bids, Best Offers, saved searches, and account standing.">
           <Standing user={user} appeal={appeal} setAppeal={setAppeal} onDone={() => load()} />
           <BiddingActivity />
           <PendingOffers />
           <SavedSearchList />
           <RecentlyViewed compact />
-        </>
+        </AccountSection>
       )}
     </AccountChrome>
+  );
+}
+
+function DonationPrefs() {
+  const [enabled, setEnabled] = useState(false);
+  const [charityId, setCharityId] = useState<number | "">("");
+  const [charities, setCharities] = useState<{ id: number; name: string; blurb: string }[]>([]);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    accountApi<{ prefs: { enabled: boolean; charity_id: number | null }; charities: { id: number; name: string; blurb: string }[] }>(
+      "/api/v1/account/donations",
+    )
+      .then((body) => {
+        setEnabled(Boolean(body.prefs?.enabled));
+        setCharities(body.charities || []);
+        setCharityId(body.prefs?.charity_id || body.charities?.[0]?.id || "");
+      })
+      .catch(() => undefined);
+  }, []);
+
+  return (
+    <form
+      className="nexlo-card space-y-4 p-5"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        try {
+          await accountApi("/api/v1/account/donations", {
+            method: "PUT",
+            body: JSON.stringify({ enabled, charityId }),
+          });
+          setSaved(enabled ? "Round-up is on. You can still skip it on an order at checkout." : "Round-up is off.");
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Could not save");
+        }
+      }}
+    >
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+        />
+        <span>
+          <span className="block text-[16px] font-bold text-[#0f1c3f]">Round up at checkout</span>
+          <span className="mt-1 block max-w-md text-[13px] leading-relaxed text-[#6b7587]">
+            We round the order total up to the next NPR 10. That spare change goes to your chosen charity.
+          </span>
+        </span>
+      </label>
+      <label className="block text-[13.5px] font-semibold text-[#0f1c3f]">
+        Charity
+        <select
+          value={charityId}
+          onChange={(e) => setCharityId(Number(e.target.value))}
+          className="nexlo-field mt-1.5"
+        >
+          {charities.map((charity) => (
+            <option key={charity.id} value={charity.id}>
+              {charity.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {charities.find((row) => row.id === charityId)?.blurb ? (
+        <p className="text-[13px] leading-relaxed text-[#6b7587]">{charities.find((row) => row.id === charityId)?.blurb}</p>
+      ) : null}
+      <button type="submit" className="nexlo-btn nexlo-btn-blue">
+        Save
+      </button>
+      {saved ? <p className="text-[13px] text-[#12a37e]">{saved}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
+    </form>
   );
 }
 
@@ -1174,20 +1274,32 @@ function NotificationPrefs() {
   }, []);
   return (
     <form
-      className="mt-6 space-y-2"
+      className="space-y-3"
       onSubmit={async (e) => {
         e.preventDefault();
         await accountApi("/api/v1/notifications/preferences", { method: "PATCH", body: JSON.stringify({ email, sms, inApp: true, quietHours: quiet }) });
         setSaved("Notification preferences saved.");
       }}
     >
-      <h2 className="text-[16px] font-bold">Notification preferences</h2>
-      <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} /> Email alerts</label>
-      <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} /> SMS for critical events</label>
-      <label className="block text-[14px]">Quiet hours
-        <input value={quiet} onChange={(e) => setQuiet(e.target.value)} placeholder="22:00-07:00" className="mt-1 block h-10 w-full max-w-xs rounded-full border border-[#e7eef6] px-4 text-[13px]" />
+      <h2 className="text-[16px] font-bold text-[#0f1c3f]">Notification preferences</h2>
+      <label className="flex items-center gap-2 text-[14px] text-[#0f1c3f]">
+        <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} /> Email alerts
       </label>
-      <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save</button>
+      <label className="flex items-center gap-2 text-[14px] text-[#0f1c3f]">
+        <input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} /> SMS for critical events
+      </label>
+      <label className="block text-[14px] text-[#0f1c3f]">
+        Quiet hours
+        <input
+          value={quiet}
+          onChange={(e) => setQuiet(e.target.value)}
+          placeholder="22:00-07:00"
+          className="nexlo-field mt-1 max-w-xs"
+        />
+      </label>
+      <button type="submit" className="nexlo-btn nexlo-btn-blue">
+        Save
+      </button>
       {saved ? <p className="text-[13px] text-[#12a37e]">{saved}</p> : null}
     </form>
   );
@@ -1240,38 +1352,59 @@ function PendingOffers() {
     loadOffers().catch(() => undefined);
   }, []);
   return (
-    <div className="mt-8">
-      <h2 className="text-[16px] font-bold">Best Offers</h2>
-      <ul className="mt-2 space-y-2 text-[13px]">
+    <section className="nexlo-card mt-4 p-5">
+      <h2 className="text-[16px] font-bold text-[#0f1c3f]">Best Offers</h2>
+      <ul className="mt-3 space-y-2">
         {rows.map((row) => (
-          <li key={row.id} className="rounded-xl border px-3 py-2">
-            <p>{row.title} · NPR {Number(row.amount).toLocaleString()} · {row.status.replace(/_/g, " ")}
-              {row.awaitingYou ? <span className="ml-2 font-semibold text-[#3665f3]">Your move</span> : null}
-            </p>
+          <li key={row.id} className="rounded-2xl bg-[#f7f9fc] px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[13px] font-semibold text-[#0f1c3f]">
+                {row.title} · {money(row.amount)}
+              </p>
+              <StatusPill status={row.awaitingYou ? "your move" : row.status} />
+            </div>
             {row.awaitingYou ? (
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" className="rounded-full bg-[#12a37e] px-3 py-1 text-white" onClick={async () => {
-                  await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "accept" }) });
-                  if (row.youAreSeller) await loadOffers();
-                  else window.location.href = "/orders";
-                }}>Accept</button>
-                <button type="button" className="rounded-full border px-3 py-1" onClick={async () => {
-                  await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "decline" }) });
-                  await loadOffers();
-                }}>Decline</button>
-                <input value={counter} onChange={(e) => setCounter(e.target.value)} placeholder="Counter" className="h-8 w-24 rounded-full border px-3" />
-                <button type="button" className="rounded-full border px-3 py-1" onClick={async () => {
-                  await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "counter", amount: Number(counter) }) });
-                  setCounter("");
-                  await loadOffers();
-                }}>Counter</button>
+                <button
+                  type="button"
+                  className="h-9 rounded-full bg-[#12a37e] px-4 text-[13px] font-semibold text-white"
+                  onClick={async () => {
+                    await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "accept" }) });
+                    if (row.youAreSeller) await loadOffers();
+                    else window.location.href = "/orders";
+                  }}
+                >
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  className="nexlo-btn-ghost h-9 px-4"
+                  onClick={async () => {
+                    await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "decline" }) });
+                    await loadOffers();
+                  }}
+                >
+                  Decline
+                </button>
+                <input value={counter} onChange={(e) => setCounter(e.target.value)} placeholder="Counter" className="nexlo-field h-9 w-28" />
+                <button
+                  type="button"
+                  className="nexlo-btn-ghost h-9 px-4"
+                  onClick={async () => {
+                    await accountApi(`/api/v1/offers/${row.id}/decide`, { method: "POST", body: JSON.stringify({ action: "counter", amount: Number(counter) }) });
+                    setCounter("");
+                    await loadOffers();
+                  }}
+                >
+                  Counter
+                </button>
               </div>
             ) : null}
           </li>
         ))}
-        {rows.length === 0 ? <li className="text-[#8a94a6]">No offers yet.</li> : null}
+        {rows.length === 0 ? <li className="text-[13px] text-[#8a94a6]">No offers yet.</li> : null}
       </ul>
-    </div>
+    </section>
   );
 }
 
@@ -1285,20 +1418,22 @@ function SavedSearchList() {
     loadSaved().catch(() => undefined);
   }, []);
   return (
-    <section className="mt-4 nexlo-card p-6">
-      <h2 className="text-[16px] font-bold">Saved searches</h2>
-      <ul className="mt-3 space-y-2 text-[13px]">
+    <section className="nexlo-card mt-4 p-5">
+      <h2 className="text-[16px] font-bold text-[#0f1c3f]">Saved searches</h2>
+      <ul className="mt-3 space-y-2">
         {rows.map((row) => {
           const params = new URLSearchParams();
           Object.entries(row.query_params || {}).forEach(([key, value]) => {
             if (value) params.set(key, String(value));
           });
           return (
-            <li key={row.id} className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
-              <Link href={`/search?${params}`} className="font-semibold text-[#3665f3]">{row.name}</Link>
+            <li key={row.id} className="flex items-center justify-between gap-3 rounded-2xl bg-[#f7f9fc] px-4 py-3">
+              <Link href={`/search?${params}`} className="text-[13px] font-semibold text-[#3665f3] hover:underline">
+                {row.name}
+              </Link>
               <button
                 type="button"
-                className="text-red-600"
+                className="text-[12.5px] font-semibold text-[#e5484d]"
                 onClick={async () => {
                   await accountApi(`/api/v1/listings/saved-searches/${row.id}`, { method: "DELETE" });
                   await loadSaved();
@@ -1309,7 +1444,7 @@ function SavedSearchList() {
             </li>
           );
         })}
-        {rows.length === 0 ? <li className="text-[#8a94a6]">Save a search from the results page to get alerts.</li> : null}
+        {rows.length === 0 ? <li className="text-[13px] text-[#8a94a6]">Save a search from the results page to get alerts.</li> : null}
       </ul>
     </section>
   );
@@ -1327,42 +1462,55 @@ function BiddingActivity() {
     loadBids().catch(() => undefined);
   }, []);
   return (
-    <section className="mt-4 nexlo-card p-6">
-      <h2 className="text-[16px] font-bold">Bids & second-chance offers</h2>
-      <ul className="mt-3 space-y-2 text-[13px]">
+    <section className="nexlo-card mt-4 p-5">
+      <h2 className="text-[16px] font-bold text-[#0f1c3f]">Bids & second-chance offers</h2>
+      <ul className="mt-3 space-y-2">
         {chances.map((row) => (
-          <li key={`sc-${row.id}`} className="rounded-xl border px-3 py-2">
-            Second chance on {row.title} · NPR {Number(row.amount).toLocaleString()}
-            <button
-              type="button"
-              className="ml-2 text-[#3665f3]"
-              onClick={async () => {
-                await accountApi("/api/v1/auctions/second-chance", { method: "POST", body: JSON.stringify({ offerId: row.id, accept: true }) });
-                window.location.href = "/orders";
-              }}
-            >
-              Accept
-            </button>
-            <button
-              type="button"
-              className="ml-2 text-[#e53238]"
-              onClick={async () => {
-                await accountApi("/api/v1/auctions/second-chance", { method: "POST", body: JSON.stringify({ offerId: row.id, accept: false }) });
-                setChances((current) => current.filter((item) => item.id !== row.id));
-              }}
-            >
-              Decline
-            </button>
+          <li key={`sc-${row.id}`} className="rounded-2xl bg-[#f7f9fc] px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[13px] font-semibold text-[#0f1c3f]">
+                Second chance on {row.title} · {money(row.amount)}
+              </p>
+              <StatusPill status="pending" />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="h-9 rounded-full bg-[#12a37e] px-4 text-[13px] font-semibold text-white"
+                onClick={async () => {
+                  await accountApi("/api/v1/auctions/second-chance", { method: "POST", body: JSON.stringify({ offerId: row.id, accept: true }) });
+                  window.location.href = "/orders";
+                }}
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                className="text-[13px] font-semibold text-[#e53238]"
+                onClick={async () => {
+                  await accountApi("/api/v1/auctions/second-chance", { method: "POST", body: JSON.stringify({ offerId: row.id, accept: false }) });
+                  setChances((current) => current.filter((item) => item.id !== row.id));
+                }}
+              >
+                Decline
+              </button>
+            </div>
           </li>
         ))}
         {bids.map((row) => (
-          <li key={row.id} className="rounded-xl border px-3 py-2">
-            <Link href={`/listing/${row.listing_id}`} className="font-semibold text-[#3665f3]">{row.title}</Link>
-            <span className="ml-2">NPR {Number(row.amount).toLocaleString()} · {row.listing_status}</span>
+          <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#f7f9fc] px-4 py-3">
+            <div>
+              <Link href={`/listing/${row.listing_id}`} className="text-[13px] font-semibold text-[#3665f3] hover:underline">
+                {row.title}
+              </Link>
+              <p className="mt-0.5 text-[12.5px] text-[#6b7587]">
+                {money(row.amount)} · {row.listing_status.replace(/_/g, " ")}
+              </p>
+            </div>
             {row.can_retract ? (
               <button
                 type="button"
-                className="ml-2 text-[#e53238]"
+                className="text-[12.5px] font-semibold text-[#e53238]"
                 onClick={async () => {
                   await accountApi(`/api/v1/auctions/${row.listing_id}/retract`, { method: "POST", body: "{}" });
                   await loadBids();
@@ -1373,7 +1521,7 @@ function BiddingActivity() {
             ) : null}
           </li>
         ))}
-        {bids.length === 0 && chances.length === 0 ? <li className="text-[#8a94a6]">No bids yet.</li> : null}
+        {bids.length === 0 && chances.length === 0 ? <li className="text-[13px] text-[#8a94a6]">No bids yet.</li> : null}
       </ul>
     </section>
   );
@@ -1385,31 +1533,48 @@ function Standing({ user, appeal, setAppeal, onDone }: { user: User; appeal: str
     accountApi<{ data: { public_id: string; message: string; status: string; reason: string | null }[] }>("/api/v1/account/appeals").then((b) => setRows(b.data)).catch(() => undefined);
   }, []);
   return (
-    <section className="nexlo-card p-6">
-      <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Activity</h1>
-      <p className="mt-1 text-[14px]">Current status: <strong className="capitalize">{user.status}</strong></p>
-      <p className="mt-1 text-[13px] text-[#667085]">If staff restrict or suspend the account, you can appeal.</p>
+    <section className="nexlo-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[16px] font-bold text-[#0f1c3f]">Account standing</h2>
+        <StatusPill status={user.status} />
+      </div>
+      <p className="mt-1 text-[13px] text-[#6b7587]">If staff restrict or suspend the account, you can appeal.</p>
       {user.status === "restricted" || user.status === "suspended" ? (
-        <form className="mt-4 space-y-2" onSubmit={async (e) => {
-          e.preventDefault();
-          await accountApi("/api/v1/account/appeals", { method: "POST", body: JSON.stringify({ message: appeal }) });
-          setAppeal("");
-          const body = await accountApi<{ data: typeof rows }>("/api/v1/account/appeals");
-          setRows(body.data);
-          onDone();
-        }}>
-          <textarea value={appeal} onChange={(e) => setAppeal(e.target.value)} placeholder="Why should this be reviewed?" className="min-h-24 w-full rounded-xl border px-3 py-2" />
-          <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Submit appeal</button>
+        <form
+          className="mt-4 space-y-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await accountApi("/api/v1/account/appeals", { method: "POST", body: JSON.stringify({ message: appeal }) });
+            setAppeal("");
+            const body = await accountApi<{ data: typeof rows }>("/api/v1/account/appeals");
+            setRows(body.data);
+            onDone();
+          }}
+        >
+          <textarea
+            value={appeal}
+            onChange={(e) => setAppeal(e.target.value)}
+            placeholder="Why should this be reviewed?"
+            className="nexlo-field h-auto min-h-24 rounded-2xl py-3"
+          />
+          <button type="submit" className="nexlo-btn nexlo-btn-blue">
+            Submit appeal
+          </button>
         </form>
       ) : null}
-      <ul className="mt-4 space-y-2 text-[13px]">
-        {rows.map((row) => (
-          <li key={row.public_id} className="rounded-xl border px-3 py-2">
-            <span className="capitalize">{row.status}</span>, {row.message}
-            {row.reason ? <span className="block text-[#667085]">Action: {row.reason}</span> : null}
-          </li>
-        ))}
-      </ul>
+      {rows.length ? (
+        <ul className="mt-4 space-y-2">
+          {rows.map((row) => (
+            <li key={row.public_id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#f7f9fc] px-4 py-3">
+              <p className="text-[13px] text-[#0f1c3f]">
+                {row.message}
+                {row.reason ? <span className="block text-[#6b7587]">Action: {row.reason}</span> : null}
+              </p>
+              <StatusPill status={row.status} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

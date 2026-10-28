@@ -33,19 +33,29 @@ export default function CheckoutPage() {
     discount: "0",
     shipping: "0",
     tax: "0",
+    donation: "0",
     total: "0",
   });
   const [error, setError] = useState<string | null>(null);
   const [buyerNotes, setBuyerNotes] = useState("");
   const [selectedGateway, setSelectedGateway] = useState<"esewa" | "khalti">("esewa");
+  const [donate, setDonate] = useState(false);
+  const [charityName, setCharityName] = useState<string | null>(null);
 
   useEffect(() => {
     loadAddresses();
+    accountApi<{ prefs: { enabled: boolean; charity_id: number | null }; charities: { id: number; name: string }[] }>("/api/v1/account/donations")
+      .then((body) => {
+        setDonate(Boolean(body.prefs?.enabled));
+        const chosen = body.charities?.find((row) => row.id === body.prefs?.charity_id) || body.charities?.[0];
+        setCharityName(chosen?.name || null);
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
     calculateTotals();
-  }, [selectedAddressId]);
+  }, [selectedAddressId, donate]);
 
   async function loadAddresses() {
     try {
@@ -78,6 +88,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           shipping_address_id: selectedAddressId,
           coupon_code: coupon || couponCode,
+          donate,
         }),
       });
 
@@ -132,6 +143,7 @@ export default function CheckoutPage() {
           billing_address_id: selectedAddressId,
           buyer_notes: buyerNotes,
           coupon_code: couponApplied ? couponCode : null,
+          donate,
         }),
       });
 
@@ -258,6 +270,26 @@ export default function CheckoutPage() {
             </section>
 
             <section className="nexlo-card p-5 sm:p-6">
+              <h2 className="text-[17px] font-bold text-[#0f1c3f]">Round up for charity</h2>
+              <label className="mt-3 flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 accent-[#3665f3]"
+                  checked={donate}
+                  onChange={(e) => setDonate(e.target.checked)}
+                />
+                <span>
+                  <span className="block text-[14px] font-semibold text-[#0f1c3f]">
+                    Add {parseFloat(totals.donation) > 0 ? formatPrice(totals.donation) : "spare change"} for {charityName || "a Nepal charity"}
+                  </span>
+                  <span className="mt-1 block text-[13px] leading-relaxed text-[#6b7587]">
+                    We round the total up to the next NPR 10. Change this any time in Account → Donations.
+                  </span>
+                </span>
+              </label>
+            </section>
+
+            <section className="nexlo-card p-5 sm:p-6">
               <h2 className="text-[17px] font-bold text-[#0f1c3f]">Order notes</h2>
               <textarea
                 value={buyerNotes}
@@ -320,6 +352,12 @@ export default function CheckoutPage() {
                 <span className="text-[#6b7587]">Tax (13% VAT)</span>
                 <span className="text-[#0f1c3f]">{formatPrice(totals.tax)}</span>
               </div>
+              {donate && parseFloat(totals.donation) > 0 ? (
+                <div className="flex justify-between">
+                  <span className="text-[#6b7587]">Charity round-up</span>
+                  <span className="text-[#0f1c3f]">{formatPrice(totals.donation)}</span>
+                </div>
+              ) : null}
             </div>
             <div className="mt-4 flex justify-between text-[18px] font-bold text-[#0f1c3f]">
               <span>Total</span>

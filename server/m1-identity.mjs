@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { pool, initDb } from "./db.mjs";
 import { sellerDsr } from "./m3-commerce.mjs";
 import { cdnify, cdnifyListing } from "./cdn.mjs";
+import { getDonationAccount, saveDonationPrefs } from "./donations.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
@@ -304,6 +305,18 @@ export async function handleM1Public(req, res, ctx) {
 export async function handleM1Account(req, res, ctx, actor) {
   const { json, readJson, pathname, method } = ctx;
   await ensureM1Tables();
+
+  if (pathname === `${API}/account/donations` && method === "GET") {
+    return json(req, res, 200, await getDonationAccount(actor.id));
+  }
+
+  if (pathname === `${API}/account/donations` && method === "PUT") {
+    try {
+      return json(req, res, 200, await saveDonationPrefs(actor.id, await readJson(req)));
+    } catch (err) {
+      return json(req, res, err.status || 400, { error: err.message || "Could not save donation preferences" });
+    }
+  }
 
   if (pathname === `${API}/account/consents` && method === "GET") {
     return json(req, res, 200, await listConsents(actor.id));

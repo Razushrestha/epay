@@ -7,6 +7,7 @@ import { query } from './db.mjs';
 import { randomBytes } from 'node:crypto';
 import { taxAmount, vatRateForCategory, shippingRateForSeller } from './commerce-rules.mjs';
 import { combinedShippingForSeller } from './m2-listings.mjs';
+import { donationForCheckout, ensureDonationTables } from './donations.mjs';
 
 /**
  * Main cart & checkout router
@@ -16,6 +17,7 @@ export async function handleCart(req, method, urlPath, headers, body, ipAddress,
   const pathParts = url.pathname.replace('/api/v1/cart', '').split('/').filter(Boolean);
 
   try {
+    await ensureDonationTables();
     // Get user/session ID
     const token = headers.authorization?.replace('Bearer ', '');
     const auth = token ? await validateToken(token) : null;
@@ -495,7 +497,9 @@ async function calculateCheckoutTotals(data, userId, sessionId) {
   const vatRate = await vatRateForCategory(null);
   const tax = taxAmount(taxableAmount, vatRate);
 
-  const total = subtotal - discount + shipping + tax;
+  const merchandise = subtotal - discount + shipping + tax;
+  const donation = await donationForCheckout(userId, data.donate, merchandise);
+  const total = merchandise + donation.amount;
 
   return {
     status: 200,
@@ -504,6 +508,8 @@ async function calculateCheckoutTotals(data, userId, sessionId) {
       discount: discount.toFixed(2),
       shipping: shipping.toFixed(2),
       tax: tax.toFixed(2),
+      donation: donation.amount.toFixed(2),
+      donation_charity: donation.charity,
       total: total.toFixed(2)
     }
   };
@@ -526,7 +532,7 @@ async function applyCoupon(data, userId, sessionId) {
  * Create order from cart
  */
 async function createOrder(data, userId, sessionId, ipAddress, userAgent) {
-  const { shipping_address_id, billing_address_id, buyer_notes, coupon_code } = data;
+  const { shipping_address_id, billing_address_id, buyer_notes, coupon_code, donate } = data;
 
   if (!shipping_address_id) {
     return { status: 400, body: { error: 'shipping_address_id is required' } };
@@ -539,7 +545,7 @@ async function createOrder(data, userId, sessionId, ipAddress, userAgent) {
   }
 
   // Calculate totals
-  const totalsResult = await calculateCheckoutTotals({ coupon_code }, userId, sessionId);
+  const totalsResult = await calculateCheckoutTotals({ coupon_code, donate }, userId, sessionId);
   if (totalsResult.status !== 200) return totalsResult;
 
   const totals = totalsResult.body;
@@ -578,15 +584,15 @@ async function createOrder(data, userId, sessionId, ipAddress, userAgent) {
       discount_amount, total_amount, coupon_id, coupon_code,
       shipping_address_id, shipping_name, shipping_phone, shipping_address_line1,
       shipping_address_line2, shipping_city, shipping_state, shipping_postal_code,
-      billing_address_id, buyer_notes
-    ) VALUES ($1, $2, 'pending_payment', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      billing_address_id, buyer_notes, donation_amount, donation_charity_id
+    ) VALUES ($1, $2, 'pending_payment', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
     RETURNING id, order_number`,
     [
       orderNumber, userId, totals.subtotal, totals.tax, totals.shipping,
       totals.discount, totals.total, couponId, coupon_code,
       address.id, shipName, address.phone, shipLine1,
       shipLine2, address.city, shipRegion, address.postal_code,
-      address.id, buyer_notes
+      address.id, buyer_notes, totals.donation || 0, totals.donation_charity?.id || null
     ]
   );
 

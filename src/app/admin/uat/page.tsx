@@ -87,7 +87,7 @@ export default function AdminUatPage() {
           Production smoke versus the §10.3 targets. Prepaid return labels, Authenticity Guarantee, VeRO, and Terapeak stay out of fee.
         </p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
 
       <div className="grid gap-3 sm:grid-cols-4">
         {[
@@ -109,7 +109,7 @@ export default function AdminUatPage() {
             <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Live smoke</h2>
             <p className="text-[13px] text-[#6b7587]">Hits this origin. Also run <code className="rounded bg-[#f3f6fb] px-1.5">{meta?.commands.uat || "npm run test:uat"}</code> and <code className="rounded bg-[#f3f6fb] px-1.5">{meta?.commands.load || "npm run test:load"}</code>.</p>
           </div>
-          <button type="button" onClick={runSmoke} disabled={running} className="h-10 rounded-full bg-[#3665f3] px-5 text-[13px] font-semibold text-white disabled:opacity-60">
+          <button type="button" onClick={runSmoke} disabled={running} className="nexlo-btn nexlo-btn-blue disabled:opacity-60">
             {running ? "Running…" : "Run smoke"}
           </button>
         </div>

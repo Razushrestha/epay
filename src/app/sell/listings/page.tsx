@@ -237,55 +237,26 @@ export default function SellerListingsPage() {
 
   return (
     <>
-      <main className="bg-[#f4f8fc]">
-        <div className="page-shell py-5 lg:py-6">
-          <section className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(105deg,#eef6ff_0%,#f7fbff_42%,#eef4ff_100%)] px-6 py-7 sm:px-8 lg:px-10">
-            <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(240px,280px)]">
-              <div className="relative z-10 max-w-md">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#0d9488]">Seller hub</p>
-                <h1 className="relative mt-2 w-fit text-[36px] font-extrabold leading-none tracking-tight text-[#0f1c3f] sm:text-[42px]">
-                  Your listings
-                  <svg className="absolute -bottom-2 left-0 h-3 w-[150px] text-[#34d399]" viewBox="0 0 150 12" aria-hidden>
-                    <path d="M2 8c38-6 78 6 146-4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                  </svg>
-                </h1>
-                <p className="mt-5 max-w-[320px] text-[14px] leading-relaxed text-[#5b6780]">
-                  Manage your items, track performance and grow your business all in one place.
-                </p>
-              </div>
-
-              <div className="relative hidden h-[168px] items-end justify-center lg:flex">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/promo/camera.png" alt="" className="absolute bottom-2 left-[8%] h-[108px] w-auto object-contain drop-shadow-md" />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/shop/shop-laptop.png" alt="" className="relative z-[1] h-[150px] w-auto object-contain drop-shadow-lg" />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/shop/shop-headphones.png" alt="" className="absolute bottom-3 right-[10%] h-[86px] w-auto object-contain drop-shadow-md" />
-              </div>
-
-              <div className="relative z-10 rounded-2xl bg-[#e7f8ef] p-5">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#22c55e] shadow-sm">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-                      <path d="M4 19V5h4l2 3h10v11H4Z" />
-                      <path d="M8 19v-6h8v6" />
-                    </svg>
-                  </span>
-                  <div>
-                    <p className="text-[14px] font-semibold text-[#0f1c3f]">
-                      You have {active} active listing{active === 1 ? "" : "s"}
-                    </p>
-                    <p className="mt-1 text-[12.5px] leading-snug text-[#5b6780]">
-                      Start selling today and reach millions of buyers around the world.
-                    </p>
-                  </div>
-                </div>
-                <Link href="/sell/create" className="mt-4 inline-flex h-10 items-center rounded-full bg-[#0f1c3f] px-4 text-[13px] font-semibold text-white">
-                  Create a listing →
-                </Link>
-              </div>
+      <main className="min-h-screen bg-[#f6f7f9]">
+        <div className="page-shell py-5">
+          <p className="text-[12.5px] text-[#98a2b3]">
+            <Link href="/" className="hover:underline">Home</Link>
+            <span className="mx-1.5">›</span>
+            <Link href="/sell" className="hover:underline">Sell</Link>
+            <span className="mx-1.5">›</span>
+            <span className="text-[#667085]">Listings</span>
+          </p>
+          <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h1 className="text-[26px] font-extrabold tracking-tight text-[#0f1c3f] sm:text-[30px]">Your listings</h1>
+              <p className="mt-1 text-[13px] text-[#6b7587]">
+                {active} active listing{active === 1 ? "" : "s"} · Manage items, track views, and go live from here.
+              </p>
             </div>
-          </section>
+            <Link href="/sell/create" className="nexlo-btn nexlo-btn-blue">
+              Create a listing
+            </Link>
+          </div>
 
           {error ? (
             <div className="mt-5 rounded-2xl border border-[#f5c2c7] bg-[#fff5f5] px-4 py-3 text-[14px] text-[#e53238]">{error}</div>

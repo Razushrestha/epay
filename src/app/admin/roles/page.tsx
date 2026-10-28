@@ -28,8 +28,8 @@ export default function AdminRolesPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Roles</h1>
         <p className="text-[14px] text-[#6b7587]">Super Admin, Moderator, Finance, and Support with module permissions.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
-      {notice ? <p className="rounded-xl bg-[#eaf1ff] px-4 py-3 text-[13px] text-[#2a4fa8]">{notice}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
+      {notice ? <p className="nexlo-alert nexlo-alert-info">{notice}</p> : null}
       <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold">Staff</h2>
         <ul className="mt-3 space-y-2">

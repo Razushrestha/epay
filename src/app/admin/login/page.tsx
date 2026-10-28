@@ -88,7 +88,7 @@ function LaptopScene() {
 
 export default function AdminLoginPage() {
   return (
-    <main className="auth-lock relative grid min-h-dvh overflow-hidden bg-[#f3f8ff] lg:grid-cols-[1.05fr_minmax(420px,1fr)]">
+    <main className="auth-lock relative grid min-h-dvh overflow-y-auto bg-[#f3f8ff] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute -left-24 top-[-80px] h-[420px] w-[420px] rounded-full bg-[#d7ecff] blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute bottom-[-80px] left-[12%] h-[380px] w-[380px] rounded-full bg-[#c8f3ea] blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute -right-20 top-10 h-[360px] w-[360px] rounded-full bg-[#e4f0ff] blur-3xl" />
@@ -128,8 +128,8 @@ export default function AdminLoginPage() {
         </div>
       </section>
 
-      <section className="relative z-10 flex items-center justify-center px-4 py-8 sm:px-8">
-        <div className="w-full max-w-[460px] rounded-[28px] bg-white px-7 py-8 shadow-[0_24px_80px_-28px_rgba(54,101,243,0.35)] ring-1 ring-[#e7eef8] sm:px-10 sm:py-10">
+      <section className="relative z-10 flex items-start justify-center px-4 py-6 sm:px-8 lg:items-center lg:py-8">
+        <div className="w-full max-w-[460px] rounded-[28px] bg-white px-5 py-7 shadow-[0_24px_80px_-28px_rgba(54,101,243,0.35)] ring-1 ring-[#e7eef8] sm:px-10 sm:py-10">
           <AdminLoginForm />
         </div>
       </section>

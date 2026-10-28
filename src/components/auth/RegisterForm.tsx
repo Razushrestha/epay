@@ -84,7 +84,7 @@ export function RegisterForm() {
       clearTimeout(timeout);
 
       const text = await res.text();
-      let body: { error?: string; data?: { devCode?: string; sent?: boolean; destinationMasked?: string; deliveryError?: string } } = {};
+      let body: { error?: string; token?: string; data?: { skipVerify?: boolean } } = {};
       try {
         body = text ? JSON.parse(text) : {};
       } catch {
@@ -93,22 +93,19 @@ export function RegisterForm() {
       }
       if (!res.ok) {
         if (res.status === 409) {
-          sessionStorage.setItem("nexlo_verify_id", email.trim() || phone.trim());
-          setError(
-            `${body.error ?? "That email or phone is already registered."} If you just signed up, open Confirm it is you and tap Resend.`,
-          );
+          setError(`${body.error ?? "That email or phone is already registered."} Sign in instead.`);
           return;
         }
         setError(body.error ?? "We could not create your account.");
         return;
       }
-      if (body.data?.devCode) sessionStorage.setItem("nexlo_dev_code", body.data.devCode);
-      sessionStorage.setItem("nexlo_verify_id", email.trim() || phone.trim());
-      sessionStorage.setItem("nexlo_code_sent", body.data?.sent === false ? "0" : "1");
-      if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", body.data.destinationMasked);
-      if (body.data?.deliveryError) sessionStorage.setItem("nexlo_code_error", body.data.deliveryError);
-      else sessionStorage.removeItem("nexlo_code_error");
-      router.push("/verify");
+      if (body.token) {
+        setToken(body.token);
+        router.push("/account");
+        router.refresh();
+        return;
+      }
+      router.push("/login");
     } catch (err) {
       setError(apiUnreachableMessage(err));
     } finally {

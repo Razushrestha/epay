@@ -69,6 +69,7 @@ export function AccountChrome({
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [personalOpen, setPersonalOpen] = useState(PERSONAL_TABS.has(tab));
   const [prefsOpen, setPrefsOpen] = useState(tab === "preferences");
   const [sellingOpen, setSellingOpen] = useState(tab === "selling" || tab === "returns");
@@ -78,7 +79,18 @@ export function AccountChrome({
   return (
     <div className="min-h-dvh bg-[#f3f7fc]">
       <header className="sticky top-0 z-30 border-b border-[#e7eef6] bg-white">
-        <div className="flex h-[68px] items-center gap-4 px-4 sm:px-6">
+        <div className="flex h-[60px] items-center gap-3 px-3 sm:h-[68px] sm:gap-4 sm:px-6">
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-[#0f1c3f] hover:bg-[#f3f7fc] lg:hidden"
+            aria-expanded={navOpen}
+            aria-label={navOpen ? "Close account menu" : "Open account menu"}
+            onClick={() => setNavOpen((v) => !v)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+              {navOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+          </button>
           <Link href="/" className="shrink-0" aria-label="Nexlo home">
             <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" priority />
           </Link>
@@ -136,8 +148,25 @@ export function AccountChrome({
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1280px] gap-6 px-4 py-5 lg:grid-cols-[248px_minmax(0,1fr)] lg:px-6">
-        <aside className="flex flex-col">
+      <div className="mx-auto grid max-w-[1280px] gap-6 px-3 py-4 sm:px-4 lg:grid-cols-[248px_minmax(0,1fr)] lg:px-6 lg:py-5">
+        {navOpen ? (
+          <button
+            type="button"
+            aria-label="Close account menu"
+            className="fixed inset-0 z-20 bg-[#0f1c3f]/30 lg:hidden"
+            onClick={() => setNavOpen(false)}
+          />
+        ) : null}
+        <aside
+          className={`z-30 flex-col ${
+            navOpen
+              ? "fixed inset-y-0 left-0 z-30 flex w-[min(100%,280px)] overflow-y-auto bg-[#f3f7fc] px-3 py-4 shadow-[8px_0_24px_-16px_rgba(15,28,63,0.35)] lg:static lg:w-auto lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none"
+              : "hidden lg:flex"
+          }`}
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest("a")) setNavOpen(false);
+          }}
+        >
           <nav className="space-y-0.5">
             {NAV.slice(0, 2).map((item) => (
               <Link
@@ -283,6 +312,49 @@ export function AccountChrome({
 
         <div className="min-w-0">{children}</div>
       </div>
+    </div>
+  );
+}
+
+export function AccountSection({
+  title,
+  body,
+  aside,
+  children,
+}: {
+  title: string;
+  body?: string;
+  aside?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[26px] font-bold tracking-tight text-[#0f1c3f]">{title}</h1>
+          {body ? <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-[#6b7587]">{body}</p> : null}
+        </div>
+        {aside}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export function AccountEmpty({
+  title,
+  body,
+  action,
+}: {
+  title: string;
+  body: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="nexlo-card px-6 py-16 text-center">
+      <h2 className="text-[18px] font-bold text-[#0f1c3f]">{title}</h2>
+      <p className="mx-auto mt-2 max-w-md text-[14px] text-[#6b7587]">{body}</p>
+      {action ? <div className="mt-5">{action}</div> : null}
     </div>
   );
 }

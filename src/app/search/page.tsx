@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { accountApi, apiBase, getToken } from "@/lib/account-api";
 import { SiteFooter } from "@/components/SiteFooter";
-import { PageHero } from "@/components/ui/PageHero";
 import { SaveButton } from "@/components/commerce/SaveButton";
 import { addToCart } from "@/lib/commerce";
 
@@ -80,10 +79,21 @@ function SearchContent() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [menu, setMenu] = useState<string | null>(null);
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const chipBarRef = useRef<HTMLDivElement>(null);
   const limit = 24;
 
   useEffect(() => {
     loadFilterOptions();
+  }, []);
+
+  useEffect(() => {
+    function onPointer(event: MouseEvent) {
+      if (!chipBarRef.current?.contains(event.target as Node)) setMenu(null);
+    }
+    document.addEventListener("mousedown", onPointer);
+    return () => document.removeEventListener("mousedown", onPointer);
   }, []);
 
   useEffect(() => {
@@ -236,9 +246,9 @@ function SearchContent() {
     setCurrentPage(1);
   }
 
-  function formatPrice(price: number | null) {
-    if (price === null) return "N/A";
-    return `NPR ${price.toLocaleString()}`;
+  function formatPrice(price: number | string | null) {
+    if (price === null || price === "") return "N/A";
+    return `NPR ${Number(price).toLocaleString("en-NP")}`;
   }
 
   function formatTimeRemaining(endsAt: string | null) {
@@ -256,357 +266,465 @@ function SearchContent() {
   }
 
   const totalPages = Math.ceil(total / limit);
+  const categoryLabel = categories.find((cat) => String(cat.id) === filters.category_id)?.name;
+  const brandLabel = brands.find((brand) => String(brand.id) === filters.brand_id)?.name;
+  const conditionLabel = conditions.find((cond) => String(cond.id) === filters.condition)?.name;
+  const formatLabel = filters.format === "auction" ? "Auction" : filters.format === "fixed" ? "Buy It Now" : "";
+  const priceLabel =
+    filters.min_price || filters.max_price
+      ? `${filters.min_price || "0"}–${filters.max_price || "∞"}`
+      : "";
+  const hasFilters = Boolean(
+    filters.category_id ||
+      filters.brand_id ||
+      filters.condition ||
+      filters.format ||
+      filters.min_price ||
+      filters.max_price ||
+      filters.location ||
+      filters.free_shipping ||
+      filters.seller_rating ||
+      filters.completed ||
+      Object.keys(specFilters).length,
+  );
+  const sortLabel =
+    {
+      best_match: "Best Match",
+      newest: "Newest",
+      price_low: "Price: low",
+      price_high: "Price: high",
+      ending_soon: "Ending soon",
+      popular: "Most popular",
+    }[filters.sort] || "Best Match";
+
+  const chips: { id: string; label: string; active: boolean }[] = [
+    { id: "category", label: categoryLabel || "Category", active: Boolean(filters.category_id) },
+    { id: "format", label: formatLabel || "Buying format", active: Boolean(filters.format) },
+    { id: "brand", label: brandLabel || "Brand", active: Boolean(filters.brand_id) },
+    { id: "condition", label: conditionLabel || "Condition", active: Boolean(filters.condition) },
+    { id: "price", label: priceLabel || "Price", active: Boolean(priceLabel) },
+    { id: "location", label: filters.location || "Location", active: Boolean(filters.location) },
+  ];
+
+  function pick(id: string, value: string, key?: string) {
+    if (key) updateFilter(key, value);
+    setMenu(null);
+  }
 
   return (
-    <div className="min-h-screen bg-white">
-      <PageHero
-        eyebrow="Search"
-        title={query ? `Results for “${query}”` : "Browse listings"}
-        body={total > 0 ? `${total.toLocaleString()} items · Save with the heart or add to cart from here.` : "Filter by category, format, and price. Escrow covers every purchase."}
-        cta="Advanced search"
-        href="/search/advanced"
-      />
-      <div className="page-shell py-8">
-        <div className="mb-6">
-          {total > 0 && <p className="text-[14px] text-[#6b7587]">{total.toLocaleString()} items</p>}
+    <div className="min-h-screen bg-[#f6f7f9]">
+      <div className="page-shell py-5">
+        <p className="text-[12.5px] text-[#98a2b3]">
+          <Link href="/" className="hover:underline">Home</Link>
+          <span className="mx-1.5">›</span>
+          <span className="text-[#667085]">{query ? "Search" : "All listings"}</span>
+        </p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-[26px] font-extrabold tracking-tight text-[#0f1c3f] sm:text-[30px]">
+              {query ? `Results for “${query}”` : "Browse listings"}
+            </h1>
+            <p className="mt-1 text-[13px] text-[#6b7587]">
+              {loading ? "Loading…" : `${total.toLocaleString()} ${total === 1 ? "item" : "items"} · Escrow on every purchase.`}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              className="text-[13px] font-semibold text-[#3665f3] hover:underline"
+              onClick={async () => {
+                if (!getToken()) {
+                  window.location.href = `/login?redirect=/search?q=${encodeURIComponent(query)}`;
+                  return;
+                }
+                await accountApi("/api/v1/listings/saved-searches", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    name: query || "Saved search",
+                    query_params: { q: query, ...filters },
+                    notify_new_listings: true,
+                  }),
+                });
+                setSaveNotice("Search saved.");
+              }}
+            >
+              Save search
+            </button>
+            <Link href="/search/advanced" className="text-[13px] font-semibold text-[#3665f3] hover:underline">
+              Advanced search →
+            </Link>
+          </div>
         </div>
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-[#f5c2c7] bg-[#fff5f5] p-4 text-[14px] text-[#e53238]">
-            {error}
-          </div>
-        )}
+        {error ? (
+          <div className="mt-4 rounded-xl border border-[#f5c2c7] bg-[#fff5f5] p-4 text-[14px] text-[#e53238]">{error}</div>
+        ) : null}
 
-        <div className="flex flex-col gap-6 lg:flex-row">
-          {/* Filters Sidebar */}
-          <div className="w-full shrink-0 lg:w-64">
-            <div className="nexlo-card sticky top-4 p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-[15px] font-bold text-[#0f1c3f]">Filters</h2>
-                <button onClick={clearFilters} className="nexlo-link text-[13px]">
-                  Clear
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Category */}
-                <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Category</label>
-                  <select
-                    value={filters.category_id}
-                    onChange={(e) => updateFilter("category_id", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                  >
-                    <option value="">All Categories</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Format */}
-                <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Format</label>
-                  <select
-                    value={filters.format}
-                    onChange={(e) => updateFilter("format", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                  >
-                    <option value="">All Formats</option>
-                    <option value="fixed">Buy It Now</option>
-                    <option value="auction">Auction</option>
-                  </select>
-                </div>
-
-                {/* Brand */}
-                <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Brand</label>
-                  <select
-                    value={filters.brand_id}
-                    onChange={(e) => updateFilter("brand_id", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                  >
-                    <option value="">All Brands</option>
-                    {brands.slice(0, 50).map((brand) => (
-                      <option key={brand.id} value={brand.id}>
-                        {brand.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Condition */}
-                <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Condition</label>
-                  <select
-                    value={filters.condition}
-                    onChange={(e) => updateFilter("condition", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                  >
-                    <option value="">Any Condition</option>
-                    {conditions.map((cond) => (
-                      <option key={cond.id} value={cond.id}>
-                        {cond.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Location</label>
-                  <input
-                    type="text"
-                    placeholder="Kathmandu"
-                    value={filters.location}
-                    onChange={(e) => updateFilter("location", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-[13px] text-[#0f1c3f]">
-                  <input
-                    type="checkbox"
-                    checked={filters.free_shipping === "1"}
-                    onChange={(e) => updateFilter("free_shipping", e.target.checked ? "1" : "")}
-                  />
-                  Free shipping
-                </label>
-                <label className="flex items-center gap-2 text-[13px] text-[#0f1c3f]">
-                  <input
-                    type="checkbox"
-                    checked={filters.completed === "1"}
-                    onChange={(e) => updateFilter("completed", e.target.checked ? "1" : "")}
-                  />
-                  Sold / completed listings
-                </label>
-                {Object.entries(facets).map(([name, options]) => (
-                  <div key={name}>
-                    <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">{name}</label>
-                    <select
-                      value={specFilters[name] || ""}
-                      onChange={(e) => {
-                        setSpecFilters((current) => {
-                          const next = { ...current };
-                          if (e.target.value) next[name] = e.target.value;
-                          else delete next[name];
-                          return next;
-                        });
-                        setCurrentPage(1);
-                      }}
-                      className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                    >
-                      <option value="">Any</option>
-                      {options.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.value} ({opt.count})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-                <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Min seller rating</label>
-                  <select
-                    value={filters.seller_rating}
-                    onChange={(e) => updateFilter("seller_rating", e.target.value)}
-                    className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                  >
-                    <option value="">Any</option>
-                    <option value="80">80%+</option>
-                    <option value="90">90%+</option>
-                    <option value="98">98%+</option>
-                  </select>
-                </div>
-                {/* Price Range */}
-                <div>
-                  <label className="mb-2 block text-[13px] font-semibold text-[#0f1c3f]">Price (NPR)</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      placeholder="Min"
-                      value={filters.min_price}
-                      onChange={(e) => updateFilter("min_price", e.target.value)}
-                      className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Max"
-                      value={filters.max_price}
-                      onChange={(e) => updateFilter("max_price", e.target.value)}
-                      className="w-full rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Listings Grid */}
-          <div className="flex-1">
-            {/* Sort */}
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[13px] text-[#6b7587]">
-                {loading ? "Loading…" : `${listings.length} of ${total.toLocaleString()} results`}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="h-9 rounded-full border border-[#e7eef6] px-3 text-[13px] text-[#3665f3]"
-                  onClick={async () => {
-                    if (!getToken()) {
-                      window.location.href = `/login?redirect=/search?q=${encodeURIComponent(query)}`;
-                      return;
-                    }
-                    await accountApi("/api/v1/listings/saved-searches", {
-                      method: "POST",
-                      body: JSON.stringify({
-                        name: query || "Saved search",
-                        query_params: { q: query, ...filters },
-                        notify_new_listings: true,
-                      }),
-                    });
-                    setSaveNotice("Search saved. We will email you when new items match.");
-                  }}
-                >
-                  Save this search
-                </button>
-                <Link href="/search/advanced" className="h-9 rounded-full px-3 text-[13px] leading-9 text-[#3665f3] hover:underline">
-                  Advanced
-                </Link>
-                {saveNotice ? <span className="text-[12px] text-[#12a37e]">{saveNotice}</span> : null}
-              <select
-                value={filters.sort}
-                onChange={(e) => updateFilter("sort", e.target.value)}
-                className="h-9 rounded-full border border-[#e7eef6] px-3 text-[13px]"
-              >
-                <option value="best_match">Best Match</option>
-                <option value="newest">Newest First</option>
-                <option value="price_low">Price: Low to High</option>
-                <option value="price_high">Price: High to Low</option>
-                <option value="ending_soon">Ending Soon</option>
-                <option value="popular">Most Popular</option>
-              </select>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</div>
-            ) : listings.length === 0 ? (
-              <div className="nexlo-card p-12 text-center">
-                <p className="text-[14px] text-[#6b7587]">No listings found. Try adjusting your filters.</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {listings.map((listing) => (
-                    <article
-                      key={listing.id}
-                      className="nexlo-card group relative overflow-hidden transition hover:shadow-[0_8px_24px_-16px_rgba(15,28,63,0.35)]"
-                    >
-                      <Link href={`/listing/${listing.id}`} className="block">
-                        <div className="relative aspect-square overflow-hidden bg-[#f4f8fd]">
-                          {listing.primary_photo ? (
-                            <img
-                              src={listing.primary_photo}
-                              alt={listing.title}
-                              className="h-full w-full object-cover transition group-hover:scale-105"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-[12px] text-[#6b7587]">
-                              No image
-                            </div>
-                          )}
-                          {listing.status === "sold" || listing.status === "ended" ? (
-                            <div className="absolute top-2 left-2 rounded-full bg-[#0f1c3f] px-2 py-1 text-[11px] font-semibold text-white">
-                              Sold
-                            </div>
-                          ) : listing.shipping_free ? (
-                            <div className="absolute top-2 left-2 rounded-full bg-[#0d9488] px-2 py-1 text-[11px] font-semibold text-white">
-                              Free shipping
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="p-3 pb-12">
-                          <h3 className="line-clamp-2 text-[13px] font-medium text-[#0f1c3f] group-hover:text-[#3665f3]">
-                            {listing.title}
-                          </h3>
-                          <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-[16px] font-bold text-[#0f1c3f]">
-                              {listing.format === "auction" && listing.auction_current_price
-                                ? formatPrice(listing.auction_current_price)
-                                : formatPrice(listing.price)}
-                            </span>
-                            {listing.format === "auction" && (
-                              <span className="text-[11px] text-[#6b7587]">{listing.auction_bid_count} bids</span>
-                            )}
-                          </div>
-                          {listing.auction_ends_at && (
-                            <div className="mt-1 text-[11px] text-[#e53238]">
-                              {formatTimeRemaining(listing.auction_ends_at)} left
-                            </div>
-                          )}
-                          <div className="mt-2 text-[11px] text-[#6b7587]">{listing.category_name}</div>
-                        </div>
-                      </Link>
-                      <SaveButton
-                        listingId={listing.id}
-                        title={listing.title}
-                        photo={listing.primary_photo}
-                        price={listing.auction_current_price || listing.price || 0}
-                        className="absolute right-2 top-2 z-10"
-                      />
-                      {listing.format !== "auction" && listing.status !== "sold" && listing.status !== "ended" ? (
-                        <button
-                          type="button"
-                          className="absolute bottom-3 left-3 right-3 h-8 rounded-full bg-[#0f1c3f] text-[12px] font-semibold text-white"
-                          onClick={async (event) => {
-                            event.preventDefault();
-                            await addToCart({
-                              listingId: listing.id,
-                              title: listing.title,
-                              photo: listing.primary_photo,
-                              price: listing.price || 0,
-                              seller: listing.seller_username,
-                            });
-                          }}
+        <div ref={chipBarRef} className="relative z-30 mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 py-0.5">
+            {chips.map((chip) => (
+              <div key={chip.id} className="relative shrink-0">
+                <ChipButton active={chip.active || menu === chip.id} onClick={() => setMenu(menu === chip.id ? null : chip.id)}>
+                  {chip.label}
+                </ChipButton>
+                {menu === chip.id ? (
+                  <div className="absolute left-0 top-[calc(100%+8px)] z-20 min-w-[220px] rounded-2xl border border-[#e7eef6] bg-white p-1.5 shadow-[0_12px_32px_-16px_rgba(15,28,63,0.35)]">
+                    {chip.id === "category" ? (
+                      [{ id: "", name: "All categories" }, ...categories].map((cat) => (
+                        <MenuItem
+                          key={cat.id || "all"}
+                          active={String(cat.id || "") === filters.category_id}
+                          onClick={() => pick("category", String(cat.id || ""), "category_id")}
                         >
-                          Add to cart
-                        </button>
-                      ) : null}
-                    </article>
+                          {cat.name}
+                        </MenuItem>
+                      ))
+                    ) : null}
+                    {chip.id === "format"
+                      ? [
+                          { id: "", name: "Any format" },
+                          { id: "fixed", name: "Buy It Now" },
+                          { id: "auction", name: "Auction" },
+                        ].map((row) => (
+                          <MenuItem key={row.id || "all"} active={filters.format === row.id} onClick={() => pick("format", row.id, "format")}>
+                            {row.name}
+                          </MenuItem>
+                        ))
+                      : null}
+                    {chip.id === "brand"
+                      ? [{ id: "", name: "All brands" }, ...brands.slice(0, 40)].map((brand) => (
+                          <MenuItem
+                            key={brand.id || "all"}
+                            active={String(brand.id || "") === filters.brand_id}
+                            onClick={() => pick("brand", String(brand.id || ""), "brand_id")}
+                          >
+                            {brand.name}
+                          </MenuItem>
+                        ))
+                      : null}
+                    {chip.id === "condition"
+                      ? [{ id: "", name: "Any condition" }, ...conditions].map((cond) => (
+                          <MenuItem
+                            key={cond.id || "all"}
+                            active={String(cond.id || "") === filters.condition}
+                            onClick={() => pick("condition", String(cond.id || ""), "condition")}
+                          >
+                            {cond.name}
+                          </MenuItem>
+                        ))
+                      : null}
+                    {chip.id === "price" ? (
+                      <div className="space-y-2 p-2">
+                        {[
+                          { min: "", max: "", name: "Any price" },
+                          { min: "", max: "5000", name: "Under NPR 5,000" },
+                          { min: "5000", max: "20000", name: "NPR 5,000 to 20,000" },
+                          { min: "20000", max: "50000", name: "NPR 20,000 to 50,000" },
+                          { min: "50000", max: "", name: "Over NPR 50,000" },
+                        ].map((band) => (
+                          <MenuItem
+                            key={band.name}
+                            active={filters.min_price === band.min && filters.max_price === band.max}
+                            onClick={() => {
+                              setFilters((prev) => ({ ...prev, min_price: band.min, max_price: band.max }));
+                              setCurrentPage(1);
+                              setMenu(null);
+                            }}
+                          >
+                            {band.name}
+                          </MenuItem>
+                        ))}
+                        <div className="flex gap-2 px-1 pt-1">
+                          <input
+                            type="number"
+                            placeholder="Min"
+                            value={filters.min_price}
+                            onChange={(e) => updateFilter("min_price", e.target.value)}
+                            className="nexlo-field h-9 flex-1 rounded-xl"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Max"
+                            value={filters.max_price}
+                            onChange={(e) => updateFilter("max_price", e.target.value)}
+                            className="nexlo-field h-9 flex-1 rounded-xl"
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                    {chip.id === "location" ? (
+                      <div className="p-2">
+                        <input
+                          type="text"
+                          placeholder="Kathmandu"
+                          value={filters.location}
+                          onChange={(e) => updateFilter("location", e.target.value)}
+                          className="nexlo-field h-10"
+                        />
+                        {["Kathmandu", "Pokhara", "Lalitpur", "Bhaktapur"].map((city) => (
+                          <MenuItem key={city} active={filters.location === city} onClick={() => pick("location", city, "location")}>
+                            {city}
+                          </MenuItem>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setMenu(menu === "all" ? null : "all")}
+                className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-[13px] font-medium leading-none ${
+                  menu === "all" ? "border-[#3665f3] bg-[#eef3ff] text-[#3665f3]" : "border-[#e7eef6] bg-white text-[#0f1c3f] hover:border-[#c9d8ff]"
+                }`}
+              >
+                All filters
+              </button>
+              {menu === "all" ? (
+                <div className="absolute left-0 top-[calc(100%+8px)] z-20 w-[280px] rounded-2xl border border-[#e7eef6] bg-white p-4 shadow-[0_12px_32px_-16px_rgba(15,28,63,0.35)]">
+                  <label className="flex items-center gap-2 text-[13px] text-[#0f1c3f]">
+                    <input type="checkbox" checked={filters.free_shipping === "1"} onChange={(e) => updateFilter("free_shipping", e.target.checked ? "1" : "")} />
+                    Free shipping
+                  </label>
+                  <label className="mt-2 flex items-center gap-2 text-[13px] text-[#0f1c3f]">
+                    <input type="checkbox" checked={filters.completed === "1"} onChange={(e) => updateFilter("completed", e.target.checked ? "1" : "")} />
+                    Sold / completed
+                  </label>
+                  <p className="mt-3 text-[12px] font-bold text-[#0f1c3f]">Min seller rating</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {["", "80", "90", "98"].map((rating) => (
+                      <button
+                        key={rating || "any"}
+                        type="button"
+                        onClick={() => updateFilter("seller_rating", rating)}
+                        className={`rounded-full px-3 py-1.5 text-[12px] ${filters.seller_rating === rating ? "bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#0f1c3f]"}`}
+                      >
+                        {rating ? `${rating}%+` : "Any"}
+                      </button>
+                    ))}
+                  </div>
+                  {Object.entries(facets).map(([name, options]) => (
+                    <div key={name} className="mt-3">
+                      <p className="text-[12px] font-bold text-[#0f1c3f]">{name}</p>
+                      <div className="mt-2 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+                        {options.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setSpecFilters((current) => {
+                                const next = { ...current };
+                                if (next[name] === opt.value) delete next[name];
+                                else next[name] = opt.value;
+                                return next;
+                              });
+                              setCurrentPage(1);
+                            }}
+                            className={`rounded-full px-3 py-1.5 text-[12px] ${specFilters[name] === opt.value ? "bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#0f1c3f]"}`}
+                          >
+                            {opt.value}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="mt-8 flex justify-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="h-9 rounded-full border border-[#e7eef6] px-4 text-[13px] disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <span className="flex items-center px-4 text-[13px] text-[#6b7587]">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="h-9 rounded-full border border-[#e7eef6] px-4 text-[13px] disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={clearFilters}
+              disabled={!hasFilters}
+              className="h-10 shrink-0 px-2 text-[13px] font-semibold text-[#3665f3] hover:underline disabled:invisible"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenu(menu === "sort" ? null : "sort")}
+                className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[#e7eef6] bg-white px-4 text-[13px] font-medium leading-none text-[#0f1c3f] hover:border-[#c9d8ff]"
+              >
+                <span className="text-[#6b7587]">Sort:</span>
+                {sortLabel}
+                <Chevron />
+              </button>
+              {menu === "sort" ? (
+                <div className="absolute right-0 top-[calc(100%+8px)] z-20 min-w-[180px] rounded-2xl border border-[#e7eef6] bg-white p-1.5 shadow-[0_12px_32px_-16px_rgba(15,28,63,0.35)]">
+                  {[
+                    ["best_match", "Best Match"],
+                    ["newest", "Newest"],
+                    ["price_low", "Price: low"],
+                    ["price_high", "Price: high"],
+                    ["ending_soon", "Ending soon"],
+                    ["popular", "Most popular"],
+                  ].map(([value, label]) => (
+                    <MenuItem key={value} active={filters.sort === value} onClick={() => pick("sort", value, "sort")}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex h-10 overflow-hidden rounded-full border border-[#e7eef6] bg-white">
+              <button
+                type="button"
+                aria-label="Grid view"
+                aria-pressed={layout === "grid"}
+                onClick={() => setLayout("grid")}
+                className={`flex h-10 w-10 items-center justify-center ${layout === "grid" ? "bg-[#eef3ff] text-[#3665f3]" : "text-[#8a94a6]"}`}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M4 4h6.2v6.2H4V4zm9.8 0H20v6.2h-6.2V4zM4 13.8h6.2V20H4v-6.2zm9.8 0H20V20h-6.2v-6.2z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                aria-label="List view"
+                aria-pressed={layout === "list"}
+                onClick={() => setLayout("list")}
+                className={`flex h-10 w-10 items-center justify-center ${layout === "list" ? "bg-[#eef3ff] text-[#3665f3]" : "text-[#8a94a6]"}`}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M4 6h16v2.2H4V6zm0 5h16v2.2H4V11zm0 5h16v2.2H4V16z" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
+        {saveNotice ? <p className="mt-2 text-[12px] text-[#12a37e]">{saveNotice}</p> : null}
+
+        {loading ? (
+          <p className="mt-10 text-center text-[14px] text-[#6b7587]">Loading…</p>
+        ) : listings.length === 0 ? (
+          <p className="mt-6 rounded-2xl border border-dashed border-[#ddd] bg-white px-6 py-16 text-center text-[14px] text-[#6b7587]">
+            No listings match these filters yet.
+          </p>
+        ) : (
+          <>
+            <div className={layout === "grid" ? "mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" : "mt-4 grid gap-3"}>
+              {listings.map((listing) => (
+                <article
+                  key={listing.id}
+                  className={
+                    layout === "list"
+                      ? "nexlo-card group relative flex overflow-hidden hover:border-[#c9d8ff]"
+                      : "nexlo-card group relative overflow-hidden hover:border-[#c9d8ff]"
+                  }
+                >
+                  <Link href={`/listing/${listing.id}`} className={layout === "list" ? "flex min-w-0 flex-1" : "block"}>
+                    <span className={layout === "list" ? "relative block h-[120px] w-[160px] shrink-0 bg-[#f4f8fd]" : "relative block bg-[#f4f8fd]"}>
+                      {listing.primary_photo ? (
+                        <img src={listing.primary_photo} alt={listing.title} className={layout === "list" ? "h-full w-full object-cover" : "aspect-[4/3] w-full object-cover"} />
+                      ) : (
+                        <span className="flex aspect-[4/3] items-center justify-center text-[12px] text-[#6b7587]">No image</span>
+                      )}
+                      {listing.status === "sold" || listing.status === "ended" ? (
+                        <span className="absolute left-2 top-2 rounded-full bg-[#0f1c3f] px-2 py-[3px] text-[10px] font-bold text-white">Sold</span>
+                      ) : listing.shipping_free ? (
+                        <span className="absolute left-2 top-2 rounded-full bg-[#0d9488] px-2 py-[3px] text-[10px] font-bold text-white">Free shipping</span>
+                      ) : null}
+                    </span>
+                    <span className="block min-w-0 p-3">
+                      <span className="clamp-2 block min-h-[36px] text-[13px] font-medium leading-snug text-[#0f1c3f] group-hover:text-[#3665f3]">{listing.title}</span>
+                      <span className="mt-1.5 block text-[16px] font-extrabold text-[#0f1c3f]">
+                        {listing.format === "auction" && listing.auction_current_price
+                          ? formatPrice(listing.auction_current_price)
+                          : formatPrice(listing.price)}
+                      </span>
+                      <span className="mt-1 block text-[11.5px] text-[#6b7587]">
+                        {listing.format === "auction"
+                          ? `${listing.auction_bid_count} bids${listing.auction_ends_at ? ` · ${formatTimeRemaining(listing.auction_ends_at)} left` : ""}`
+                          : "Buy It Now"}
+                        {listing.category_name ? ` · ${listing.category_name}` : ""}
+                      </span>
+                    </span>
+                  </Link>
+                  <SaveButton
+                    listingId={listing.id}
+                    title={listing.title}
+                    photo={listing.primary_photo}
+                    price={listing.auction_current_price || listing.price || 0}
+                    className="absolute right-2 top-1.5 z-10"
+                  />
+                  {listing.format !== "auction" && listing.status !== "sold" && listing.status !== "ended" ? (
+                    <button
+                      type="button"
+                      className="absolute bottom-3 right-3 hidden h-8 rounded-full bg-[#0f1c3f] px-3 text-[12px] font-semibold text-white sm:block"
+                      onClick={async (event) => {
+                        event.preventDefault();
+                        await addToCart({
+                          listingId: listing.id,
+                          title: listing.title,
+                          photo: listing.primary_photo,
+                          price: listing.price || 0,
+                          seller: listing.seller_username,
+                        });
+                      }}
+                    >
+                      Add to cart
+                    </button>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+            {totalPages > 1 ? (
+              <div className="mt-8 flex justify-center gap-2">
+                <button type="button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-10 rounded-full border border-[#e7eef6] bg-white px-4 text-[13px] disabled:opacity-50">
+                  Previous
+                </button>
+                <span className="flex items-center px-4 text-[13px] text-[#6b7587]">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button type="button" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-10 rounded-full border border-[#e7eef6] bg-white px-4 text-[13px] disabled:opacity-50">
+                  Next
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
       <SiteFooter />
     </div>
+  );
+}
+
+function Chevron() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="shrink-0 opacity-55" aria-hidden>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function ChipButton({ active, onClick, children }: { active?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex h-10 max-w-[220px] shrink-0 items-center gap-1.5 rounded-full border px-4 text-[13px] leading-none transition ${
+        active ? "border-[#3665f3] bg-[#eef3ff] font-semibold text-[#3665f3]" : "border-[#e7eef6] bg-white font-medium text-[#0f1c3f] hover:border-[#c9d8ff]"
+      }`}
+    >
+      <span className="truncate">{children}</span>
+      <Chevron />
+    </button>
+  );
+}
+
+function MenuItem({ active, onClick, children }: { active?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`block w-full rounded-xl px-3 py-2 text-left text-[13px] hover:bg-[#f4f8fd] ${active ? "font-semibold text-[#3665f3]" : "text-[#0f1c3f]"}`}
+    >
+      {children}
+    </button>
   );
 }
 

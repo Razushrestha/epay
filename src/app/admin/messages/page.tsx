@@ -35,7 +35,7 @@ export default function AdminMessagesPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Messages</h1>
         <p className="text-[14px] text-[#6b7587]">Buyer questions on listings. Unanswered threads stay at the top.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <div className="space-y-3">
         {rows.map((row) => (
           <section key={row.id} className="nexlo-card p-5">
@@ -59,8 +59,8 @@ export default function AdminMessagesPage() {
                   await load();
                 }}
               >
-                <input value={reply[row.id] ?? ""} onChange={(e) => setReply((c) => ({ ...c, [row.id]: e.target.value }))} placeholder="Write a reply…" className="h-10 flex-1 rounded-lg border border-[#e2e8f0] px-3" />
-                <button className="h-10 rounded-full bg-[#3665f3] px-4 text-[14px] font-semibold text-white">Send</button>
+                <input value={reply[row.id] ?? ""} onChange={(e) => setReply((c) => ({ ...c, [row.id]: e.target.value }))} placeholder="Write a reply…" className="nexlo-field flex-1" />
+                <button className="nexlo-btn nexlo-btn-blue">Send</button>
               </form>
             )}
           </section>

@@ -35,7 +35,7 @@ export default function AdminReviewsPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Reviews</h1>
         <p className="text-[14px] text-[#6b7587]">Feedback left between buyers and sellers across Nexlo.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <div className="grid gap-3 sm:grid-cols-3">
         {[
           ["Positive", counts.positive, "text-[#12a37e]", "bg-[#e7fbf4]"],

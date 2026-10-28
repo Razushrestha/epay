@@ -28,7 +28,7 @@ export default function AdminFinancePage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Finance</h1>
         <p className="text-[14px] text-[#6b7587]">GMV, fees, refunds, payouts, and ledger balance.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <div className="grid gap-3 sm:grid-cols-4">
         {[
           ["GMV", money(data?.gmv.gmv ?? 0)],

@@ -45,16 +45,20 @@ export function longDate(d = new Date()) {
 export function StatusPill({ status }: { status: string }) {
   const key = status.replace(/_/g, " ");
   const tone =
-    /complete|deliver|active|approved|positive/.test(status)
-      ? "text-[#16a34a]"
-      : /process|paid|ship/.test(status)
-        ? "text-[#2563eb]"
-        : /pend|draft|neutral/.test(status)
-          ? "text-[#d97706]"
-          : /cancel|refund|suspend|reject|negative|removed/.test(status)
-            ? "text-[#dc2626]"
-            : "text-[#5b6780]";
-  return <span className={`text-[13px] font-semibold capitalize ${tone}`}>{key}</span>;
+    /complete|deliver|active|approved|positive|paid|verified/.test(status)
+      ? "bg-[#e8f8ee] text-[#159947]"
+      : /process|ship/.test(status)
+        ? "bg-[#eef3ff] text-[#3665f3]"
+        : /pend|draft|neutral|open|flag/.test(status)
+          ? "bg-[#fff8e8] text-[#b45309]"
+          : /cancel|refund|suspend|reject|negative|removed|inactive/.test(status)
+            ? "bg-[#fff5f5] text-[#b42318]"
+            : "bg-[#f4f8fd] text-[#0f1c3f]";
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${tone}`}>
+      {key}
+    </span>
+  );
 }
 
 type Pt = { x: number; y: number };
@@ -188,8 +192,8 @@ export function Donut({
 
 export function Empty({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="px-4 py-10 text-center">
-      <p className="text-[15px] font-semibold text-[#0f1c3f]">{title}</p>
+    <div className="px-6 py-14 text-center">
+      <p className="text-[16px] font-bold text-[#0f1c3f]">{title}</p>
       <p className="mt-1 text-[13px] text-[#8a94a6]">{sub}</p>
     </div>
   );

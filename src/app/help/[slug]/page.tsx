@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { accountApi } from "@/lib/account-api";
-import { SiteFooter } from "@/components/SiteFooter";
-import { PageHero } from "@/components/ui/PageHero";
+import { BuyShell } from "@/components/commerce/BuyShell";
 
 const fallback: Record<string, { title: string; body: string }> = {
   faq: { title: "Frequently asked questions", body: "Bidding uses proxy bids and a soft close. Best Offer gives the seller 48 hours. Pay with eSewa or Khalti. Funds stay in escrow until delivery." },
@@ -29,32 +28,40 @@ export default function HelpArticlePage() {
   }, [params.slug]);
 
   return (
-    <>
-      <PageHero
-        eyebrow="Help centre"
-        title={page?.title || "Loading guide…"}
-        body={error || "Escrow, returns, and staff review: the same rules that protect every order on Nexlo."}
-      />
-      <main className="page-shell py-8">
-        <Link href="/help" className="nexlo-link text-[13px]">← All guides</Link>
-        {page ? (
-          <article className="nexlo-card mt-4 max-w-3xl p-6 sm:p-8">
-            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-[#333]">{page.body}</p>
-            {params.slug === "returns" ? (
-              <p className="mt-5 text-[14px]">
-                File from the <Link href="/resolution" className="font-semibold text-[#3665f3]">Resolution Center</Link>
-                {" "}·{" "}
-                <Link href="/buyer-protection" className="font-semibold text-[#3665f3]">Buyer Protection</Link>
-              </p>
-            ) : null}
-          </article>
-        ) : !error ? (
-          <p className="mt-6 text-[14px] text-[#6b7587]">Loading…</p>
-        ) : (
-          <p className="mt-6 text-[14px] text-[#e53238]">{error}</p>
-        )}
-      </main>
-      <SiteFooter />
-    </>
+    <BuyShell
+      crumbs={[
+        { href: "/", label: "Home" },
+        { href: "/help", label: "Help" },
+        { label: page?.title || "Guide" },
+      ]}
+      title={page?.title || (error ? "Guide not found" : "Loading guide…")}
+      body="Escrow, returns, and staff review: the same rules that protect every order on Nexlo."
+      aside={
+        <Link href="/help" className="text-[13px] font-semibold text-[#3665f3] hover:underline">
+          All guides →
+        </Link>
+      }
+    >
+      {error && !page ? <p className="nexlo-alert nexlo-alert-error mt-5">{error}</p> : null}
+      {page ? (
+        <article className="nexlo-card mt-5 max-w-3xl p-5 sm:p-6">
+          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-[#3a4a66]">{page.body}</p>
+          {params.slug === "returns" ? (
+            <p className="mt-5 text-[14px]">
+              File from the{" "}
+              <Link href="/resolution" className="font-semibold text-[#3665f3] hover:underline">
+                Resolution Center
+              </Link>
+              {" · "}
+              <Link href="/buyer-protection" className="font-semibold text-[#3665f3] hover:underline">
+                Buyer Protection
+              </Link>
+            </p>
+          ) : null}
+        </article>
+      ) : !error ? (
+        <p className="mt-6 text-[14px] text-[#6b7587]">Loading…</p>
+      ) : null}
+    </BuyShell>
   );
 }

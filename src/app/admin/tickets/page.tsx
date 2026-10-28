@@ -25,7 +25,7 @@ export default function AdminTicketsPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Support tickets</h1>
         <p className="text-[14px] text-[#6b7587]">Assign, reply, and close buyer or seller requests.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <ul className="space-y-2">
         {rows.map((row) => (
           <li key={row.public_id} className="nexlo-card p-4">
@@ -42,8 +42,8 @@ export default function AdminTicketsPage() {
               setReply("");
               await load();
             }}>
-              <input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply and resolve" className="h-9 flex-1 rounded-full border px-3 text-[13px]" />
-              <button className="h-9 rounded-full bg-[#3665f3] px-4 text-[13px] text-white">Resolve</button>
+              <input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply and resolve" className="nexlo-field h-9 flex-1" />
+              <button className="nexlo-btn nexlo-btn-blue h-9">Resolve</button>
             </form>
           </li>
         ))}

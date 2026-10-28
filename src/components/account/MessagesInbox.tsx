@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { accountApi } from "@/lib/account-api";
+import { AccountEmpty, AccountSection } from "@/components/account/AccountChrome";
 
 type Thread = {
   id: number;
@@ -19,6 +20,10 @@ type Thread = {
 };
 
 type Msg = { id: number; sender_id: number; body: string; created_at: string; read_at: string | null };
+
+function counterpart(t?: Thread | null) {
+  return t?.counterpart_name || t?.counterpart_username || t?.counterpart_email || "Member";
+}
 
 export function MessagesInbox() {
   const searchParams = useSearchParams();
@@ -61,78 +66,89 @@ export function MessagesInbox() {
   const current = threads.find((t) => t.id === active);
 
   return (
-    <section className="overflow-hidden nexlo-card">
-      <div className="border-b border-[#eef2f7] px-6 py-5">
-        <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Messages</h1>
-        <p className="mt-1 text-[14px] text-[#6b7587]">Member-to-member conversations, including listing questions sent privately.</p>
-      </div>
-      {error ? <p className="px-6 py-3 text-[13px] text-red-700">{error}</p> : null}
+    <AccountSection
+      title="Messages"
+      body="Member-to-member conversations, including listing questions sent privately."
+    >
+      {error ? <p className="nexlo-alert nexlo-alert-error mb-4">{error}</p> : null}
       {threads.length === 0 ? (
-        <p className="px-6 py-12 text-center text-[14px] text-[#6b7587]">No conversations yet. Message a member from a listing or seller page.</p>
+        <AccountEmpty
+          title="No conversations yet"
+          body="Message a member from a listing or seller page. Replies show up here."
+          action={
+            <Link href="/search" className="nexlo-btn nexlo-btn-blue">
+              Browse listings
+            </Link>
+          }
+        />
       ) : (
-        <div className="grid min-h-[420px] lg:grid-cols-[280px_minmax(0,1fr)]">
-          <ul className="border-r border-[#eef2f7]">
-            {threads.map((t) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  onClick={() => setActive(t.id)}
-                  className={`w-full border-b border-[#f3f6fa] px-4 py-3 text-left ${active === t.id ? "bg-[#eaf1ff]" : "hover:bg-[#f7faff]"}`}
-                >
-                  <p className="flex items-center justify-between text-[13px] font-semibold text-[#0f1c3f]">
-                    <span>{t.counterpart_name || t.counterpart_username || t.counterpart_email || "Member"}</span>
-                    {t.unread > 0 ? <span className="rounded-full bg-[#3665f3] px-1.5 text-[10px] text-white">{t.unread}</span> : null}
-                  </p>
-                  <p className="mt-1 line-clamp-1 text-[12px] text-[#6b7587]">{t.last_message || t.subject || "No messages"}</p>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex flex-col">
-            <div className="border-b border-[#eef2f7] px-4 py-3">
-              <p className="text-[14px] font-semibold text-[#0f1c3f]">
-                {current?.counterpart_name || current?.counterpart_username || current?.counterpart_email || "Conversation"}
-              </p>
-              {current?.listing_id ? (
-                <Link href={`/listing/${current.listing_id}`} className="text-[12px] text-[#3665f3] hover:underline">
-                  {current.listing_title || `Listing #${current.listing_id}`}
-                </Link>
-              ) : null}
-            </div>
-            <div className="flex-1 space-y-2 overflow-auto p-4">
-              {messages.map((m) => {
-                const mine = youId != null && Number(m.sender_id) === youId;
-                return (
-                  <div
-                    key={m.id}
-                    className={`max-w-[85%] rounded-xl px-3 py-2 text-[13px] ${mine ? "ml-auto bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#0f1c3f]"}`}
+        <section className="overflow-hidden nexlo-card">
+          <div className="grid min-h-[420px] lg:grid-cols-[280px_minmax(0,1fr)]">
+            <ul className="border-b border-[#eef2f7] lg:border-b-0 lg:border-r">
+              {threads.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => setActive(t.id)}
+                    className={`w-full border-b border-[#f3f6fa] px-4 py-3 text-left ${active === t.id ? "bg-[#eaf1ff]" : "hover:bg-[#f7faff]"}`}
                   >
-                    <p>{m.body}</p>
-                    <p className={`mt-1 text-[11px] ${mine ? "text-white/70" : "text-[#8a94a6]"}`}>
-                      {new Date(m.created_at).toLocaleString()}
+                    <p className="flex items-center justify-between gap-2 text-[13px] font-semibold text-[#0f1c3f]">
+                      <span className="truncate">{counterpart(t)}</span>
+                      {t.unread > 0 ? (
+                        <span className="rounded-full bg-[#3665f3] px-1.5 text-[10px] font-bold text-white">{t.unread}</span>
+                      ) : null}
                     </p>
-                  </div>
-                );
-              })}
+                    <p className="mt-1 line-clamp-1 text-[12px] text-[#6b7587]">{t.last_message || t.subject || "No messages"}</p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex min-h-[320px] flex-col">
+              <div className="border-b border-[#eef2f7] px-4 py-3">
+                <p className="text-[14px] font-semibold text-[#0f1c3f]">{counterpart(current)}</p>
+                {current?.listing_id ? (
+                  <Link href={`/listing/${current.listing_id}`} className="text-[12px] font-semibold text-[#3665f3] hover:underline">
+                    {current.listing_title || `Listing #${current.listing_id}`}
+                  </Link>
+                ) : null}
+              </div>
+              <div className="flex-1 space-y-2 overflow-auto p-4">
+                {messages.map((m) => {
+                  const mine = youId != null && Number(m.sender_id) === youId;
+                  return (
+                    <div
+                      key={m.id}
+                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-[13px] ${mine ? "ml-auto bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#0f1c3f]"}`}
+                    >
+                      <p>{m.body}</p>
+                      <p className={`mt-1 text-[11px] ${mine ? "text-white/70" : "text-[#8a94a6]"}`}>
+                        {new Date(m.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              <form
+                className="flex gap-2 border-t border-[#eef2f7] p-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  send().catch((err) => setError(err instanceof Error ? err.message : "Could not send"));
+                }}
+              >
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Write a message"
+                  className="nexlo-field flex-1"
+                />
+                <button type="submit" className="nexlo-btn nexlo-btn-blue h-10">
+                  Send
+                </button>
+              </form>
             </div>
-            <form
-              className="flex gap-2 border-t border-[#eef2f7] p-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                send().catch((err) => setError(err instanceof Error ? err.message : "Could not send"));
-              }}
-            >
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Write a message"
-                className="h-10 flex-1 rounded-full border border-[#e2e8f0] px-4 text-[14px]"
-              />
-              <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Send</button>
-            </form>
           </div>
-        </div>
+        </section>
       )}
-    </section>
+    </AccountSection>
   );
 }

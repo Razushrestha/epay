@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { accountApi, apiBase } from "@/lib/account-api";
+import { Empty, StatusPill } from "@/components/admin/admin-ui";
 
 interface Category {
   id: number;
@@ -249,53 +250,49 @@ export default function CatalogAdminPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-4">
       <div>
-        <div className="mb-6">
-          <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Catalog Management</h1>
-          <p className="mt-1 text-[14px] text-[#6b7587]">Manage categories, brands, conditions, and item specifics</p>
-        </div>
+        <h1 className="text-[26px] font-extrabold tracking-tight text-[#0f1c3f]">Catalog</h1>
+        <p className="mt-1 text-[14px] text-[#6b7587]">Categories, brands, and item conditions used on every listing.</p>
+      </div>
 
-        {error && (
-          <div className="mb-6 rounded-lg bg-red-50 p-4 text-red-800">
-            <strong>Error:</strong> {error}
-          </div>
-        )}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
 
-        {/* Tab Navigation */}
-        <div className="mb-6 flex flex-wrap gap-2">
-          {(["categories", "brands", "conditions"] as const).map((id) => (
-            <button
-              key={id}
-              onClick={() => setView(id)}
-              className={`h-9 rounded-full px-4 text-[13px] font-semibold capitalize ${
-                view === id ? "bg-[#0f1c3f] text-white" : "border border-[#e7eef6] text-[#0f1c3f] hover:bg-[#f4f8fd]"
-              }`}
-            >
-              {id}
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-2">
+        {(["categories", "brands", "conditions"] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setView(id)}
+            className={`rounded-full px-4 py-2 text-[13px] font-semibold capitalize ${
+              view === id ? "bg-[#3665f3] text-white" : "border border-[#e7eef6] bg-white text-[#3a4a66]"
+            }`}
+          >
+            {id}
+          </button>
+        ))}
+      </div>
 
         {/* Categories View */}
         {view === "categories" && (
           <div>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Categories ({categories.length})</h2>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-[16px] font-bold text-[#0f1c3f]">Categories ({categories.length})</h2>
               <button
+                type="button"
                 onClick={() => setShowCategoryForm(!showCategoryForm)}
-                className="nexlo-btn nexlo-btn-blue"
+                className={showCategoryForm ? "nexlo-btn-ghost" : "nexlo-btn nexlo-btn-blue"}
               >
-                {showCategoryForm ? "Cancel" : "Add Category"}
+                {showCategoryForm ? "Cancel" : "Add category"}
               </button>
             </div>
 
             {showCategoryForm && (
-              <form onSubmit={handleCreateCategory} className="mb-6 nexlo-card p-6">
-                <h3 className="mb-4 text-lg font-semibold">New Category</h3>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Name *</label>
+              <form onSubmit={handleCreateCategory} className="mb-4 nexlo-card space-y-3 p-5">
+                <h3 className="text-[16px] font-bold text-[#0f1c3f]">New category</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Name *
                     <input
                       type="text"
                       required
@@ -307,21 +304,21 @@ export default function CatalogAdminPage() {
                           slug: generateSlug(e.target.value),
                         });
                       }}
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1"
                     />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Slug *</label>
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Slug *
                     <input
                       type="text"
                       required
                       value={categoryForm.slug}
                       onChange={(e) => setCategoryForm({ ...categoryForm, slug: e.target.value })}
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1"
                     />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Parent Category</label>
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Parent category
                     <select
                       value={categoryForm.parent_id || ""}
                       onChange={(e) =>
@@ -331,9 +328,9 @@ export default function CatalogAdminPage() {
                           level: e.target.value ? 2 : 1,
                         })
                       }
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1"
                     >
-                      <option value="">None (Root Category)</option>
+                      <option value="">None (root)</option>
                       {categories
                         .filter((c) => c.level === 1)
                         .map((c) => (
@@ -342,116 +339,92 @@ export default function CatalogAdminPage() {
                           </option>
                         ))}
                     </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Icon (emoji)</label>
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Icon
                     <input
                       type="text"
                       value={categoryForm.icon}
                       onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
-                      placeholder="⚡"
+                      className="nexlo-field mt-1"
+                      placeholder="Optional"
                     />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Description</label>
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f] md:col-span-2">
+                    Description
                     <textarea
                       value={categoryForm.description}
                       onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1 h-auto min-h-20 rounded-2xl py-3"
                       rows={2}
                     />
-                  </div>
-                  <div className="flex items-center gap-6">
+                  </label>
+                  <div className="flex items-center gap-6 text-[13px] text-[#0f1c3f]">
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={categoryForm.is_restricted}
                         onChange={(e) => setCategoryForm({ ...categoryForm, is_restricted: e.target.checked })}
-                        className="rounded"
                       />
-                      <span className="text-sm">Restricted</span>
+                      Restricted
                     </label>
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={categoryForm.requires_approval}
                         onChange={(e) => setCategoryForm({ ...categoryForm, requires_approval: e.target.checked })}
-                        className="rounded"
                       />
-                      <span className="text-sm">Requires Approval</span>
+                      Requires approval
                     </label>
                   </div>
                 </div>
-                <button
-                  type="submit"
-                  className="nexlo-btn nexlo-btn-blue mt-4"
-                >
-                  Create Category
+                <button type="submit" className="nexlo-btn nexlo-btn-blue">
+                  Create category
                 </button>
               </form>
             )}
 
             {loading ? (
-              <div className="py-12 text-center text-gray-500">Loading...</div>
+              <p className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</p>
+            ) : categories.length === 0 ? (
+              <div className="nexlo-card">
+                <Empty title="No categories yet" sub="Add a root category, then nest subcategories under it." />
+              </div>
             ) : (
-              <div className="nexlo-card overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-[#f4f8fd]">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Category
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Slug
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Level
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Items
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Actions
-                      </th>
+              <div className="nexlo-card overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-[13.5px]">
+                  <thead>
+                    <tr className="border-b border-[#eef2f7] text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a94a6]">
+                      <th className="px-4 py-3">Category</th>
+                      <th className="px-4 py-3">Slug</th>
+                      <th className="px-4 py-3">Level</th>
+                      <th className="px-4 py-3">Items</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
+                  <tbody>
                     {categories.map((cat) => (
-                      <tr key={cat.id}>
-                        <td className="whitespace-nowrap px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            {cat.icon && <span className="text-xl">{cat.icon}</span>}
-                            <div>
-                              <div className="font-medium text-gray-900">{cat.name}</div>
-                              {cat.child_count > 0 && (
-                                <div className="text-sm text-gray-500">{cat.child_count} subcategories</div>
-                              )}
-                            </div>
-                          </div>
+                      <tr key={cat.id} className="border-b border-[#f3f6fa]">
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-[#0f1c3f]">{cat.name}</p>
+                          {cat.child_count > 0 ? (
+                            <p className="text-[12px] text-[#8a94a6]">{cat.child_count} subcategories</p>
+                          ) : null}
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{cat.slug}</td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">L{cat.level}</td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{cat.item_count}</td>
-                        <td className="whitespace-nowrap px-6 py-4">
-                          <button
-                            onClick={() => handleToggleCategoryActive(cat.id, cat.is_active)}
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                              cat.is_active
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {cat.is_active ? "Active" : "Inactive"}
+                        <td className="px-4 py-3 text-[#6b7587]">{cat.slug}</td>
+                        <td className="px-4 py-3 text-[#6b7587]">L{cat.level}</td>
+                        <td className="px-4 py-3 text-[#6b7587]">{cat.item_count}</td>
+                        <td className="px-4 py-3">
+                          <button type="button" onClick={() => handleToggleCategoryActive(cat.id, cat.is_active)}>
+                            <StatusPill status={cat.is_active ? "active" : "inactive"} />
                           </button>
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
+                        <td className="px-4 py-3 text-right">
                           <button
+                            type="button"
                             onClick={() => handleDeleteCategory(cat.id)}
-                            className="text-red-600 hover:text-red-900"
+                            className="text-[12.5px] font-semibold text-[#e5484d]"
                           >
                             Delete
                           </button>
@@ -468,22 +441,23 @@ export default function CatalogAdminPage() {
         {/* Brands View */}
         {view === "brands" && (
           <div>
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Brands ({brands.length})</h2>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-[16px] font-bold text-[#0f1c3f]">Brands ({brands.length})</h2>
               <button
+                type="button"
                 onClick={() => setShowBrandForm(!showBrandForm)}
-                className="nexlo-btn nexlo-btn-blue"
+                className={showBrandForm ? "nexlo-btn-ghost" : "nexlo-btn nexlo-btn-blue"}
               >
-                {showBrandForm ? "Cancel" : "Add Brand"}
+                {showBrandForm ? "Cancel" : "Add brand"}
               </button>
             </div>
 
             {showBrandForm && (
-              <form onSubmit={handleCreateBrand} className="mb-6 nexlo-card p-6">
-                <h3 className="mb-4 text-lg font-semibold">New Brand</h3>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Name *</label>
+              <form onSubmit={handleCreateBrand} className="mb-4 nexlo-card space-y-3 p-5">
+                <h3 className="text-[16px] font-bold text-[#0f1c3f]">New brand</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Name *
                     <input
                       type="text"
                       required
@@ -491,88 +465,89 @@ export default function CatalogAdminPage() {
                       onChange={(e) =>
                         setBrandForm({ ...brandForm, name: e.target.value, slug: generateSlug(e.target.value) })
                       }
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1"
                     />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Slug *</label>
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Slug *
                     <input
                       type="text"
                       required
                       value={brandForm.slug}
                       onChange={(e) => setBrandForm({ ...brandForm, slug: e.target.value })}
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1"
                     />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Logo URL</label>
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Logo URL
                     <input
                       type="url"
                       value={brandForm.logo_url}
                       onChange={(e) => setBrandForm({ ...brandForm, logo_url: e.target.value })}
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1"
                     />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Website</label>
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Website
                     <input
                       type="url"
                       value={brandForm.website}
                       onChange={(e) => setBrandForm({ ...brandForm, website: e.target.value })}
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1"
                     />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-[#0f1c3f]">Description</label>
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f] md:col-span-2">
+                    Description
                     <textarea
                       value={brandForm.description}
                       onChange={(e) => setBrandForm({ ...brandForm, description: e.target.value })}
-                      className="w-full rounded border border-[#e7eef6] px-3 py-2"
+                      className="nexlo-field mt-1 h-auto min-h-20 rounded-2xl py-3"
                       rows={2}
                     />
-                  </div>
-                  <div>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={brandForm.is_verified}
-                        onChange={(e) => setBrandForm({ ...brandForm, is_verified: e.target.checked })}
-                        className="rounded"
-                      />
-                      <span className="text-sm">Verified Brand</span>
-                    </label>
-                  </div>
+                  </label>
+                  <label className="flex items-center gap-2 text-[13px] text-[#0f1c3f]">
+                    <input
+                      type="checkbox"
+                      checked={brandForm.is_verified}
+                      onChange={(e) => setBrandForm({ ...brandForm, is_verified: e.target.checked })}
+                    />
+                    Verified brand
+                  </label>
                 </div>
-                <button
-                  type="submit"
-                  className="nexlo-btn nexlo-btn-blue mt-4"
-                >
-                  Create Brand
+                <button type="submit" className="nexlo-btn nexlo-btn-blue">
+                  Create brand
                 </button>
               </form>
             )}
 
             {loading ? (
-              <div className="py-12 text-center text-gray-500">Loading...</div>
+              <p className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</p>
+            ) : brands.length === 0 ? (
+              <div className="nexlo-card">
+                <Empty title="No brands yet" sub="Add a brand so sellers can pick it on a listing." />
+              </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {brands.map((brand) => (
                   <div key={brand.id} className="nexlo-card p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-gray-900">{brand.name}</h3>
-                          {brand.is_verified && <span className="text-blue-500" title="Verified">✓</span>}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-[#0f1c3f]">{brand.name}</h3>
+                          {brand.is_verified ? <StatusPill status="verified" /> : null}
                         </div>
-                        <p className="text-sm text-gray-500">{brand.slug}</p>
-                        {brand.description && <p className="mt-2 text-sm text-gray-600">{brand.description}</p>}
-                        <div className="mt-2 text-sm text-gray-500">{brand.listing_count} listings</div>
+                        <p className="text-[12.5px] text-[#6b7587]">{brand.slug}</p>
+                        {brand.description ? <p className="mt-2 text-[13px] text-[#5b6780]">{brand.description}</p> : null}
+                        <p className="mt-2 text-[12.5px] text-[#8a94a6]">
+                          {brand.listing_count} listing{brand.listing_count === 1 ? "" : "s"}
+                        </p>
                       </div>
                       <button
+                        type="button"
                         onClick={() => handleDeleteBrand(brand.id)}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-[12.5px] font-semibold text-[#e5484d]"
                       >
-                        ×
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -585,23 +560,26 @@ export default function CatalogAdminPage() {
         {/* Conditions View */}
         {view === "conditions" && (
           <div>
-            <h2 className="mb-6 text-xl font-semibold text-gray-900">Item Conditions ({conditions.length})</h2>
+            <h2 className="mb-4 text-[16px] font-bold text-[#0f1c3f]">Item conditions ({conditions.length})</h2>
             {loading ? (
-              <div className="py-12 text-center text-gray-500">Loading...</div>
+              <p className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</p>
+            ) : conditions.length === 0 ? (
+              <div className="nexlo-card">
+                <Empty title="No conditions yet" sub="Condition options appear here once they are seeded." />
+              </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {conditions.map((condition) => (
                   <div key={condition.id} className="nexlo-card p-4">
-                    <h3 className="font-semibold text-gray-900">{condition.name}</h3>
-                    <p className="text-sm text-gray-500">{condition.slug}</p>
-                    {condition.description && <p className="mt-2 text-sm text-gray-600">{condition.description}</p>}
+                    <h3 className="font-semibold text-[#0f1c3f]">{condition.name}</h3>
+                    <p className="text-[12.5px] text-[#6b7587]">{condition.slug}</p>
+                    {condition.description ? <p className="mt-2 text-[13px] text-[#5b6780]">{condition.description}</p> : null}
                   </div>
                 ))}
               </div>
             )}
           </div>
         )}
-      </div>
     </div>
   );
 }

@@ -40,7 +40,7 @@ export function SearchCategoryMenu({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative z-50 hidden shrink-0 md:block">
+    <div ref={rootRef} className="relative z-50 hidden shrink-0 lg:block">
       <input type="hidden" name={name} value={value} />
       <button
         type="button"

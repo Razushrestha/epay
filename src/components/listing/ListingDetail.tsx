@@ -486,7 +486,7 @@ export function ListingDetail({ product }: { product: ProductDetail }) {
                   className="pointer-events-none absolute inset-y-0 right-0 w-[62%] bg-[linear-gradient(165deg,#d5e6ff_0%,#eaf2ff_48%,#f7fbff_100%)]"
                   style={{ clipPath: "polygon(16% 0, 100% 0, 100% 100%, 0 100%)" }}
                 />
-                <div className="relative grid min-h-[420px] md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                <div className="relative grid min-h-[280px] md:min-h-[420px] md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                   <div className="flex flex-col justify-center px-6 py-8 md:px-8 md:py-10">
                     <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#3665f3] px-3 py-1 text-[12px] font-semibold text-white">
                       <Icon name="check" size={13} />

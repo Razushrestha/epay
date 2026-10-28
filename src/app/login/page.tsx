@@ -43,7 +43,7 @@ const features = [
 
 export default function LoginPage() {
   return (
-    <main className="auth-lock grid h-dvh overflow-hidden bg-[#f4f8fd] lg:grid-cols-2">
+    <main className="auth-lock grid min-h-dvh overflow-y-auto bg-[#f4f8fd] lg:h-dvh lg:grid-cols-2 lg:overflow-hidden">
       <section className="relative hidden overflow-hidden bg-[#eef4fb] lg:block">
         <Image
           src="/auth/signin-scene.jpg"

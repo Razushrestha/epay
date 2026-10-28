@@ -1,11 +1,7 @@
 import Link from "next/link";
 import { ListingGrid } from "@/components/browse/ListingGrid";
 import { SiteFooter } from "@/components/SiteFooter";
-import { PageHero } from "@/components/ui/PageHero";
 import { categoryNames, listings } from "@/lib/home-data";
-
-const formats = ["All", "Auction", "Buy It Now"];
-const sorts = ["Best Match", "Price: low", "Price: high", "Ending soonest", "Newly listed"];
 
 export function BrowsePage({
   title,
@@ -19,72 +15,32 @@ export function BrowsePage({
   subtitle?: string;
 }) {
   return (
-    <>
-      <PageHero
-        eyebrow={crumb}
-        title={title}
-        body={subtitle ?? `${items.length.toLocaleString()} results · Same buyer protection as the rest of Nexlo.`}
-        cta="Live listings"
-        href="/search"
-      />
+    <div className="min-h-screen bg-[#f6f7f9]">
       <main className="page-shell py-5">
-        <p className="text-[12px] text-[#6b7587]">
-          <Link href="/" className="hover:underline">Home</Link>
+        <p className="text-[12.5px] text-[#98a2b3]">
+          <Link href="/" className="hover:underline">
+            Home
+          </Link>
           <span className="mx-1.5">›</span>
-          <span className="text-[#0f1c3f]">{crumb}</span>
+          <span className="text-[#667085]">{crumb}</span>
         </p>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-[13px] text-[#6b7587]">{items.length.toLocaleString()} listings</p>
+            <h1 className="text-[26px] font-extrabold tracking-tight text-[#0f1c3f] sm:text-[30px]">{title}</h1>
+            <p className="mt-1 text-[13px] text-[#6b7587]">
+              {subtitle ?? `${items.length.toLocaleString()} results · Same buyer protection as the rest of Nexlo.`}
+            </p>
           </div>
-          <label className="flex items-center gap-2 text-[12.5px] text-[#333]">
-            Sort
-            <select className="h-9 rounded-full border border-[#ccc] bg-white px-3 text-[12.5px] outline-none">
-              {sorts.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </label>
+          <Link href="/search" className="text-[13px] font-semibold text-[#3665f3] hover:underline">
+            Live listings →
+          </Link>
         </div>
-
-        <div className="mt-5 grid gap-6 lg:grid-cols-[220px_1fr]">
-          <aside className="nexlo-card h-fit p-4 text-[13px]">
-            <p className="font-bold text-[#0f1c3f]">Format</p>
-            <ul className="mt-2 space-y-1.5 text-[#333]">
-              {formats.map((f) => (
-                <li key={f}>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="format" defaultChecked={f === "All"} />
-                    {f}
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-5 font-bold text-[#0f1c3f]">Condition</p>
-            <ul className="mt-2 space-y-1.5 text-[#333]">
-              {["New", "Used", "Refurbished"].map((c) => (
-                <li key={c}>
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" />
-                    {c}
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-5 font-bold text-[#0f1c3f]">Price (NPR)</p>
-            <div className="mt-2 flex gap-2">
-              <input placeholder="Min" className="w-full rounded-lg border border-[#ddd] px-2 py-1.5 text-[12px] outline-none" />
-              <input placeholder="Max" className="w-full rounded-lg border border-[#ddd] px-2 py-1.5 text-[12px] outline-none" />
-            </div>
-            <label className="mt-4 flex items-center gap-2 text-[#333]">
-              <input type="checkbox" /> Free shipping
-            </label>
-          </aside>
+        <div className="mt-5">
           <ListingGrid items={items} />
         </div>
       </main>
       <SiteFooter />
-    </>
+    </div>
   );
 }
 

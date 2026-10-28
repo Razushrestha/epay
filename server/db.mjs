@@ -22,6 +22,9 @@ export async function initDb() {
     connectionString: databaseUrl,
     max: 10,
   });
+  pool.on("error", (err) => {
+    console.error("[db] idle client error", err.code || err.message);
+  });
   return pool;
 }
 

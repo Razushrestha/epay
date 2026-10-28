@@ -28,7 +28,7 @@ export function PrivacyAccept() {
     <div className="space-y-2">
       <button
         type="button"
-        className="h-10 rounded-full bg-[#3665f3] px-5 text-[13.5px] font-semibold text-white"
+        className="nexlo-btn nexlo-btn-blue"
         onClick={async () => {
           await accountApi("/api/v1/account/consents", { method: "POST", body: JSON.stringify({ policies: ["privacy"] }) });
           setAccepted(true);

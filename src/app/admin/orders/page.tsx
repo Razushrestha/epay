@@ -41,15 +41,15 @@ export default function AdminOrdersPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Orders</h1>
         <p className="text-[14px] text-[#6b7587]">Track checkout, fulfillment, refunds, and cancellations.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <section className="nexlo-card p-5">
         <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); load(); }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search order ID or customer" className="h-10 min-w-[220px] flex-1 rounded-lg border border-[#e2e8f0] px-3" />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 rounded-lg border border-[#e2e8f0] px-3">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search order ID or customer" className="nexlo-field min-w-[220px] flex-1" />
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="nexlo-field w-auto">
             <option value="">All statuses</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
           </select>
-          <button className="h-10 rounded-full border px-4 text-[14px]">Filter</button>
+          <button className="nexlo-btn-ghost h-10 px-4">Filter</button>
         </form>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[860px] text-left text-[13.5px]">

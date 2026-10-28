@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { HideOnRoutes } from "@/components/HideOnRoutes";
 import { CookieConsent } from "@/components/legal/CookieConsent";

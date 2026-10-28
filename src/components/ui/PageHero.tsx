@@ -15,7 +15,7 @@ export function PageHero({
 }) {
   return (
     <section className="page-shell pt-3">
-      <div className="hero-bg relative overflow-hidden rounded-[20px] px-6 py-8 sm:px-10 sm:py-11">
+      <div className="hero-bg relative overflow-hidden rounded-[20px] px-5 py-7 sm:px-10 sm:py-11">
         <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/40" />
         <div aria-hidden className="pointer-events-none absolute -bottom-20 right-24 h-40 w-40 rounded-full bg-[#08c4a6]/15" />
         <p className="nexlo-kicker relative">{eyebrow}</p>

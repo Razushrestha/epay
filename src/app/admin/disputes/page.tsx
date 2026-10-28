@@ -36,10 +36,10 @@ export default function AdminDisputesPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Disputes</h1>
         <p className="text-[14px] text-[#6b7587]">Escalate, refund, or side with the seller. Escrow stays frozen until you decide.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
-      {notice ? <p className="rounded-xl bg-[#eaf1ff] px-4 py-3 text-[13px] text-[#2a4fa8]">{notice}</p> : null}
-      <div className="overflow-hidden nexlo-card">
-        <table className="w-full text-left text-[13px]">
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
+      {notice ? <p className="nexlo-alert nexlo-alert-info">{notice}</p> : null}
+      <div className="nexlo-card overflow-x-auto">
+        <table className="w-full min-w-[720px] text-left text-[13px]">
           <thead className="bg-[#f7fafd] text-[#6b7587]">
             <tr>
               <th className="px-4 py-3">Order</th>

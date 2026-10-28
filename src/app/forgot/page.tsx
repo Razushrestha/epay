@@ -33,7 +33,7 @@ const features = [
 
 export default function ForgotPage() {
   return (
-    <main className="auth-lock relative grid h-dvh overflow-hidden bg-[#f3f8ff] lg:grid-cols-2">
+    <main className="auth-lock relative grid min-h-dvh overflow-y-auto bg-[#f3f8ff] lg:h-dvh lg:grid-cols-2 lg:overflow-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute -right-24 top-[-80px] h-[420px] w-[420px] rounded-full bg-[#dcecff] blur-3xl"
@@ -116,7 +116,7 @@ export default function ForgotPage() {
         </div>
       </section>
 
-      <section className="relative flex h-full min-h-0 flex-col overflow-hidden">
+      <section className="relative flex min-h-dvh flex-col overflow-y-auto lg:h-full lg:min-h-0 lg:overflow-hidden">
         <header className="relative z-10 flex shrink-0 items-center justify-between px-5 py-4 sm:px-8 lg:hidden">
           <Link href="/" aria-label="Nexlo home">
             <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" />

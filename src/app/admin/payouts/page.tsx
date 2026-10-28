@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { accountApi } from "@/lib/account-api";
-import { money } from "@/components/admin/admin-ui";
+import { Empty, money, StatusPill } from "@/components/admin/admin-ui";
 
 type Payout = {
   public_id: string;
@@ -36,14 +36,15 @@ export default function AdminPayoutsPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Payouts & ledger</h1>
         <p className="text-[14px] text-[#6b7587]">Approve seller withdrawals and confirm the double-entry ledger still balances.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       {integrity ? (
-        <div className={`rounded-2xl px-4 py-3 text-[13px] ${integrity.balanced ? "bg-[#e7fbf4] text-[#0f7a5c]" : "bg-red-50 text-red-700"}`}>
+        <p className={`nexlo-alert ${integrity.balanced ? "nexlo-alert-ok" : "nexlo-alert-error"}`}>
           Ledger {integrity.balanced ? "balanced" : "imbalanced"} · debit {money(integrity.debit)} · credit {money(integrity.credit)}
-        </div>
+        </p>
       ) : null}
       <section className="nexlo-card p-5">
-        <table className="w-full text-left text-[13.5px]">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-[13.5px]">
           <thead>
             <tr className="border-b text-[11px] font-semibold tracking-[0.06em] text-[#8a94a6]">
               <th className="py-3">Seller</th>
@@ -62,7 +63,7 @@ export default function AdminPayoutsPage() {
                 </td>
                 <td>{money(row.amount)}</td>
                 <td className="capitalize">{row.method}</td>
-                <td className="capitalize">{row.status}</td>
+                <td><StatusPill status={row.status} /></td>
                 <td className="space-x-2">
                   {row.status === "pending" ? (
                     <>
@@ -82,6 +83,8 @@ export default function AdminPayoutsPage() {
             ))}
           </tbody>
         </table>
+        {!rows.length ? <Empty title="No payouts yet" sub="Seller withdrawal requests appear here after escrow releases." /> : null}
+        </div>
       </section>
     </div>
   );

@@ -85,7 +85,7 @@ export default function ShopPage() {
             </h1>
             <p className="mt-3 text-[15px] leading-relaxed text-[#4b5563]">Free shipping on these favourite items, with escrow on every order.</p>
           </div>
-          <div className="grid w-full max-w-[560px] grid-cols-4 gap-2.5 lg:w-[560px]">
+          <div className="grid w-full max-w-[560px] grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5 lg:w-[560px]">
             {bannerTiles.map((tile) => (
               <span key={tile.src} className="relative aspect-square overflow-hidden rounded-[12px] bg-white">
                 <Image src={tile.src} alt={tile.alt} fill sizes="140px" className="object-cover" priority />

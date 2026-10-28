@@ -12,15 +12,15 @@ export function SiteHeader() {
     <header className="bg-white">
       {/* ── utility strip ─────────────────────────────── */}
       <div className="border-b border-[#e7eef6] bg-[#f4f8fd]">
-        <div className="page-shell flex items-center justify-between py-[8px] text-[12px] leading-none text-[#5b6780]">
-          <div className="flex items-center gap-4">
-            <span>Free shipping on millions of items</span>
-            <span className="hidden text-[#c9d8ff] sm:inline">|</span>
-            <Link href="/resolution" className="hidden hover:text-[#3665f3] hover:underline sm:inline">30-day returns</Link>
+        <div className="page-shell flex items-center justify-between gap-3 py-[8px] text-[11px] leading-none text-[#5b6780] sm:text-[12px]">
+          <div className="hidden min-w-0 items-center gap-4 sm:flex">
+            <span className="truncate">Free shipping on millions of items</span>
             <span className="hidden text-[#c9d8ff] md:inline">|</span>
-            <Link href="/buyer-protection" className="hidden hover:text-[#3665f3] hover:underline md:inline">Buyer protection</Link>
+            <Link href="/resolution" className="hidden hover:text-[#3665f3] hover:underline md:inline">30-day returns</Link>
+            <span className="hidden text-[#c9d8ff] lg:inline">|</span>
+            <Link href="/buyer-protection" className="hidden hover:text-[#3665f3] hover:underline lg:inline">Buyer protection</Link>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
             <button className="flex items-center gap-1 hover:underline">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
@@ -34,23 +34,25 @@ export function SiteHeader() {
       </div>
 
       {/* ── main bar ──────────────────────────────────── */}
-      <div className="page-shell flex items-center gap-4 pb-2.5 pt-3">
-        <Link href="/" className="flex shrink-0 items-center" aria-label="Nexlo home">
+      <div className="page-shell grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 pb-2.5 pt-3 md:flex md:gap-4">
+        <Link href="/" className="col-start-1 row-start-1 flex shrink-0 items-center" aria-label="Nexlo home">
           <Image
             src="/logo-transparent.png"
             alt="Nexlo: Find What Comes Next."
             width={808}
             height={256}
-            className="h-[48px] w-auto"
+            className="h-9 w-auto sm:h-11 md:h-[48px]"
             priority
           />
         </Link>
 
         <CategoryMenu />
 
-        <SearchBar />
+        <div className="col-span-3 row-start-2 min-w-0 md:col-auto md:row-auto md:flex-1">
+          <SearchBar />
+        </div>
 
-        <div className="ml-2 flex shrink-0 items-center gap-5 sm:ml-4 sm:gap-6">
+        <div className="col-start-3 row-start-1 ml-0 flex shrink-0 items-center gap-4 sm:gap-5 md:ml-2 md:gap-6">
           <NotificationBell />
           <HeaderIcons />
         </div>

@@ -44,8 +44,8 @@ export default function AdminSettingsPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Settings</h1>
         <p className="text-[14px] text-[#6b7587]">Platform details, identity reviews, and appeals.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
-      {notice ? <p className="rounded-xl bg-[#eaf1ff] px-4 py-3 text-[13px] text-[#2a4fa8]">{notice}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
+      {notice ? <p className="nexlo-alert nexlo-alert-info">{notice}</p> : null}
 
       <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Platform</h2>
@@ -57,15 +57,15 @@ export default function AdminSettingsPage() {
             setNotice("Settings saved.");
           }}
         >
-          <label className="text-[13px] text-[#5b6780]">Site name<input value={settings.siteName} onChange={(e) => setSettings({ ...settings, siteName: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-[#e2e8f0] px-3 text-[14px] text-[#0f1c3f]" /></label>
-          <label className="text-[13px] text-[#5b6780]">Currency<input value={settings.currency} onChange={(e) => setSettings({ ...settings, currency: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-[#e2e8f0] px-3 text-[14px] text-[#0f1c3f]" /></label>
-          <label className="text-[13px] text-[#5b6780]">Country<input value={settings.country} onChange={(e) => setSettings({ ...settings, country: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-[#e2e8f0] px-3 text-[14px] text-[#0f1c3f]" /></label>
-          <label className="text-[13px] text-[#5b6780]">Support email<input value={settings.supportEmail} onChange={(e) => setSettings({ ...settings, supportEmail: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-[#e2e8f0] px-3 text-[14px] text-[#0f1c3f]" /></label>
+          <label className="text-[13px] text-[#5b6780]">Site name<input value={settings.siteName} onChange={(e) => setSettings({ ...settings, siteName: e.target.value })} className="nexlo-field mt-1" /></label>
+          <label className="text-[13px] text-[#5b6780]">Currency<input value={settings.currency} onChange={(e) => setSettings({ ...settings, currency: e.target.value })} className="nexlo-field mt-1" /></label>
+          <label className="text-[13px] text-[#5b6780]">Country<input value={settings.country} onChange={(e) => setSettings({ ...settings, country: e.target.value })} className="nexlo-field mt-1" /></label>
+          <label className="text-[13px] text-[#5b6780]">Support email<input value={settings.supportEmail} onChange={(e) => setSettings({ ...settings, supportEmail: e.target.value })} className="nexlo-field mt-1" /></label>
           <label className="flex items-center gap-2 text-[14px] text-[#3a4a66] sm:col-span-2">
             <input type="checkbox" checked={settings.maintenance} onChange={(e) => setSettings({ ...settings, maintenance: e.target.checked })} />
             Maintenance mode
           </label>
-          <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save settings</button>
+          <button className="nexlo-btn nexlo-btn-blue">Save settings</button>
         </form>
       </section>
 

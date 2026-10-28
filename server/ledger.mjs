@@ -1,5 +1,6 @@
 import { query } from "./db.mjs";
 import { notify } from "./notify.mjs";
+import { ensureDonationTables } from "./donations.mjs";
 
 async function accountId(code) {
   const { rows } = await query(`SELECT id FROM ledger_accounts WHERE code = $1`, [code]);
@@ -31,8 +32,9 @@ export async function postJournal(kind, refType, refId, memo, lines) {
 }
 
 export async function feeBreakdown(orderId) {
+  await ensureDonationTables();
   const { rows } = await query(
-    `SELECT o.total_amount, o.id, oi.seller_id, l.category_id, u.seller_level
+    `SELECT o.total_amount, COALESCE(o.donation_amount, 0) AS donation_amount, o.id, oi.seller_id, l.category_id, u.seller_level
      FROM orders o
      JOIN order_items oi ON oi.order_id = o.id
      LEFT JOIN listings l ON l.id = oi.listing_id
@@ -44,7 +46,7 @@ export async function feeBreakdown(orderId) {
   if (!row) return null;
   const fees = await query(`SELECT * FROM category_fees WHERE category_id = $1`, [row.category_id]);
   const f = fees.rows[0] || { commission_percentage: 10, final_value_fee_percentage: 0, insertion_fee: 0 };
-  const amount = Number(row.total_amount);
+  const amount = Number(row.total_amount) - Number(row.donation_amount || 0);
   let commissionPct = Number(f.commission_percentage || 10);
   if (row.seller_level === "top_rated") commissionPct *= 0.8;
   else if (row.seller_level === "above_standard") commissionPct *= 0.9;
@@ -75,7 +77,7 @@ export async function onOrderPaid(orderId) {
     await query(
       `INSERT INTO seller_wallets (user_id, pending_balance) VALUES ($1, $2)
        ON CONFLICT (user_id) DO UPDATE SET pending_balance = seller_wallets.pending_balance + EXCLUDED.pending_balance, updated_at = NOW()`,
-      [fees.sellerId, amount],
+      [fees.sellerId, fees.amount],
     );
     const sellers = await query(`SELECT DISTINCT seller_id FROM order_items WHERE order_id = $1`, [orderId]);
     for (const s of sellers.rows) {
@@ -98,11 +100,17 @@ export async function releaseEscrow(orderId) {
   if (!hold.rows[0]) return { skipped: true };
   const fees = await feeBreakdown(orderId);
   if (!fees) return { skipped: true };
-  await postJournal("release", "order", orderId, "Release escrow to seller after fees", [
-    { code: "PLATFORM_ESCROW", debit: fees.amount },
-    { code: "PLATFORM_REVENUE", credit: +(fees.commission + fees.fvf + fees.insertion + fees.processing).toFixed(2) },
+  const donation = Math.max(0, Number(hold.rows[0].amount) - Number(fees.amount));
+  const platformFees = +(fees.commission + fees.fvf + fees.insertion + fees.processing).toFixed(2);
+  const releaseLines = [
+    { code: "PLATFORM_ESCROW", debit: Number(hold.rows[0].amount) },
+    { code: "PLATFORM_REVENUE", credit: platformFees },
     { code: `SELLER_AVAILABLE_${fees.sellerId}`, credit: fees.net },
-  ]);
+  ];
+  if (donation > 0.009) {
+    releaseLines.push({ code: "CHARITY_PAYABLE", credit: donation });
+  }
+  await postJournal("release", "order", orderId, "Release escrow to seller after fees", releaseLines);
   await query(`UPDATE escrow_holds SET status = 'released', released_at = NOW() WHERE order_id = $1`, [orderId]);
   await query(
     `INSERT INTO order_fees (order_id, commission, final_value_fee, insertion_fee, processing_fee, net_to_seller)

@@ -24,7 +24,7 @@ export default function AdminModerationPage() {
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Moderation</h1>
         <p className="text-[14px] text-[#6b7587]">Flagged listings, reports, and prohibited content.</p>
       </div>
-      {error ? <p className="rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</p> : null}
+      {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       <ul className="space-y-2">
         {rows.map((row) => (
           <li key={row.public_id} className="flex flex-wrap items-center justify-between gap-3 nexlo-card px-4 py-3">

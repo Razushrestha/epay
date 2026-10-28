@@ -372,6 +372,13 @@ async function getListings(params) {
  * Get listing by ID
  */
 async function getListingById(listingId, authHeader) {
+  let viewerId = null;
+  const token = authHeader?.replace('Bearer ', '');
+  if (token) {
+    const auth = await validateToken(token);
+    viewerId = auth?.userId ?? null;
+  }
+
   const result = await query(
     `SELECT 
       l.*,
@@ -404,8 +411,11 @@ async function getListingById(listingId, authHeader) {
     JOIN users u ON l.seller_id = u.id
     LEFT JOIN user_profiles up ON up.user_id = u.id
     LEFT JOIN feedback_scores fs ON fs.user_id = u.id
-    WHERE l.id = $1 AND l.status IN ('active', 'sold', 'ended')`,
-    [listingId]
+    WHERE l.id = $1 AND (
+      l.status IN ('active', 'sold', 'ended')
+      OR ($2::int IS NOT NULL AND l.seller_id = $2)
+    )`,
+    [listingId, viewerId]
   );
 
   if (!result.rows[0]) {
@@ -438,24 +448,19 @@ async function getListingById(listingId, authHeader) {
   listing.dsr = await sellerDsr(listing.seller_id);
   Object.assign(listing, cdnifyListing(listing));
 
-  const token = authHeader?.replace('Bearer ', '');
   void (async () => {
-    let userId = null;
-    if (token) {
-      const auth = await validateToken(token);
-      userId = auth?.userId ?? null;
-    }
+    if (viewerId && Number(listing.seller_id) === Number(viewerId) && listing.status !== 'active') return;
     await query(
       `INSERT INTO listing_views (listing_id, user_id, ip_address, user_agent, viewed_at)
        VALUES ($1, $2, $3, $4, NOW())`,
-      [listingId, userId, null, null],
+      [listingId, viewerId, null, null],
     );
     await query(`UPDATE listings SET view_count = view_count + 1 WHERE id = $1`, [listingId]);
-    if (userId) {
+    if (viewerId) {
       await query(
         `INSERT INTO recently_viewed (user_id, listing_id, viewed_at) VALUES ($1, $2, NOW())
          ON CONFLICT (user_id, listing_id) DO UPDATE SET viewed_at = NOW()`,
-        [userId, listingId],
+        [viewerId, listingId],
       );
     }
   })().catch(() => {});
@@ -627,7 +632,8 @@ async function createListing(data, userId) {
 
   const listing = result.rows[0];
   if (Array.isArray(data.variations) && listing) {
-    await saveVariations(listing.id, data.variations, data.skus);
+    await saveVariations(listing.id, data.variations, data.skus, { price: data.price, quantity: data.quantity });
+    await syncListingStockFromSkus(listing.id);
   }
   if (listing?.status === 'active') await indexListing(listing.id).catch(() => {});
 
@@ -668,8 +674,25 @@ async function updateListing(listingId, data, userId) {
     values.push(JSON.stringify(data.specifics));
   }
 
+  if (Array.isArray(data.variations) && data.variations.length) {
+    const existing = await query(`SELECT 1 FROM listing_variations WHERE listing_id = $1 LIMIT 1`, [listingId]);
+    if (!existing.rows[0]) {
+      await saveVariations(listingId, data.variations, data.skus, { price: data.price, quantity: data.quantity });
+    } else if (Array.isArray(data.skus)) {
+      await replaceListingSkus(listingId, data.skus);
+    }
+  } else if (Array.isArray(data.skus)) {
+    await replaceListingSkus(listingId, data.skus);
+  }
+
+  if (Array.isArray(data.skus) || Array.isArray(data.variations)) {
+    await syncListingStockFromSkus(listingId);
+  }
+
   if (fields.length === 0) {
-    return { status: 400, body: { error: 'No valid fields to update' } };
+    const listing = await query('SELECT * FROM listings WHERE id = $1', [listingId]);
+    if (!listing.rows[0]) return { status: 404, body: { error: 'Listing not found' } };
+    return { status: 200, body: { listing: listing.rows[0] } };
   }
 
   fields.push(`updated_at = NOW()`);
@@ -679,6 +702,11 @@ async function updateListing(listingId, data, userId) {
     `UPDATE listings SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
     values
   );
+
+  if (Array.isArray(data.skus) || Array.isArray(data.variations)) {
+    const fresh = await query('SELECT * FROM listings WHERE id = $1', [listingId]);
+    return { status: 200, body: { listing: fresh.rows[0] || result.rows[0] } };
+  }
 
   return { status: 200, body: { listing: result.rows[0] } };
 }
@@ -1024,7 +1052,18 @@ async function getSellerAnalytics(userId) {
   return { status: 200, body: { stats: statsResult.rows[0] } };
 }
 
-async function saveVariations(listingId, variations, skus) {
+function skuPrice(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function skuQuantity(value, fallback = 0) {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+async function saveVariations(listingId, variations, skus, defaults = {}) {
   for (const [i, variation] of variations.entries()) {
     const name = String(variation.name || "").trim();
     if (!name) continue;
@@ -1044,17 +1083,69 @@ async function saveVariations(listingId, variations, skus) {
   }
   const combos = Array.isArray(skus) && skus.length
     ? skus
-    : cartesianSkus(variations);
+    : cartesianSkus(variations, defaults);
   for (const sku of combos) {
+    const combination = sku.combination && typeof sku.combination === "object" ? sku.combination : sku;
     await query(
       `INSERT INTO listing_variation_skus (listing_id, sku, combination, price, quantity)
        VALUES ($1,$2,$3,$4,$5)`,
-      [listingId, sku.sku || null, JSON.stringify(sku.combination || sku), sku.price || null, sku.quantity || 0],
+      [listingId, sku.sku || null, JSON.stringify(combination), skuPrice(sku.price), skuQuantity(sku.quantity, 0)],
     );
   }
 }
 
-function cartesianSkus(variations) {
+async function replaceListingSkus(listingId, skus) {
+  const kept = [];
+  for (const sku of skus) {
+    const combination = sku.combination && typeof sku.combination === "object" ? sku.combination : sku;
+    const encoded = JSON.stringify(combination);
+    const updated = await query(
+      `UPDATE listing_variation_skus
+       SET sku = $1, price = $2, quantity = $3, is_active = TRUE
+       WHERE listing_id = $4 AND combination = $5::jsonb
+       RETURNING id`,
+      [sku.sku || null, skuPrice(sku.price), skuQuantity(sku.quantity, 0), listingId, encoded],
+    );
+    if (updated.rows[0]) {
+      kept.push(updated.rows[0].id);
+      continue;
+    }
+    const inserted = await query(
+      `INSERT INTO listing_variation_skus (listing_id, sku, combination, price, quantity, is_active)
+       VALUES ($1,$2,$3,$4,$5, TRUE) RETURNING id`,
+      [listingId, sku.sku || null, encoded, skuPrice(sku.price), skuQuantity(sku.quantity, 0)],
+    );
+    kept.push(inserted.rows[0].id);
+  }
+  if (kept.length) {
+    await query(
+      `UPDATE listing_variation_skus SET is_active = FALSE, quantity = 0
+       WHERE listing_id = $1 AND NOT (id = ANY($2::int[]))`,
+      [listingId, kept],
+    );
+  }
+}
+
+async function syncListingStockFromSkus(listingId) {
+  const { rows } = await query(
+    `SELECT COALESCE(SUM(quantity), 0) AS qty, MIN(price) FILTER (WHERE price IS NOT NULL AND price > 0) AS min_price
+     FROM listing_variation_skus
+     WHERE listing_id = $1 AND is_active = TRUE`,
+    [listingId],
+  );
+  const qty = Number(rows[0]?.qty || 0);
+  const minPrice = rows[0]?.min_price == null ? null : Number(rows[0].min_price);
+  await query(
+    `UPDATE listings
+     SET quantity = $1,
+         price = COALESCE($2, price),
+         updated_at = NOW()
+     WHERE id = $3`,
+    [qty, minPrice, listingId],
+  );
+}
+
+function cartesianSkus(variations, defaults = {}) {
   const named = (variations || []).filter((v) => v.name && Array.isArray(v.options) && v.options.length);
   if (!named.length) return [];
   let combos = [{}];
@@ -1068,7 +1159,11 @@ function cartesianSkus(variations) {
     }
     combos = next;
   }
-  return combos.map((combination) => ({ combination, quantity: 1 }));
+  return combos.map((combination) => ({
+    combination,
+    quantity: skuQuantity(defaults.quantity, 1),
+    price: skuPrice(defaults.price),
+  }));
 }
 
 async function getRecentlyViewed(userId) {

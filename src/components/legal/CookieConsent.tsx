@@ -28,7 +28,7 @@ export function CookieConsent() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e7eef6] bg-white px-4 py-3 shadow-[0_-8px_24px_-16px_rgba(15,28,63,0.35)]">
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e7eef6] bg-white px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-16px_rgba(15,28,63,0.35)]">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[13px] leading-relaxed text-[#3a4a66]">
           Nexlo uses cookies to keep you signed in and to remember search and cart. See the{" "}

@@ -43,7 +43,7 @@ export function HeroSection() {
             <p className="nexlo-kicker">
               {slide.eyebrow}
             </p>
-            <h1 className="mt-2 text-[32px] font-extrabold leading-[1.08] tracking-tight text-[#0f1c3f] sm:text-[40px]">
+            <h1 className="mt-2 text-[26px] font-extrabold leading-[1.08] tracking-tight text-[#0f1c3f] sm:text-[40px]">
               {slide.title}
             </h1>
             <p className="mt-3 text-[14px] leading-relaxed text-[#4b5563]">
