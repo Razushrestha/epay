@@ -124,17 +124,22 @@ async function postMailgun(base, domain, key, fields) {
   }
 }
 
-function codeEmailHtml(code, purpose) {
+function codeEmailHtml(code, purpose, resetUrl) {
   const label = SUBJECTS[purpose] ?? "Your Nexlo code";
+  const link = resetUrl
+    ? `<p style="margin:0 0 16px"><a href="${resetUrl}" style="display:inline-block;background:#3665f3;color:#fff;text-decoration:none;padding:12px 18px;border-radius:999px;font-weight:700">Reset your password</a></p>
+  <p style="font-size:12px;color:#6b7587;margin:0 0 16px">Or paste this link: ${resetUrl}</p>`
+    : "";
   return `<div style="font-family:Arial,sans-serif;max-width:480px;color:#0f1c3f">
   <p style="font-size:16px;font-weight:700;margin:0 0 12px">${label}</p>
-  <p style="font-size:13px;color:#6b7587;margin:0 0 16px">Use this code within 10 minutes. If you requested another code, use the latest one.</p>
+  <p style="font-size:13px;color:#6b7587;margin:0 0 16px">${resetUrl ? "Open the button below to choose a new password. The link expires in 30 minutes." : "Use this code within 10 minutes. If you requested another code, use the latest one."}</p>
+  ${link}
   <p style="font-size:28px;letter-spacing:8px;font-weight:800;margin:0 0 16px">${code}</p>
   <p style="font-size:12px;color:#8a94a6">If you did not request this, you can ignore the email.</p>
 </div>`;
 }
 
-export async function sendCodeEmail({ to, code, purpose = "verify" }) {
+export async function sendCodeEmail({ to, code, purpose = "verify", resetUrl }) {
   const key = process.env.MAILGUN_API_KEY;
   const domain = process.env.MAILGUN_DOMAIN;
   const destination = String(to || "").trim().toLowerCase();
@@ -155,8 +160,10 @@ export async function sendCodeEmail({ to, code, purpose = "verify" }) {
 
   const from = fromAddress(domain);
   const subject = SUBJECTS[purpose] ?? "Your Nexlo code";
-  const text = `Your Nexlo code is ${code}. It expires in 10 minutes. If you requested another code, use the latest one.`;
-  const html = codeEmailHtml(code, purpose);
+  const text = resetUrl
+    ? `Reset your Nexlo password: ${resetUrl}\nThis link expires in 30 minutes. You can also use code ${code}.`
+    : `Your Nexlo code is ${code}. It expires in 10 minutes. If you requested another code, use the latest one.`;
+  const html = codeEmailHtml(code, purpose, resetUrl);
   const fields = {
     from,
     to: destination,
@@ -216,7 +223,7 @@ export async function sendTransactional({ to, subject, text }) {
   return { skipped: true, sent: false, error: lastError?.message };
 }
 
-export async function deliverCode(channel, destination, code, purpose) {
+export async function deliverCode(channel, destination, code, purpose, extras = {}) {
   const dest = String(destination || "").trim();
   if (!dest) {
     return { sent: false, skipped: true, userMessage: "No email or phone to send a code to." };
@@ -243,5 +250,5 @@ export async function deliverCode(channel, destination, code, purpose) {
     }
     return { sent: true, skipped: false, masked: maskDestination(dest, "phone") };
   }
-  return sendCodeEmail({ to: dest, code, purpose });
+  return sendCodeEmail({ to: dest, code, purpose, resetUrl: extras.resetUrl });
 }

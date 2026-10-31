@@ -22,6 +22,7 @@ type OrderDetail = {
   shipments: { carrier: string | null; tracking_number: string | null; status: string }[];
   you?: { isBuyer: boolean; isSeller: boolean; isStaff: boolean };
   escrow?: { status: string; amount: number; released_at: string | null; net_to_seller: number | null } | null;
+  payment?: { gateway: string | null; gateway_transaction_id: string | null; status: string | null } | null;
 };
 
 export default function OrderDetailPage() {
@@ -341,6 +342,12 @@ export default function OrderDetailPage() {
               <p className="mt-2 flex items-center justify-between text-[13px] text-[#6b7587]">
                 Escrow
                 <StatusPill status={data.escrow.status} />
+              </p>
+            ) : null}
+            {data.payment?.gateway_transaction_id ? (
+              <p className="mt-2 flex items-center justify-between text-[13px] text-[#6b7587]">
+                Transaction reference
+                <span className="font-semibold text-[#0f1c3f]">{data.payment.gateway_transaction_id}</span>
               </p>
             ) : null}
             {data.shipments?.[0] ? (

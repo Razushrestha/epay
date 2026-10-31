@@ -1,6 +1,43 @@
 import { query } from "./db.mjs";
 import { bestMatchScore, expandQueryWithSynonyms } from "./commerce-rules.mjs";
 import { completedRequested, listingFacets, statusClause } from "./m2-listings.mjs";
+
+export function listingSearchVectorSql(alias = "l") {
+  return `COALESCE(${alias}.search_vector,
+    setweight(to_tsvector('english', COALESCE(${alias}.title, '')), 'A') ||
+    setweight(to_tsvector('english', COALESCE(${alias}.subtitle, '')), 'B') ||
+    setweight(to_tsvector('english', COALESCE(${alias}.description, '')), 'C'))`;
+}
+
+export function conditionMatchSql(alias, param) {
+  return `(
+    ${alias}.condition_id::text = ${param}
+    OR EXISTS (
+      SELECT 1 FROM conditions cond
+      WHERE cond.id = ${alias}.condition_id
+        AND (cond.slug = ${param} OR lower(cond.name) = lower(${param}))
+    )
+  )`;
+}
+
+export function englishTsQueryString(original, expanded = "") {
+  const base = String(original || "").trim();
+  if (base.length < 2) return "";
+  const extras = String(expanded || "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token && !base.toLowerCase().split(/\s+/).includes(token));
+  const groups = [base, ...extras]
+    .map((term) =>
+      term
+        .split(/\s+/)
+        .map((word) => word.replace(/[^a-zA-Z0-9]+/g, ""))
+        .filter((word) => word.length >= 2)
+        .join(" & "),
+    )
+    .filter(Boolean);
+  return [...new Set(groups)].join(" | ");
+}
 import { cdnifyListing } from "./cdn.mjs";
 
 function osUrl() {
@@ -119,7 +156,7 @@ export async function searchListingsAdvanced(params) {
     synonyms = [];
   }
   const expanded = expandQueryWithSynonyms(q, synonyms);
-  const tsQuery = expanded || q;
+  const tsQuery = englishTsQueryString(q, expanded);
 
   const values = [];
   let n = 1;
@@ -132,20 +169,28 @@ export async function searchListingsAdvanced(params) {
 
   if (tsQuery && tsQuery.length >= 2) {
     where += ` AND (
-      to_tsvector('english', l.title || ' ' || COALESCE(l.description,'')) @@ plainto_tsquery('english', $${n})
+      ${listingSearchVectorSql("l")} @@ to_tsquery('english', $${n})
       OR l.title ILIKE $${n + 1}
     )`;
     values.push(tsQuery, `%${q}%`);
     n += 2;
   }
   if (/^\d+$/.test(categoryId)) {
-    where += ` AND l.category_id = $${n++}`;
+    where += ` AND EXISTS (
+      SELECT 1 FROM categories sel
+      WHERE sel.id = $${n++}
+        AND c.lft >= sel.lft AND c.rgt <= sel.rgt
+    )`;
     values.push(categoryId);
   } else if (categorySlug && categorySlug !== "all" && !/^\d+$/.test(categorySlug)) {
     where += ` AND c.slug = $${n++}`;
     values.push(categorySlug);
   } else if (/^\d+$/.test(categorySlug)) {
-    where += ` AND l.category_id = $${n++}`;
+    where += ` AND EXISTS (
+      SELECT 1 FROM categories sel
+      WHERE sel.id = $${n++}
+        AND c.lft >= sel.lft AND c.rgt <= sel.rgt
+    )`;
     values.push(categorySlug);
   }
   if (exclude.length >= 2) {
@@ -161,7 +206,7 @@ export async function searchListingsAdvanced(params) {
     values.push(format);
   }
   if (condition) {
-    where += ` AND l.condition_id = $${n++}`;
+    where += ` AND ${conditionMatchSql("l", `$${n++}`)}`;
     values.push(condition);
   }
   if (minPrice) {
@@ -196,7 +241,7 @@ export async function searchListingsAdvanced(params) {
   }
 
   const rankExpr = tsQuery && tsQuery.length >= 2
-    ? `ts_rank(to_tsvector('english', l.title || ' ' || COALESCE(l.description,'')), plainto_tsquery('english', $1))`
+    ? `ts_rank(${listingSearchVectorSql("l")}, to_tsquery('english', $1))`
     : `0::float`;
 
   let order = `ORDER BY l.published_at DESC`;
@@ -229,20 +274,37 @@ export async function searchListingsAdvanced(params) {
       freeShipping: row.shipping_free,
     }),
   }));
-  if (sort === "best_match") listings.sort((a, b) => b.match_score - a.match_score);
+  if (sort === "best_match") {
+    listings.sort((a, b) => {
+      const rank = Number(b.text_rank || 0) - Number(a.text_rank || 0);
+      if (Math.abs(rank) > 1e-9) return rank;
+      return Number(b.match_score || 0) - Number(a.match_score || 0);
+    });
+  }
   const facets = await listingFacets(facetWhere, facetValues);
+  const countResult = await query(
+    `SELECT COUNT(*)::int AS total
+     FROM listings l
+     JOIN categories c ON l.category_id = c.id
+     JOIN users u ON l.seller_id = u.id
+     LEFT JOIN feedback_scores fs ON fs.user_id = u.id
+     WHERE ${where}`,
+    values.slice(0, -2),
+  );
+  const total = Number(countResult.rows[0]?.total || 0);
 
   return {
     status: 200,
     body: {
       listings,
       facets,
-      total: listings.length + offset,
+      total,
       query: q,
       expanded: expanded !== q ? expanded : undefined,
       engine: osUrl() ? "opensearch+postgres" : "postgres",
       limit,
       offset,
+      hasMore: offset + listings.length < total,
     },
   };
 }

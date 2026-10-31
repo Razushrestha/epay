@@ -3,6 +3,16 @@
 import Link from "next/link";
 import { useState } from "react";
 import { apiBase, apiUnreachableMessage, digitsCode } from "@/lib/account-api";
+import { passwordPolicyError } from "@/lib/password";
+
+function resetHref(url: string) {
+  try {
+    const parsed = new URL(url, "http://localhost:3000");
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
 
 function MailIcon() {
   return (
@@ -42,6 +52,7 @@ export function ForgotForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [sent, setSent] = useState(false);
   const [done, setDone] = useState(false);
+  const [resetUrl, setResetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -61,8 +72,9 @@ export function ForgotForm() {
       }
       const filled = digitsCode(body.data?.devCode);
       if (filled) setCode(filled);
-      if (body.data?.sent === false && !filled) {
-        setError(body.data.deliveryError ?? "We could not send the code. Try again.");
+      if (body.data?.resetUrl) setResetUrl(String(body.data.resetUrl));
+      if (body.data?.sent === false && !filled && !body.data?.resetUrl) {
+        setError(body.data.deliveryError ?? "We could not send a reset link. Try again.");
         setSent(true);
         return;
       }
@@ -82,6 +94,11 @@ export function ForgotForm() {
 
   async function resetPassword(e: React.FormEvent) {
     e.preventDefault();
+    const passwordError = passwordPolicyError(password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -119,8 +136,10 @@ export function ForgotForm() {
         {done
           ? "Your password has been updated. You can sign in with the new password."
           : sent
-            ? "Enter the 6-digit code we sent, then choose a new password. Other signed-in devices will be signed out."
-            : "We'll send a one-time code to your email or phone, then you can choose a new password. Other signed-in devices are signed out."}
+            ? resetUrl
+              ? "Open the reset link we sent to your email, then choose a new password. Other signed-in devices will be signed out."
+              : "Enter the 6-digit code we sent, then choose a new password. Other signed-in devices will be signed out."
+            : "We'll send a reset link to your email (or a code to your phone). Other signed-in devices are signed out."}
       </p>
 
       {done ? (
@@ -134,7 +153,7 @@ export function ForgotForm() {
           </svg>
         </Link>
       ) : (
-        <form onSubmit={sent ? resetPassword : requestCode} className="mt-6 space-y-3.5">
+        <form onSubmit={sent && !resetUrl ? resetPassword : requestCode} className="mt-6 space-y-3.5">
           <label className="sr-only" htmlFor="forgot-identifier">
             Email or phone
           </label>
@@ -151,7 +170,19 @@ export function ForgotForm() {
             />
           </div>
 
-          {sent ? (
+          {sent && resetUrl ? (
+            <Link
+              href={resetHref(resetUrl)}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6]"
+            >
+              Open reset link
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </Link>
+          ) : null}
+
+          {sent && !resetUrl ? (
             <>
               <button
                 type="button"
@@ -216,7 +247,7 @@ export function ForgotForm() {
             disabled={loading}
             className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Working…" : sent ? "Save new password" : "Send code"}
+            {loading ? "Working…" : sent ? (resetUrl ? "Resend link" : "Save new password") : "Send reset link"}
             {!loading && (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M5 12h14M13 6l6 6-6 6" />

@@ -3,7 +3,7 @@
  * Handles category tree management, item specifics configuration, and catalog browsing
  */
 
-import { query } from './db.mjs';
+import { query, withTx } from './db.mjs';
 
 /**
  * Main catalog router handler
@@ -15,6 +15,7 @@ export async function handleCatalog(req, method, urlPath, headers, body, ipAddre
   try {
     // Public endpoints (no auth required)
     if (method === 'GET' && pathParts[0] === 'categories') {
+      await ensureCategoryHierarchy();
       if (!pathParts[1]) return await getCategories(url.searchParams);
       if (pathParts[1] === 'tree') return await getCategoryTree();
       if (pathParts[2] === 'specifics') return await getCategorySpecifics(pathParts[1]);
@@ -22,6 +23,7 @@ export async function handleCatalog(req, method, urlPath, headers, body, ipAddre
     }
 
     if (method === 'GET' && pathParts[0] === 'conditions') {
+      await ensureItemConditions();
       return await getConditions();
     }
 
@@ -42,6 +44,15 @@ export async function handleCatalog(req, method, urlPath, headers, body, ipAddre
 
     // Category management (admin)
     if (pathParts[0] === 'admin') {
+      if (pathParts[1] === 'fees') {
+        if (method === 'GET' && !pathParts[2]) {
+          return await listCategoryFees();
+        }
+        if ((method === 'PUT' || method === 'PATCH') && pathParts[2]) {
+          return await upsertCategoryFees(pathParts[2], body, auth.userId);
+        }
+      }
+
       if (pathParts[1] === 'categories') {
         if (method === 'POST' && !pathParts[2]) {
           return await createCategory(body, auth.userId, ipAddress, userAgent);
@@ -54,6 +65,9 @@ export async function handleCatalog(req, method, urlPath, headers, body, ipAddre
         }
         if (method === 'POST' && pathParts[2] === 'reorder') {
           return await reorderCategories(body, auth.userId);
+        }
+        if ((method === 'PUT' || method === 'PATCH') && pathParts[3] === 'fees') {
+          return await upsertCategoryFees(pathParts[2], body, auth.userId);
         }
       }
 
@@ -107,10 +121,12 @@ async function validateStaffToken(token) {
     `SELECT u.id as user_id, u.is_staff
      FROM auth_sessions s
      JOIN users u ON s.user_id = u.id
-     WHERE s.token_hash = $1 AND s.expires_at > NOW() AND u.is_staff = true`,
+     WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > NOW() AND u.is_staff = true`,
     [hash]
   );
-  return result.rows[0] || null;
+  const row = result.rows[0];
+  if (!row) return null;
+  return { userId: row.user_id, is_staff: row.is_staff };
 }
 
 async function hashToken(token) {
@@ -131,8 +147,10 @@ async function getCategories(params) {
       c.id, c.name, c.slug, c.parent_id, c.level, c.icon, c.image_url,
       c.description, c.item_count, c.is_restricted, c.requires_approval,
       c.is_active, c.sort_order,
-      (SELECT COUNT(*) FROM categories WHERE parent_id = c.id) as child_count
+      (SELECT COUNT(*) FROM categories WHERE parent_id = c.id) as child_count,
+      f.insertion_fee, f.final_value_fee_percentage, f.commission_percentage
     FROM categories c
+    LEFT JOIN category_fees f ON f.category_id = c.id
     WHERE 1=1
   `;
   const values = [];
@@ -156,7 +174,7 @@ async function getCategories(params) {
     sql += ` AND c.is_active = true`;
   }
 
-  sql += ` ORDER BY c.sort_order, c.name`;
+  sql += ` ORDER BY c.lft, c.sort_order, c.name`;
 
   const result = await query(sql, values);
   return { status: 200, body: { categories: result.rows } };
@@ -190,17 +208,18 @@ function buildTree(rows, parentId = null) {
  * Get category by slug with breadcrumb and specifics
  */
 async function getCategoryBySlug(slug) {
+  const byId = /^\d+$/.test(String(slug));
   const catResult = await query(
     `SELECT c.*, 
        (SELECT json_agg(json_build_object(
          'id', p.id, 'name', p.name, 'slug', p.slug, 'level', p.level
        ) ORDER BY p.level)
         FROM categories p
-        WHERE p.lft < c.lft AND p.rgt > c.rgt) as breadcrumb,
+        WHERE p.lft < c.lft AND p.rgt > c.rgt) as ancestors,
        (SELECT COUNT(*) FROM categories WHERE parent_id = c.id) as child_count
      FROM categories c
-     WHERE c.slug = $1`,
-    [slug]
+     WHERE ${byId ? "c.id = $1" : "c.slug = $1"}`,
+    [byId ? Number(slug) : slug]
   );
 
   if (!catResult.rows[0]) {
@@ -208,6 +227,11 @@ async function getCategoryBySlug(slug) {
   }
 
   const category = catResult.rows[0];
+  const ancestors = Array.isArray(category.ancestors) ? category.ancestors : [];
+  const breadcrumb = [
+    ...ancestors,
+    { id: category.id, name: category.name, slug: category.slug, level: category.level },
+  ];
 
   // Get subcategories
   const subResult = await query(
@@ -217,6 +241,8 @@ async function getCategoryBySlug(slug) {
      ORDER BY sort_order, name`,
     [category.id]
   );
+
+  await ensureDefaultSpecifics(category.id);
 
   // Get item specifics for this category
   const specificsResult = await query(
@@ -256,6 +282,7 @@ async function getCategoryBySlug(slug) {
     status: 200,
     body: {
       category,
+      breadcrumb,
       subcategories: subResult.rows,
       specifics: specificsResult.rows,
       conditions: conditionsResult.rows,
@@ -267,39 +294,237 @@ async function getCategoryBySlug(slug) {
 /**
  * Get item specifics for a category (by slug)
  */
-async function ensureDefaultSpecifics(categoryId) {
-  const existing = await query('SELECT COUNT(*)::int AS c FROM category_specifics WHERE category_id = $1', [categoryId]);
-  if (Number(existing.rows[0]?.c || 0) > 0) return;
+const LAPTOP_SPECIFICS = [
+  {
+    name: "Brand",
+    slug: "brand",
+    input_type: "select",
+    required: true,
+    options: ["Apple", "Dell", "HP", "Lenovo", "ASUS", "Acer", "MSI", "Samsung", "Microsoft", "Other"],
+  },
+  { name: "Model", slug: "model", input_type: "text", required: false, options: [] },
+  {
+    name: "Screen Size",
+    slug: "screen-size",
+    input_type: "number",
+    required: false,
+    unit: "inch",
+    min: 10,
+    max: 20,
+    help_text: "Enter screen size in inches (10–20).",
+    options: [],
+  },
+  {
+    name: "Processor",
+    slug: "processor",
+    input_type: "select",
+    required: false,
+    options: ["Intel Core i5", "Intel Core i7", "AMD Ryzen 5", "AMD Ryzen 7", "Apple M-series", "Other"],
+  },
+  {
+    name: "RAM",
+    slug: "ram",
+    input_type: "number",
+    required: false,
+    unit: "GB",
+    min: 1,
+    max: 128,
+    help_text: "Enter RAM in GB (1–128). Negative values are not allowed.",
+    options: [],
+  },
+  {
+    name: "Storage",
+    slug: "storage",
+    input_type: "number",
+    required: false,
+    unit: "GB",
+    min: 1,
+    max: 8192,
+    help_text: "Enter storage in GB (1–8192). Negative values are not allowed.",
+    options: [],
+  },
+  {
+    name: "Operating System",
+    slug: "operating-system",
+    input_type: "select",
+    required: false,
+    options: ["Windows 11", "Windows 10", "macOS", "ChromeOS", "Linux"],
+  },
+];
 
-  const defaults = [
-    { name: 'Brand', slug: 'brand', input_type: 'text', required: false, options: [] },
-    { name: 'Model', slug: 'model', input_type: 'text', required: false, options: [] },
-    { name: 'Color', slug: 'color', input_type: 'select', required: false, options: ['Black', 'White', 'Blue', 'Red', 'Green', 'Gold', 'Silver', 'Other'] },
-    { name: 'Size', slug: 'size', input_type: 'select', required: false, options: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'One size', 'Other'] },
-    { name: 'Storage', slug: 'storage', input_type: 'select', required: false, options: ['64GB', '128GB', '256GB', '512GB', '1TB', 'Other'] },
-  ];
+const DEFAULT_SPECIFICS = [
+  { name: "Brand", slug: "brand", input_type: "text", required: false, options: [] },
+  { name: "Model", slug: "model", input_type: "text", required: false, options: [] },
+  { name: "Color", slug: "color", input_type: "select", required: false, options: ["Black", "White", "Blue", "Red", "Green", "Gold", "Silver", "Other"] },
+  { name: "Size", slug: "size", input_type: "select", required: false, options: ["XS", "S", "M", "L", "XL", "XXL", "One size", "Other"] },
+  { name: "Storage", slug: "storage", input_type: "select", required: false, options: ["64GB", "128GB", "256GB", "512GB", "1TB", "Other"] },
+];
 
-  for (const spec of defaults) {
-    let row = await query('SELECT id FROM item_specifics WHERE slug = $1 LIMIT 1', [spec.slug]);
+async function attachSpecifics(categoryId, pack) {
+  for (let index = 0; index < pack.length; index += 1) {
+    const spec = pack[index];
+    let row = await query("SELECT id FROM item_specifics WHERE slug = $1 LIMIT 1", [spec.slug]);
     if (!row.rows[0]) {
       row = await query(
-        `INSERT INTO item_specifics (name, slug, input_type, is_required, is_active)
-         VALUES ($1, $2, $3, $4, true) RETURNING id`,
-        [spec.name, spec.slug, spec.input_type, spec.required],
+        `INSERT INTO item_specifics (name, slug, input_type, unit, is_required, is_active, min_value, max_value, help_text)
+         VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8) RETURNING id`,
+        [spec.name, spec.slug, spec.input_type, spec.unit || null, spec.required, spec.min ?? null, spec.max ?? null, spec.help_text || null],
       );
-      for (let i = 0; i < spec.options.length; i += 1) {
-        await query(
-          `INSERT INTO item_specific_options (specific_id, value, sort_order, is_active) VALUES ($1, $2, $3, true)`,
-          [row.rows[0].id, spec.options[i], i],
+    } else {
+      await query(
+        `UPDATE item_specifics
+         SET name = $1, input_type = $2, unit = $3, is_required = $4, min_value = $5, max_value = $6, help_text = $7, updated_at = NOW()
+         WHERE id = $8`,
+        [spec.name, spec.input_type, spec.unit || null, spec.required, spec.min ?? null, spec.max ?? null, spec.help_text || null, row.rows[0].id],
+      );
+    }
+    const specificId = row.rows[0].id;
+    if (spec.input_type === "select" || spec.input_type === "dropdown") {
+      await query(`UPDATE item_specific_options SET is_active = false WHERE specific_id = $1`, [specificId]);
+      for (let i = 0; i < (spec.options || []).length; i += 1) {
+        const existingOpt = await query(
+          `SELECT id FROM item_specific_options WHERE specific_id = $1 AND value = $2 LIMIT 1`,
+          [specificId, spec.options[i]],
         );
+        if (existingOpt.rows[0]) {
+          await query(`UPDATE item_specific_options SET is_active = true, sort_order = $1 WHERE id = $2`, [i, existingOpt.rows[0].id]);
+        } else {
+          await query(
+            `INSERT INTO item_specific_options (specific_id, value, sort_order, is_active) VALUES ($1, $2, $3, true)`,
+            [specificId, spec.options[i], i],
+          );
+        }
       }
+    } else {
+      await query(`UPDATE item_specific_options SET is_active = false WHERE specific_id = $1`, [specificId]);
     }
     await query(
       `INSERT INTO category_specifics (category_id, specific_id, is_required, sort_order)
-       VALUES ($1, $2, $3, $4) ON CONFLICT (category_id, specific_id) DO NOTHING`,
-      [categoryId, row.rows[0].id, spec.required, spec.slug === 'brand' ? 1 : 10],
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (category_id, specific_id) DO UPDATE SET is_required = EXCLUDED.is_required, sort_order = EXCLUDED.sort_order`,
+      [categoryId, specificId, spec.required, index + 1],
     );
   }
+}
+
+async function ensureDefaultSpecifics(categoryId) {
+  const category = await query("SELECT slug FROM categories WHERE id = $1", [categoryId]);
+  if (category.rows[0]?.slug === "laptops") {
+    const check = await query(
+      `SELECT s.slug, s.input_type
+       FROM item_specifics s
+       JOIN category_specifics cs ON cs.specific_id = s.id
+       WHERE cs.category_id = $1 AND s.slug IN ('ram', 'brand', 'storage', 'screen-size')`,
+      [categoryId],
+    );
+    const types = Object.fromEntries(check.rows.map((row) => [row.slug, row.input_type]));
+    if (types.ram === "number" && types.brand === "select" && types.storage === "number" && types["screen-size"] === "number") {
+      return;
+    }
+    await attachSpecifics(categoryId, LAPTOP_SPECIFICS);
+    return;
+  }
+  const existing = await query("SELECT COUNT(*)::int AS c FROM category_specifics WHERE category_id = $1", [categoryId]);
+  if (Number(existing.rows[0]?.c || 0) > 0) return;
+  await attachSpecifics(categoryId, DEFAULT_SPECIFICS);
+}
+
+export async function validateListingSpecifics(categoryId, values) {
+  if (!categoryId) return null;
+  const loaded = await getCategorySpecifics(categoryId);
+  if (loaded.status !== 200) return loaded;
+  const specs = loaded.body?.specifics || [];
+  const provided = values && typeof values === "object" ? values : {};
+  for (const spec of specs) {
+    const raw = String(provided[spec.slug] ?? "").trim();
+    if (spec.input_type === "number" && raw) {
+      const num = Number(raw);
+      const min = spec.min_value == null ? 0 : Number(spec.min_value);
+      const max = spec.max_value == null ? null : Number(spec.max_value);
+      const unit = spec.unit ? ` ${spec.unit}` : "";
+      if (!Number.isFinite(num)) {
+        return { status: 400, body: { error: `${spec.name} must be a number${unit}.` } };
+      }
+      if (num < min || (max != null && num > max)) {
+        const range = max != null ? `${min}–${max}${unit}` : `at least ${min}${unit}`;
+        return {
+          status: 400,
+          body: {
+            error: `${spec.name} must be ${range}. Negative or out-of-range values are not allowed.`,
+          },
+        };
+      }
+    }
+  }
+  for (const spec of specs) {
+    const raw = String(provided[spec.slug] ?? "").trim();
+    if (spec.is_required && !raw) {
+      return { status: 400, body: { error: `${spec.name} is required for this category.` } };
+    }
+    if (!raw) continue;
+    if ((spec.input_type === "select" || spec.input_type === "dropdown") && spec.options?.length) {
+      const allowed = spec.options.map((opt) => opt.value);
+      if (!allowed.includes(raw)) {
+        return { status: 400, body: { error: `${spec.name} must be one of the listed options.` } };
+      }
+    }
+  }
+  return null;
+}
+
+let hierarchyPromise = null;
+
+async function insertChild(parentId, { name, slug, level, sort_order }) {
+  const found = await query("SELECT * FROM categories WHERE slug = $1", [slug]);
+  if (found.rows[0]) return found.rows[0];
+  const parentResult = await query("SELECT id, rgt FROM categories WHERE id = $1", [parentId]);
+  if (!parentResult.rows[0]) throw new Error("Parent category not found");
+  const gap = parentResult.rows[0].rgt;
+  await query("UPDATE categories SET rgt = rgt + 2 WHERE rgt >= $1", [gap]);
+  await query("UPDATE categories SET lft = lft + 2 WHERE lft > $1", [gap]);
+  const inserted = await query(
+    `INSERT INTO categories (name, slug, parent_id, level, lft, rgt, sort_order, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+     RETURNING *`,
+    [name, slug, parentId, level, gap, gap + 1, sort_order],
+  );
+  return inserted.rows[0];
+}
+
+async function seedCategoryHierarchy() {
+  const electronics = await query("SELECT id FROM categories WHERE slug = 'electronics' LIMIT 1");
+  if (!electronics.rows[0]) return;
+  const computers = await insertChild(electronics.rows[0].id, {
+    name: "Computers",
+    slug: "computers",
+    level: 2,
+    sort_order: 1,
+  });
+  await insertChild(electronics.rows[0].id, {
+    name: "Cell Phones",
+    slug: "cell-phones",
+    level: 2,
+    sort_order: 2,
+  });
+  const laptops = await insertChild(computers.id, {
+    name: "Laptops",
+    slug: "laptops",
+    level: 3,
+    sort_order: 1,
+  });
+  await insertChild(computers.id, { name: "Desktops", slug: "desktops", level: 3, sort_order: 2 });
+  await insertChild(computers.id, { name: "Tablets", slug: "tablets", level: 3, sort_order: 3 });
+  await attachSpecifics(laptops.id, LAPTOP_SPECIFICS);
+}
+
+async function ensureCategoryHierarchy() {
+  if (!hierarchyPromise) {
+    hierarchyPromise = seedCategoryHierarchy().catch((err) => {
+      hierarchyPromise = null;
+      throw err;
+    });
+  }
+  await hierarchyPromise;
 }
 
 async function getCategorySpecifics(key) {
@@ -330,6 +555,61 @@ async function getCategorySpecifics(key) {
   );
 
   return { status: 200, body: { specifics: result.rows } };
+}
+
+const STANDARD_CONDITIONS = [
+  { name: "New", slug: "new", description: "Brand new, unused item in original packaging", sort_order: 1 },
+  { name: "Like New", slug: "like-new", description: "Barely used with no signs of wear", sort_order: 2 },
+  { name: "Excellent", slug: "excellent", description: "Very lightly used with minimal wear", sort_order: 3 },
+  { name: "Good", slug: "good", description: "Used with noticeable signs of wear", sort_order: 4 },
+  { name: "Fair", slug: "fair", description: "Heavily used but still functional", sort_order: 5 },
+  { name: "For Parts", slug: "for-parts", description: "Not working or missing parts", sort_order: 6 },
+  { name: "Refurbished", slug: "refurbished", description: "Professionally restored to working condition", sort_order: 7 },
+];
+
+let conditionsPromise = null;
+
+async function ensureItemConditions() {
+  if (!conditionsPromise) {
+    conditionsPromise = syncItemConditions().catch((err) => {
+      conditionsPromise = null;
+      throw err;
+    });
+  }
+  await conditionsPromise;
+}
+
+async function syncItemConditions() {
+  const fairRow = (await query(`SELECT id FROM conditions WHERE slug = 'fair' OR name = 'Fair' LIMIT 1`)).rows[0];
+  const oldAcceptable = (await query(`SELECT id FROM conditions WHERE slug = 'acceptable' OR name = 'Acceptable' LIMIT 1`)).rows[0];
+  if (oldAcceptable && fairRow && oldAcceptable.id !== fairRow.id) {
+    await query(`UPDATE listings SET condition_id = $1 WHERE condition_id = $2`, [fairRow.id, oldAcceptable.id]);
+    await query(`UPDATE conditions SET is_active = false WHERE id = $1`, [oldAcceptable.id]);
+  } else if (oldAcceptable && !fairRow) {
+    await query(
+      `UPDATE conditions SET name = 'Fair', slug = 'fair', description = $1, sort_order = 5, is_active = true WHERE id = $2`,
+      ["Heavily used but still functional", oldAcceptable.id],
+    );
+  }
+
+  await query(`UPDATE conditions SET is_active = false WHERE slug IN ('very-good', 'used', 'for_parts') OR name IN ('Very Good')`);
+
+  for (const spec of STANDARD_CONDITIONS) {
+    const existing = await query(`SELECT id FROM conditions WHERE slug = $1 LIMIT 1`, [spec.slug]);
+    if (existing.rows[0]) {
+      await query(
+        `UPDATE conditions SET name = $1, description = $2, sort_order = $3, is_active = true WHERE id = $4`,
+        [spec.name, spec.description, spec.sort_order, existing.rows[0].id],
+      );
+    } else {
+      await query(
+        `INSERT INTO conditions (name, slug, description, sort_order, is_active)
+         VALUES ($1, $2, $3, $4, true)
+         ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, sort_order = EXCLUDED.sort_order, is_active = true`,
+        [spec.name, spec.slug, spec.description, spec.sort_order],
+      );
+    }
+  }
 }
 
 /**
@@ -383,48 +663,132 @@ async function getBrands(params) {
  * ADMIN: Create category
  */
 async function createCategory(data, userId, ipAddress, userAgent) {
-  const { name, slug, parent_id, level, icon, image_url, description, is_restricted, requires_approval } = data;
+  const { name, slug, parent_id, icon, image_url, description, is_restricted, requires_approval } = data;
 
   if (!name || !slug) {
     return { status: 400, body: { error: 'Name and slug are required' } };
   }
 
-  // Calculate lft/rgt for nested set
-  let lft, rgt;
-  if (parent_id) {
-    const parentResult = await query('SELECT rgt FROM categories WHERE id = $1', [parent_id]);
-    if (!parentResult.rows[0]) {
-      return { status: 400, body: { error: 'Parent category not found' } };
+  try {
+    const category = await withTx(async (client) => {
+      let lft;
+      let rgt;
+      let level = 1;
+      if (parent_id) {
+        const parentResult = await client.query('SELECT rgt, level FROM categories WHERE id = $1', [parent_id]);
+        if (!parentResult.rows[0]) {
+          const err = new Error('Parent category not found');
+          err.status = 400;
+          throw err;
+        }
+        level = Number(parentResult.rows[0].level || 0) + 1;
+        if (level > 3) {
+          const err = new Error('Categories are limited to 3 levels. Choose a root or level-2 parent.');
+          err.status = 400;
+          throw err;
+        }
+        const gap = parentResult.rows[0].rgt;
+        await client.query("UPDATE categories SET rgt = rgt + 2 WHERE rgt >= $1", [gap]);
+        await client.query("UPDATE categories SET lft = lft + 2 WHERE lft > $1", [gap]);
+        lft = gap;
+        rgt = gap + 1;
+      } else {
+        const maxResult = await client.query('SELECT COALESCE(MAX(rgt), 0) + 1 as next_lft FROM categories');
+        lft = maxResult.rows[0].next_lft;
+        rgt = lft + 1;
+      }
+
+      const result = await client.query(
+        `INSERT INTO categories 
+           (name, slug, parent_id, level, lft, rgt, icon, image_url, description, 
+            is_restricted, requires_approval)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING *`,
+        [name, slug, parent_id || null, level, lft, rgt, icon, image_url, description, 
+         is_restricted || false, requires_approval || false]
+      );
+
+      const insertion = data.insertion_fee == null ? 0 : Number(data.insertion_fee);
+      const fvf = data.final_value_fee_percentage == null ? 0 : Number(data.final_value_fee_percentage);
+      await client.query(
+        `INSERT INTO category_fees (category_id, insertion_fee, final_value_fee_percentage)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (category_id) DO NOTHING`,
+        [result.rows[0].id, Number.isFinite(insertion) ? insertion : 0, Number.isFinite(fvf) ? fvf : 0]
+      );
+
+      await client.query(
+        `INSERT INTO category_audit_log (category_id, action, changed_by, changes, ip_address, user_agent)
+         VALUES ($1, 'created', $2, $3, $4, $5)`,
+        [result.rows[0].id, userId || null, JSON.stringify({ name, slug, parent_id, level }), ipAddress, userAgent]
+      );
+
+      return result.rows[0];
+    });
+
+    return { status: 201, body: { category } };
+  } catch (err) {
+    if (err?.status === 400) {
+      return { status: 400, body: { error: err.message } };
     }
-    rgt = parentResult.rows[0].rgt;
-    lft = rgt;
-    // Update existing nodes
-    await query('UPDATE categories SET rgt = rgt + 2 WHERE rgt >= $1', [rgt]);
-    await query('UPDATE categories SET lft = lft + 2 WHERE lft > $1', [rgt]);
-  } else {
-    const maxResult = await query('SELECT COALESCE(MAX(rgt), 0) + 1 as next_lft FROM categories');
-    lft = maxResult.rows[0].next_lft;
-    rgt = lft + 1;
+    if (err?.code === '23505') {
+      return { status: 409, body: { error: 'A category with that name or slug already exists' } };
+    }
+    throw err;
+  }
+}
+
+async function listCategoryFees() {
+  const result = await query(
+    `SELECT f.category_id, c.name as category_name, c.slug as category_slug, c.level,
+            f.insertion_fee, f.final_value_fee_percentage, f.commission_percentage,
+            f.auction_listing_fee, f.featured_listing_fee, f.updated_at
+     FROM category_fees f
+     JOIN categories c ON c.id = f.category_id
+     ORDER BY c.lft, c.name`
+  );
+  return { status: 200, body: { fees: result.rows } };
+}
+
+async function upsertCategoryFees(categoryId, data, userId) {
+  const cat = await query('SELECT id, name, slug FROM categories WHERE id = $1', [categoryId]);
+  if (!cat.rows[0]) {
+    return { status: 404, body: { error: 'Category not found' } };
+  }
+
+  const insertion = data.insertion_fee == null ? 0 : Number(data.insertion_fee);
+  const fvf = data.final_value_fee_percentage == null ? 0 : Number(data.final_value_fee_percentage);
+  const commission = data.commission_percentage == null ? null : Number(data.commission_percentage);
+
+  if (!Number.isFinite(insertion) || insertion < 0) {
+    return { status: 400, body: { error: 'Insertion fee must be 0 or greater (NPR)' } };
+  }
+  if (!Number.isFinite(fvf) || fvf < 0 || fvf > 100) {
+    return { status: 400, body: { error: 'Final value fee must be between 0 and 100%' } };
+  }
+  if (commission != null && (!Number.isFinite(commission) || commission < 0 || commission > 100)) {
+    return { status: 400, body: { error: 'Commission must be between 0 and 100%' } };
   }
 
   const result = await query(
-    `INSERT INTO categories 
-       (name, slug, parent_id, level, lft, rgt, icon, image_url, description, 
-        is_restricted, requires_approval)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `INSERT INTO category_fees (category_id, insertion_fee, final_value_fee_percentage, commission_percentage, updated_at)
+     VALUES ($1, $2, $3, COALESCE($4, 10), NOW())
+     ON CONFLICT (category_id) DO UPDATE SET
+       insertion_fee = EXCLUDED.insertion_fee,
+       final_value_fee_percentage = EXCLUDED.final_value_fee_percentage,
+       commission_percentage = COALESCE($4, category_fees.commission_percentage),
+       updated_at = NOW()
      RETURNING *`,
-    [name, slug, parent_id, level || 1, lft, rgt, icon, image_url, description, 
-     is_restricted || false, requires_approval || false]
+    [categoryId, insertion, fvf, commission]
   );
 
-  // Audit log
   await query(
-    `INSERT INTO category_audit_log (category_id, action, changed_by, changes, ip_address, user_agent)
-     VALUES ($1, 'created', $2, $3, $4, $5)`,
-    [result.rows[0].id, userId, JSON.stringify({ name, slug, parent_id }), ipAddress, userAgent]
+    `INSERT INTO category_audit_log (category_id, action, changed_by, changes)
+     VALUES ($1, 'fees_updated', $2, $3)`,
+    [categoryId, userId || null, JSON.stringify({ insertion_fee: insertion, final_value_fee_percentage: fvf, commission_percentage: commission })]
   );
 
-  return { status: 201, body: { category: result.rows[0] } };
+  return { status: 200, body: { fees: result.rows[0], category: cat.rows[0] } };
 }
 
 /**
@@ -588,14 +952,27 @@ async function createBrand(data, userId) {
     return { status: 400, body: { error: 'Name and slug are required' } };
   }
 
-  const result = await query(
-    `INSERT INTO brands (name, slug, logo_url, description, website, is_verified)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [name, slug, logo_url, description, website, is_verified || false]
-  );
-
-  return { status: 201, body: { brand: result.rows[0] } };
+  try {
+    const result = await query(
+      `INSERT INTO brands (name, slug, logo_url, description, website, is_verified)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (name) DO UPDATE SET
+         is_verified = EXCLUDED.is_verified,
+         logo_url = COALESCE(NULLIF(EXCLUDED.logo_url, ''), brands.logo_url),
+         description = COALESCE(NULLIF(EXCLUDED.description, ''), brands.description),
+         website = COALESCE(NULLIF(EXCLUDED.website, ''), brands.website),
+         is_active = true,
+         updated_at = NOW()
+       RETURNING *`,
+      [name, slug, logo_url || null, description || null, website || null, Boolean(is_verified)]
+    );
+    return { status: 201, body: { brand: result.rows[0] } };
+  } catch (err) {
+    if (err?.code === '23505') {
+      return { status: 409, body: { error: 'A brand with that name or slug already exists' } };
+    }
+    throw err;
+  }
 }
 
 /**

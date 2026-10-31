@@ -3,9 +3,9 @@ import Link from "next/link";
 import { CategoryMenu } from "@/components/CategoryMenu";
 import { CategoryNav } from "@/components/CategoryNav";
 import { AccountLinks } from "@/components/account/AccountLinks";
-import { SearchBar } from "@/components/SearchBar";
+import { HeaderSearch } from "@/components/HeaderSearch";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { HeaderIcons } from "@/components/commerce/HeaderIcons";
+import { HeaderIcons } from "@/components/commerce/HeaderIconsGate";
 
 export function SiteHeader() {
   return (
@@ -49,7 +49,7 @@ export function SiteHeader() {
         <CategoryMenu />
 
         <div className="col-span-3 row-start-2 min-w-0 md:col-auto md:row-auto md:flex-1">
-          <SearchBar />
+          <HeaderSearch />
         </div>
 
         <div className="col-start-3 row-start-1 ml-0 flex shrink-0 items-center gap-4 sm:gap-5 md:ml-2 md:gap-6">

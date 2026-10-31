@@ -49,6 +49,20 @@ async function req(method, path, { token, body, headers = {}, expectStatus } = {
   return { status: res.status, json, headers: res.headers };
 }
 
+async function registerSession(body) {
+  const { json } = await req("POST", "/api/v1/auth/register", { body, expectStatus: 201 });
+  if (json.token) return json.token;
+  const identifier = body.email || body.phone;
+  const code = json.data?.devCode;
+  if (!code) throw new Error("register did not return a verification code");
+  const verified = await req("POST", "/api/v1/auth/verify", {
+    body: { identifier, code },
+    expectStatus: 200,
+  });
+  if (!verified.json.token) throw new Error("verify did not return a token");
+  return verified.json.token;
+}
+
 async function page(name, path, ok = (status) => status === 200) {
   try {
     const res = await fetch(`${web}${path}`, { redirect: "manual" });
@@ -149,19 +163,14 @@ let listingId = null;
 let skuId = null;
 
 await check("Register business seller", async () => {
-  const { json } = await req("POST", "/api/v1/auth/register", {
-    body: {
-      email,
-      password,
-      firstName: "Smoke",
-      lastName: "Bot",
-      accountType: "business",
-      displayName: "Smoke Seller",
-    },
-    expectStatus: 201,
+  token = await registerSession({
+    email,
+    password,
+    firstName: "Smoke",
+    lastName: "Bot",
+    accountType: "business",
+    displayName: "Smoke Seller",
   });
-  if (!json.token) throw new Error("no session token");
-  token = json.token;
   return email;
 });
 
@@ -271,11 +280,12 @@ await check("Watchlist add/list", async () => {
 await check("Cart add + calculate donation round-up", async () => {
   if (!listingId) throw new Error("no listing");
   const buyerEmail = `buyer${stamp}@nexlo.test`;
-  const buyer = await req("POST", "/api/v1/auth/register", {
-    body: { email: buyerEmail, password, firstName: "Smoke", lastName: "Buyer" },
-    expectStatus: 201,
+  const buyerToken = await registerSession({
+    email: buyerEmail,
+    password,
+    firstName: "Smoke",
+    lastName: "Buyer",
   });
-  const buyerToken = buyer.json.token;
   await req("PUT", "/api/v1/account/donations", {
     token: buyerToken,
     body: { enabled: true },

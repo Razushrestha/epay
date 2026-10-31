@@ -7,7 +7,7 @@
 const rateLimitStore = new Map();
 
 // Cleanup old entries every 5 minutes
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, data] of rateLimitStore.entries()) {
     // Remove old attempts
@@ -19,45 +19,52 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+if (typeof cleanupTimer.unref === "function") cleanupTimer.unref();
 
 /**
  * Rate limiter configurations
  */
 export const RateLimitConfig = {
   AUTH_LOGIN: {
-    window: 15 * 60 * 1000,
-    maxAttempts: 20,
-    blockDuration: 10 * 60 * 1000,
-    message: 'Too many login attempts. Please try again in 10 minutes.'
+    key: 'login',
+    window: 30 * 60 * 1000,
+    maxAttempts: 5,
+    blockDuration: 30 * 60 * 1000,
+    message: 'Too many login attempts. You are blocked for 30 minutes.'
   },
   AUTH_REGISTER: {
-    window: 15 * 60 * 1000,
-    maxAttempts: 20,
-    blockDuration: 10 * 60 * 1000,
+    key: 'register',
+    window: 60 * 60 * 1000,
+    maxAttempts: 3,
+    blockDuration: 60 * 60 * 1000,
     message: 'Too many registration attempts. Please try again later.'
   },
   AUTH_FORGOT_PASSWORD: {
+    key: 'forgot',
     window: 15 * 60 * 1000,
     maxAttempts: 10,
     blockDuration: 10 * 60 * 1000,
     message: 'Too many password reset requests. Please try again later.'
   },
   AUTH_VERIFY: {
-    window: 15 * 60 * 1000,
-    maxAttempts: 20,
-    blockDuration: 10 * 60 * 1000,
+    key: 'verify',
+    window: 60 * 60 * 1000,
+    maxAttempts: 5,
+    blockDuration: 60 * 60 * 1000,
     message: 'Too many verification attempts. Please try again later.'
   },
   AUTH_2FA: {
-    window: 15 * 60 * 1000,    // 15 minutes
-    maxAttempts: 5,             // 5 attempts per window
-    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
+    key: '2fa',
+    window: 15 * 60 * 1000,
+    maxAttempts: 5,
+    blockDuration: 30 * 60 * 1000,
     message: 'Too many 2FA attempts. Please try again in 30 minutes.'
   },
   DEFAULT: {
-    window: 60 * 1000,         // 1 minute
-    maxAttempts: 30,            // 30 requests per minute
-    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
+    key: 'default',
+    window: 60 * 1000,
+    maxAttempts: 30,
+    blockDuration: 5 * 60 * 1000,
     message: 'Too many requests. Please slow down.'
   }
 };
@@ -65,22 +72,22 @@ export const RateLimitConfig = {
 /**
  * Get client identifier (IP + User-Agent)
  */
-function getClientIdentifier(req) {
+function getClientIdentifier(req, accountKey, config = RateLimitConfig.DEFAULT) {
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() 
            || req.headers['x-real-ip'] 
            || req.socket.remoteAddress 
            || 'unknown';
   
   const userAgent = req.headers['user-agent'] || 'unknown';
-  
-  return `${ip}:${userAgent}`;
+  const scope = config.key || 'default';
+  return `${scope}:${ip}:${userAgent}`;
 }
 
 /**
  * Check if request should be rate limited
  */
-export function checkRateLimit(req, config = RateLimitConfig.DEFAULT) {
-  const identifier = getClientIdentifier(req);
+export function checkRateLimit(req, config = RateLimitConfig.DEFAULT, accountKey) {
+  const identifier = getClientIdentifier(req, accountKey, config);
   const now = Date.now();
   
   // Get or create rate limit entry
@@ -153,8 +160,8 @@ export function rateLimiter(config = RateLimitConfig.DEFAULT) {
 /**
  * Manual rate limit check for use in handlers
  */
-export function rateLimit(req, config = RateLimitConfig.DEFAULT) {
-  const result = checkRateLimit(req, config);
+export function rateLimit(req, config = RateLimitConfig.DEFAULT, accountKey) {
+  const result = checkRateLimit(req, config, accountKey);
   
   if (!result.allowed) {
     return {
@@ -175,16 +182,20 @@ export function rateLimit(req, config = RateLimitConfig.DEFAULT) {
 /**
  * Clear rate limit for a specific identifier (e.g., after successful login)
  */
-export function clearRateLimit(req) {
-  const identifier = getClientIdentifier(req);
+export function clearRateLimit(req, accountKey, config = RateLimitConfig.AUTH_LOGIN) {
+  const identifier = getClientIdentifier(req, accountKey, config);
   rateLimitStore.delete(identifier);
+}
+
+export function resetRateLimitStore() {
+  rateLimitStore.clear();
 }
 
 /**
  * Get current rate limit status
  */
-export function getRateLimitStatus(req, config = RateLimitConfig.DEFAULT) {
-  const identifier = getClientIdentifier(req);
+export function getRateLimitStatus(req, config = RateLimitConfig.DEFAULT, accountKey) {
+  const identifier = getClientIdentifier(req, accountKey, config);
   const limitData = rateLimitStore.get(identifier);
   const now = Date.now();
 

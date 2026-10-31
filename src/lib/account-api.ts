@@ -17,7 +17,49 @@ export function getToken() {
 
 export function setToken(token: string | null) {
   if (token) localStorage.setItem(tokenKey, token);
-  else localStorage.removeItem(tokenKey);
+  else {
+    localStorage.removeItem(tokenKey);
+    cacheProfile(null);
+  }
+}
+
+export const profileCacheKey = "nexlo_profile";
+export const PROFILE_EVENT = "nexlo-profile";
+
+export type CachedProfile = {
+  avatarUrl: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  displayName: string | null;
+  username: string | null;
+};
+
+export function cacheProfile(user: CachedProfile | null) {
+  if (typeof window === "undefined") return;
+  if (!user) localStorage.removeItem(profileCacheKey);
+  else {
+    localStorage.setItem(
+      profileCacheKey,
+      JSON.stringify({
+        avatarUrl: user.avatarUrl ?? null,
+        firstName: user.firstName ?? null,
+        lastName: user.lastName ?? null,
+        displayName: user.displayName ?? null,
+        username: user.username ?? null,
+      }),
+    );
+  }
+  window.dispatchEvent(new Event(PROFILE_EVENT));
+}
+
+export function readCachedProfile(): CachedProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(profileCacheKey);
+    return raw ? (JSON.parse(raw) as CachedProfile) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function apiUnreachableMessage(err: unknown) {
@@ -32,8 +74,14 @@ export function digitsCode(value: unknown) {
   return digits.length === 6 ? digits : "";
 }
 
+export const VERIFY_OTP_TTL_SECONDS = 30;
+export const VERIFY_RESEND_COOLDOWN_SECONDS = 30;
+
 export const localOtpNotice =
-  "Email is not sending from this computer yet. The code is filled in. Tap Verify and continue.";
+  "Email is not sending from this computer yet. The code is filled in. Tap Verify.";
+
+export const localSmsOtpNotice =
+  "SMS is not sending from this computer yet. The code is filled in. Tap Verify.";
 
 export async function accountApi<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
@@ -60,6 +108,12 @@ export async function accountApi<T = unknown>(path: string, options: RequestInit
     body = text ? (JSON.parse(text) as { error?: string }) : {};
   } catch {
     if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  }
+  if (res.status === 401) {
+    setToken(null);
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/account")) {
+      window.location.replace("/login");
+    }
   }
   if (!res.ok) throw new Error(body.error ?? "Request failed");
   return body as T;

@@ -117,6 +117,11 @@ export async function handleFulfillment(method, pathParts, auth, body) {
     if (httpError(order)) return order;
     const history = await query(`SELECT * FROM order_history WHERE order_id = $1 ORDER BY created_at`, [order.id]);
     const shipments = await query(`SELECT * FROM shipments WHERE order_id = $1`, [order.id]);
+    const payment = await query(
+      `SELECT gateway, gateway_transaction_id, status, amount, completed_at
+       FROM payments WHERE order_id = $1 ORDER BY initiated_at DESC NULLS LAST, id DESC LIMIT 1`,
+      [order.id],
+    );
     const escrow = await query(
       `SELECT e.status, e.amount, e.held_at, e.released_at, of.net_to_seller
        FROM escrow_holds e
@@ -132,6 +137,7 @@ export async function handleFulfillment(method, pathParts, auth, body) {
         shipments: shipments.rows,
         you: order.you,
         escrow: escrow.rows[0] || null,
+        payment: payment.rows[0] || null,
       },
     };
   }

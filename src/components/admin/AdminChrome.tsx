@@ -41,6 +41,8 @@ const NAV = [
   { id: "payouts", href: "/admin/payouts", label: "Payouts", icon: "M4 7h16v10H4V7Zm0 4h16M8 15h4" },
   { id: "finance", href: "/admin/finance", label: "Finance", icon: "M4 19V8l8-4 8 4v11H4Zm4-2h2m4 0h2m4 0h2" },
   { id: "disputes", href: "/admin/disputes", label: "Disputes", icon: "M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" },
+  { id: "kyc", href: "/admin/kyc", label: "KYC", icon: "M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Zm-1 12-3-3 1.4-1.4L11 12.2l4.6-4.6L17 9l-6 6Z" },
+  { id: "appeals", href: "/admin/appeals", label: "Appeals", icon: "M5 6h14v9H9l-4 3V6Zm4 4h6" },
   { id: "moderation", href: "/admin/moderation", label: "Moderation", icon: "M4 5h16v4H4V5Zm0 7h10v7H4v-7Zm12 0h4v7h-4v-7Z" },
   { id: "tickets", href: "/admin/tickets", label: "Tickets", icon: "M4 7h16v3l-1.5 1.5L20 13v4H4v-4l1.5-1.5L4 10V7Z" },
   { id: "cms", href: "/admin/cms", label: "CMS", icon: "M4 5h16v14H4V5Zm4 4h8M8 13h5" },

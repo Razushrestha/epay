@@ -50,6 +50,7 @@ const NAV = [
   { id: "dashboard", label: "Dashboard", href: "/account?tab=dashboard", icon: <Icon d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" /> },
   { id: "messages", label: "Messages", href: "/account?tab=messages", icon: <Icon d="M4 6h16v12H7l-3 3V6Z" /> },
   { id: "activity", label: "Activity", href: "/account?tab=activity", icon: <Icon d="M8 4h8v4H8V4Zm-3 6h14v10H5V10Zm5 3h4" /> },
+  { id: "standing", label: "Account standing", href: "/account/standing", icon: <Icon d="M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" /> },
   { id: "tickets", label: "Support", href: "/account?tab=tickets", icon: <Icon d="M4 7h16v3l-1.5 1.5L20 13v4H4v-4l1.5-1.5L4 10V7Z" /> },
   { id: "resolution", label: "Resolution Center", href: "/resolution", icon: <Icon d="M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" /> },
   { id: "payment", label: "Payment Information", href: "/account?tab=payment", icon: <Icon d="M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9ZM3 10h18" /> },
@@ -188,15 +189,15 @@ export function AccountChrome({
                 <svg width="12" height="12" viewBox="0 0 24 24" className={`transition ${personalOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2"><path d="m6 9 6 6 6-6" /></svg>
               </summary>
               {[
-                ["account", "Personal information"],
-                ["security", "Sign-in and security"],
-                ["preferences", "Addresses"],
+                ["account", "Personal information", "/account/profile"],
+                ["security", "Sign-in and security", "/account/security"],
+                ["preferences", "Addresses", "/account/addresses"],
                 ["collections", "Collections"],
                 ["following", "Followed sellers"],
-              ].map(([id, label]) => (
+              ].map(([id, label, href]) => (
                 <Link
                   key={id}
-                  href={`/account?tab=${id}`}
+                  href={href ?? `/account?tab=${id}`}
                   className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${
                     tab === id ? "bg-[#edf1f5] font-semibold text-[#0f1c3f]" : "text-[#5b6780] hover:text-[#3665f3]"
                   }`}
@@ -236,7 +237,7 @@ export function AccountChrome({
                 <span className="flex-1">Selling</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" className={`transition ${sellingOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2"><path d="m6 9 6 6 6-6" /></svg>
               </summary>
-              <Link href="/account?tab=selling" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "selling" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
+              <Link href="/account/selling" className={`ml-9 mt-0.5 block rounded-lg px-3 py-2 text-[13px] ${tab === "selling" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>
                 Seller tools
               </Link>
               <Link href="/resolution" className={`ml-9 block rounded-lg px-3 py-2 text-[13px] ${tab === "returns" ? "font-semibold text-[#3665f3]" : "text-[#5b6780] hover:text-[#3665f3]"}`}>

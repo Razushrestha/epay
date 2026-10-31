@@ -69,7 +69,7 @@ export default function ForgotPage() {
                 </span>
               </h2>
               <p className="mt-4 max-w-[340px] text-[14px] leading-relaxed text-[#4b566b]">
-                Enter your email or phone number and we&apos;ll send you a code to help you reset your password and get back to your account.
+                Enter your email and we&apos;ll send a reset link so you can choose a new password and get back into your account.
               </p>
               <ul className="mt-7 flex max-w-[380px] items-start">
                 {features.map((f) => (

@@ -9,6 +9,7 @@ import { addToCart, loadWatchIds, toggleWatch } from "@/lib/commerce";
 import { SaveToCollection } from "@/components/listing/SaveToCollection";
 import { WatchlistIcon } from "@/components/commerce/WatchlistIcon";
 import { DsrBars } from "@/components/seller/DsrBars";
+import { AuthenticityBadge } from "@/components/catalog/AuthenticityBadge";
 
 type Listing = {
   id: number;
@@ -37,7 +38,10 @@ type Listing = {
   category_name?: string;
   category_slug?: string;
   brand_name?: string | null;
+  brand_is_verified?: boolean | null;
   condition_name?: string;
+  condition_slug?: string | null;
+  condition_description?: string | null;
   shipping_free?: boolean;
   shipping_cost?: number;
   shipping_additional?: number | null;
@@ -49,6 +53,12 @@ type Listing = {
   auction_current_price?: number | null;
   auction_bid_count?: number | null;
   auction_ends_at?: string | null;
+  has_reserve?: boolean | null;
+  reserve_met?: boolean | null;
+  available?: number | null;
+  reserved?: number | null;
+  temporarily_unavailable?: boolean | null;
+  reserved_until?: string | null;
   photos?: { url: string; thumbnail_url?: string | null; is_primary?: boolean }[] | null;
   variations?: { id: number; name: string; options: { id: number; value: string; photo_url?: string | null }[] | null }[] | null;
   skus?: { id: number; combination: Record<string, string>; price: number | null; quantity: number }[] | null;
@@ -199,6 +209,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
   const [askText, setAskText] = useState("");
   const [answerDraft, setAnswerDraft] = useState<Record<number, string>>({});
   const [qaBusy, setQaBusy] = useState(false);
+  const [answerPublic, setAnswerPublic] = useState<Record<number, boolean>>({});
   const isAuction = listing.format === "auction" || listing.format === "both";
   const isFixed = listing.format === "fixed" || listing.format === "both";
   const live = listing.status === "active";
@@ -207,6 +218,8 @@ export function LiveListing({ listing }: { listing: Listing }) {
     variations.every((v) => sku.combination?.[v.name] === picked[v.name]),
   );
   const stock = selectedSku?.quantity ?? listing.quantity ?? 1;
+  const available = listing.available ?? stock;
+  const held = Boolean(listing.temporarily_unavailable) || (stock > 0 && available < 1);
   const sellerName = listing.seller_username || listing.seller_full_name || "Seller";
   const sellerHref = `/seller/${encodeURIComponent(listing.seller_username || listing.seller_public_id || String(listing.seller_id))}`;
   const title = prettyTitle(listing.title);
@@ -261,7 +274,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
     accountApi<{ listing: Listing; bids: Bid[]; increment: number; youLead?: boolean; canRetract?: boolean }>(`/api/v1/auctions/${listing.id}`)
       .then((snap) => {
         if (snap.listing) {
-          setPrice(Number(snap.listing.auction_current_price || price));
+          setPrice(Number(snap.listing.auction_current_price || listing.auction_start_price || price));
           setBidCount(Number(snap.listing.auction_bid_count || 0));
           setEndsAt(snap.listing.auction_ends_at);
         }
@@ -341,7 +354,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
 
   async function placeBid() {
     if (isOwner) {
-      router.push(`/sell/edit/${listing.id}`);
+      setNotice("Sellers cannot bid on their own item. Buyers see Place Bid and Buy It Now together.");
       return;
     }
     if (!requireAuth()) return;
@@ -380,8 +393,14 @@ export function LiveListing({ listing }: { listing: Listing }) {
 
   async function sendOffer() {
     if (!requireAuth()) return;
-    await accountApi("/api/v1/offers", { method: "POST", body: JSON.stringify({ listingId: listing.id, amount: Number(offer) }) });
-    setNotice("Offer sent. The seller has 48 hours to respond.");
+    const body = await accountApi<{ data?: { status?: string } }>("/api/v1/offers", {
+      method: "POST",
+      body: JSON.stringify({ listingId: listing.id, amount: Number(offer) }),
+    });
+    const status = body?.data?.status;
+    if (status === "auto_accepted") setNotice("Offer accepted. Pay now to complete the purchase.");
+    else if (status === "auto_declined") setNotice("Offer declined. It was below the seller's auto-decline amount.");
+    else setNotice("Offer sent. The seller has 48 hours to respond.");
     setOffer("");
   }
 
@@ -444,7 +463,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
     try {
       await accountApi(`/api/v1/listings/questions/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ answer }),
+        body: JSON.stringify({ answer, public: answerPublic[id] !== false }),
       });
       setQuestions((current) =>
         current.map((q) => (q.id === id ? { ...q, answer, answered_at: new Date().toISOString() } : q)),
@@ -616,19 +635,40 @@ export function LiveListing({ listing }: { listing: Listing }) {
                 <>
                   <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-[#0f1c3f] sm:text-[28px]">{title}</h1>
                   {listing.condition_name ? (
-                    <span className="mt-2 inline-flex rounded-full bg-[#e8f8ee] px-2.5 py-1 text-[12px] font-semibold text-[#16a34a]">
-                      {listing.condition_name} Condition
+                    <span
+                      className={`mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+                        listing.condition_slug === "refurbished"
+                          ? "bg-[#e6f7f4] text-[#0f766e]"
+                          : listing.condition_slug === "new"
+                            ? "bg-[#e8f8ee] text-[#16a34a]"
+                            : listing.condition_slug === "for-parts"
+                              ? "bg-[#f4f4f5] text-[#3f3f46]"
+                              : "bg-[#eef4ff] text-[#1d4ed8]"
+                      }`}
+                    >
+                      {listing.condition_name}
                     </span>
                   ) : null}
                   <div className="mt-3 flex flex-wrap items-end gap-2.5">
-                    <p className="text-[30px] font-extrabold leading-none text-[#0f1c3f]">{money(displayPrice)}</p>
+                    <div>
+                      {isAuction ? (
+                        <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-[#6b7587]">
+                          {bidCount > 0 ? "Current bid" : "Starting price"}
+                        </p>
+                      ) : null}
+                      <p className="text-[30px] font-extrabold leading-none text-[#0f1c3f]">{money(displayPrice)}</p>
+                    </div>
                     {showWas ? <p className="text-[15px] text-[#98a2b3] line-through">{money(compareAt)}</p> : null}
                     {off > 0 ? <span className="text-[13px] font-semibold text-[#16a34a]">{off}% OFF</span> : null}
                   </div>
                   {isAuction ? (
-                    <p className="mt-2 text-[13px] text-[#6b7587]">
+                    <p className="mt-2 text-[13px] font-semibold text-[#e53238]" data-tick={tick}>
                       {bidCount} bids · {countdown(endsAt)} left
-                      <span className="sr-only">{tick}</span>
+                    </p>
+                  ) : null}
+                  {isAuction && listing.has_reserve ? (
+                    <p className="mt-1 text-[12.5px] text-[#6b7587]">
+                      {listing.reserve_met ? "Reserve met" : "Reserve not met"}
                     </p>
                   ) : null}
 
@@ -644,7 +684,15 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
                     {[
                       { icon: "box" as const, label: "Condition", value: listing.condition_name || "Used" },
-                      { icon: "tag" as const, label: "Brand", value: listing.brand_name || "N/A" },
+                      ...(listing.condition_description
+                        ? [{ icon: "check" as const, label: "Seller notes", value: listing.condition_description }]
+                        : []),
+                      {
+                        icon: "tag" as const,
+                        label: "Brand",
+                        value: listing.brand_name || "N/A",
+                        authentic: Boolean(listing.brand_is_verified && listing.brand_name),
+                      },
                       { icon: "grid" as const, label: "Category", value: listing.category_name || "N/A" },
                       { icon: "clock" as const, label: "Posted", value: postedAgo(listing.published_at || listing.created_at) },
                       ...Object.entries(listing.specifics || {})
@@ -655,7 +703,10 @@ export function LiveListing({ listing }: { listing: Listing }) {
                         <span className="mt-0.5 text-[#8a94a6]"><Icon name={row.icon} /></span>
                         <div>
                           <dt className="text-[12px] text-[#8a94a6]">{row.label}</dt>
-                          <dd className="text-[13.5px] font-semibold text-[#0f1c3f]">{row.value}</dd>
+                          <dd className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-semibold text-[#0f1c3f]">
+                            {row.value}
+                            {"authentic" in row && row.authentic ? <AuthenticityBadge /> : null}
+                          </dd>
                         </div>
                       </div>
                     ))}
@@ -721,21 +772,31 @@ export function LiveListing({ listing }: { listing: Listing }) {
                             <p className="mt-2 text-[#4b5563]">A: {item.answer}</p>
                           ) : isOwner ? (
                             <form
-                              className="mt-2 flex gap-2"
+                              className="mt-2 space-y-2"
                               onSubmit={(e) => {
                                 e.preventDefault();
                                 answerQuestion(item.id).catch((err) => setNotice(err instanceof Error ? err.message : "Could not answer"));
                               }}
                             >
-                              <input
-                                value={answerDraft[item.id] || ""}
-                                onChange={(e) => setAnswerDraft((current) => ({ ...current, [item.id]: e.target.value }))}
-                                placeholder="Write an answer"
-                                className="h-10 flex-1 rounded-full border border-[#e2e8f0] px-3"
-                              />
-                              <button className="h-10 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white" disabled={qaBusy}>
-                                Answer
-                              </button>
+                              <div className="flex gap-2">
+                                <input
+                                  value={answerDraft[item.id] || ""}
+                                  onChange={(e) => setAnswerDraft((current) => ({ ...current, [item.id]: e.target.value }))}
+                                  placeholder="Write an answer"
+                                  className="h-10 flex-1 rounded-full border border-[#e2e8f0] px-3"
+                                />
+                                <button className="h-10 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white" disabled={qaBusy}>
+                                  Answer
+                                </button>
+                              </div>
+                              <label className="flex items-center gap-2 text-[12.5px] font-medium text-[#0f1c3f]">
+                                <input
+                                  type="checkbox"
+                                  checked={answerPublic[item.id] !== false}
+                                  onChange={(e) => setAnswerPublic((current) => ({ ...current, [item.id]: e.target.checked }))}
+                                />
+                                Post publicly
+                              </label>
                             </form>
                           ) : (
                             <p className="mt-2 text-[13px] text-[#8a94a6]">Waiting for the seller.</p>
@@ -878,17 +939,44 @@ export function LiveListing({ listing }: { listing: Listing }) {
 
               <div className="rounded-2xl border border-[#e7eef6] bg-white p-5 shadow-[0_8px_30px_-18px_rgba(15,28,63,0.25)]">
                 <div className="flex flex-wrap items-end gap-2">
-                  <p className="text-[26px] font-extrabold leading-none text-[#0f1c3f]">{money(displayPrice)}</p>
+                  <div>
+                    {isAuction ? (
+                      <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-[#6b7587]">
+                        {bidCount > 0 ? "Current bid" : "Starting price"}
+                      </p>
+                    ) : null}
+                    <p className="text-[26px] font-extrabold leading-none text-[#0f1c3f]">{money(displayPrice)}</p>
+                  </div>
                   {showWas ? <p className="text-[13px] text-[#98a2b3] line-through">{money(compareAt)}</p> : null}
                   {off > 0 ? <span className="text-[12.5px] font-semibold text-[#16a34a]">{off}% OFF</span> : null}
                 </div>
+                {isAuction ? (
+                  <p className="mt-2 text-[13.5px] font-semibold text-[#e53238]" data-tick={tick}>
+                    Time left: {countdown(endsAt)}
+                  </p>
+                ) : null}
+                {isAuction && listing.has_reserve ? (
+                  <p className="mt-1 text-[12.5px] text-[#6b7587]">
+                    {listing.reserve_met ? "Reserve met" : "Reserve not met"}
+                  </p>
+                ) : null}
                 <p className="mt-2 text-[13px] text-[#16a34a]">{listing.shipping_free ? "Free shipping" : money(Number(listing.shipping_cost || 0))}</p>
                 {!live ? <p className="mt-2 text-[13px] font-semibold text-[#e53238]">This listing has ended.</p> : null}
                 <button type="button" className="mt-1 text-[12.5px] font-semibold text-[#3665f3] hover:underline" onClick={() => setTab("shipping")}>
                   Calculate shipping to your city
                 </button>
 
-                {notice ? <p className="mt-3 rounded-xl bg-[#eef4ff] px-3 py-2 text-[13px] text-[#3665f3]">{notice}</p> : null}
+                {notice ? (
+                  <p
+                    className={`mt-3 rounded-xl px-3 py-2 text-[13px] ${
+                      /available in stock/i.test(notice)
+                        ? "bg-[#fff5f5] text-[#e53238]"
+                        : "bg-[#eef4ff] text-[#3665f3]"
+                    }`}
+                  >
+                    {notice}
+                  </p>
+                ) : null}
 
                 {variations.length ? (
                   <div className="mt-3 space-y-3">
@@ -934,23 +1022,34 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   </div>
                 ) : null}
 
+                {live ? (
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <span className="text-[13px] font-semibold text-[#0f1c3f]">Quantity</span>
                   <div className="flex items-center gap-2">
                     <div className="flex h-9 items-center rounded-full border border-[#e2e8f0]">
                       <button type="button" aria-label="Decrease quantity" className="w-8 text-[16px]" onClick={() => setQty((n) => Math.max(1, n - 1))}>−</button>
-                      <span className="w-6 text-center text-[13.5px] font-semibold">{qty}</span>
-                      <button type="button" aria-label="Increase quantity" className="w-8 text-[16px]" onClick={() => setQty((n) => Math.min(stock, n + 1))}>+</button>
+                      <input
+                        type="number"
+                        min={1}
+                        aria-label="Quantity"
+                        value={qty}
+                        onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
+                        className="w-10 border-0 bg-transparent text-center text-[13.5px] font-semibold outline-none"
+                      />
+                      <button type="button" aria-label="Increase quantity" className="w-8 text-[16px]" onClick={() => setQty((n) => n + 1)}>+</button>
                     </div>
-                    <span className="text-[12px] font-medium text-[#16a34a]">Only {stock} left in stock</span>
+                    <span className={`text-[12px] font-medium ${held ? "text-[#e53238]" : "text-[#16a34a]"}`}>
+                      {held ? "Temporarily unavailable / reserved" : `Only ${stock} left in stock`}
+                    </span>
                   </div>
                 </div>
+                ) : null}
 
                 {isOwner ? (
                   <>
                     <Link
                       href={`/sell/edit/${listing.id}`}
-                      className="mt-4 flex h-11 w-full items-center justify-center rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6]"
+                      className="mt-4 flex h-11 w-full items-center justify-center rounded-full border border-[#d7e0ec] text-[14px] font-semibold text-[#0f1c3f]"
                     >
                       Edit listing
                     </Link>
@@ -961,32 +1060,38 @@ export function LiveListing({ listing }: { listing: Listing }) {
                       Manage listings
                     </Link>
                   </>
-                ) : (
-                  <>
-                    {isAuction ? (
-                      <button
-                        type="button"
-                        disabled={!live || bidBusy}
-                        className="mt-4 h-11 w-full rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6] disabled:opacity-60"
-                        onClick={() => placeBid().catch((err) => setNotice(err instanceof Error ? err.message : "Bid failed"))}
-                      >
-                        {bidBusy ? "Placing bid…" : "Place bid"}
-                      </button>
-                    ) : null}
+                ) : null}
 
-                    {isFixed && live ? (
-                      <button
-                        type="button"
-                        disabled={(variations.length > 0 && !selectedSku) || stock < 1}
-                        className={`${isAuction ? "mt-2" : "mt-4"} inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6] disabled:opacity-60`}
-                        onClick={() => buyNow().catch((err) => setNotice(err instanceof Error ? err.message : "Could not add to cart"))}
-                      >
-                        <Icon name="cart" />
-                        {stock < 1 ? "Out of stock" : variations.length && !selectedSku ? "Select options" : "Buy it now"}
-                      </button>
-                    ) : null}
-                  </>
-                )}
+                {isAuction && live ? (
+                  <button
+                    type="button"
+                    disabled={bidBusy}
+                    className={`${isOwner ? "mt-2" : "mt-4"} h-11 w-full rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6] disabled:opacity-60`}
+                    onClick={() => placeBid().catch((err) => setNotice(err instanceof Error ? err.message : "Bid failed"))}
+                  >
+                    {bidBusy ? "Placing bid…" : "Place Bid"}
+                  </button>
+                ) : null}
+
+                {isFixed && live ? (
+                  <button
+                    type="button"
+                    disabled={(variations.length > 0 && !selectedSku) || stock < 1 || held}
+                    className={`${isOwner || isAuction ? "mt-2" : "mt-4"} inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[14.5px] font-semibold text-white hover:bg-[#2953c6] disabled:opacity-60`}
+                    onClick={() => buyNow().catch((err) => setNotice(err instanceof Error ? err.message : "Could not add to cart"))}
+                  >
+                    <Icon name="cart" />
+                    {held
+                      ? "Temporarily unavailable / reserved"
+                      : stock < 1
+                      ? "Out of stock"
+                      : variations.length && !selectedSku
+                        ? "Select options"
+                        : isAuction
+                          ? `Buy It Now · ${money(Number(listing.price || 0))}`
+                          : "Buy It Now"}
+                  </button>
+                ) : null}
 
                 <button
                   type="button"
@@ -1001,7 +1106,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                 </button>
                 <SaveToCollection listingId={listing.id} />
 
-                {isAuction && !isOwner ? (
+                {isAuction && live ? (
                   <form
                     className="mt-4"
                     onSubmit={(e) => {
@@ -1020,7 +1125,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                         disabled={!live || bidBusy}
                       />
                       <button type="submit" className="h-10 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white disabled:opacity-60" disabled={!live || bidBusy}>
-                        {bidBusy ? "…" : "Place bid"}
+                        {bidBusy ? "…" : "Place Bid"}
                       </button>
                     </div>
                     {youLead ? <p className="mt-2 text-[12.5px] font-semibold text-[#12a37e]">You are the high bidder.</p> : null}

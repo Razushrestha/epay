@@ -2,7 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiBase, apiUnreachableMessage, digitsCode, localOtpNotice, setToken } from "@/lib/account-api";
+import {
+  apiBase,
+  apiUnreachableMessage,
+  digitsCode,
+  localOtpNotice,
+  localSmsOtpNotice,
+  setToken,
+  VERIFY_RESEND_COOLDOWN_SECONDS,
+} from "@/lib/account-api";
+
+function cooldownLeft(sentAt: number) {
+  if (!sentAt) return 0;
+  return Math.max(0, Math.ceil((sentAt + VERIFY_RESEND_COOLDOWN_SECONDS * 1000 - Date.now()) / 1000));
+}
 
 function MailIcon() {
   return (
@@ -42,40 +55,79 @@ export function VerifyForm() {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  function markOtpSent(at = Date.now()) {
+    sessionStorage.setItem("nexlo_otp_sent_at", String(at));
+    setCooldown(cooldownLeft(at));
+  }
 
   useEffect(() => {
     setIdentifier(sessionStorage.getItem("nexlo_verify_id") ?? "");
     const dest = sessionStorage.getItem("nexlo_verify_dest");
     const sendError = sessionStorage.getItem("nexlo_code_error");
+    const channel = sessionStorage.getItem("nexlo_verify_channel") === "phone" ? "phone" : "email";
     const filled = digitsCode(sessionStorage.getItem("nexlo_dev_code"));
+    const storedSent = Number(sessionStorage.getItem("nexlo_otp_sent_at") || 0);
+    if (storedSent) setCooldown(cooldownLeft(storedSent));
+    else if (filled || dest) markOtpSent();
     if (filled) {
       setCode(filled);
       setShowCode(true);
-      setNotice(localOtpNotice);
+      setNotice(channel === "phone" ? localSmsOtpNotice : localOtpNotice);
       return;
     }
     if (sendError) setError(sendError);
-    else if (dest) setNotice(`We sent a code to ${dest}. Check inbox and spam.`);
+    else if (dest) {
+      setNotice(
+        channel === "phone"
+          ? `We sent a code by SMS to ${dest}. Codes expire in 30 seconds.`
+          : `We sent a code to ${dest}. Codes expire in 30 seconds.`,
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const tick = window.setInterval(() => {
+      const sentAt = Number(sessionStorage.getItem("nexlo_otp_sent_at") || 0);
+      setCooldown(cooldownLeft(sentAt));
+    }, 250);
+    return () => window.clearInterval(tick);
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    if (!identifier.trim()) {
+      setError("Enter the email or phone you registered with.");
+      return;
+    }
+    const digits = code.replace(/\D/g, "");
+    if (digits.length !== 6) {
+      setError("Enter the 6-digit code we sent.");
+      return;
+    }
+    setLoading(true);
     try {
       const res = await fetch(`${apiBase}/api/v1/auth/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, code }),
+        body: JSON.stringify({ identifier: identifier.trim(), code: digits }),
       });
       const body = await res.json();
       if (!res.ok) {
         setError(body.error ?? "That code was not accepted.");
         return;
       }
+      if (!body.token) {
+        setError("Verification succeeded but we could not sign you in. Try signing in.");
+        return;
+      }
       setToken(body.token);
       sessionStorage.removeItem("nexlo_dev_code");
+      sessionStorage.removeItem("nexlo_code_error");
       router.push("/account");
+      router.refresh();
     } catch (err) {
       setError(apiUnreachableMessage(err));
     } finally {
@@ -84,7 +136,7 @@ export function VerifyForm() {
   }
 
   async function onResend() {
-    if (!identifier || resending) return;
+    if (!identifier || resending || cooldown > 0) return;
     setResending(true);
     setError(null);
     setResent(false);
@@ -95,10 +147,17 @@ export function VerifyForm() {
         body: JSON.stringify({ identifier }),
       });
       const body = await res.json();
+      if (res.status === 429) {
+        const wait = Number(body.retryAfter) || VERIFY_RESEND_COOLDOWN_SECONDS;
+        markOtpSent(Date.now() - (VERIFY_RESEND_COOLDOWN_SECONDS - wait) * 1000);
+        setError("Wait for the countdown before requesting a new code.");
+        return;
+      }
       if (!res.ok) {
         setError(body.error ?? "Could not resend the code.");
         return;
       }
+      markOtpSent();
       const filled = digitsCode(body.data?.devCode);
       if (filled) {
         sessionStorage.setItem("nexlo_dev_code", filled);
@@ -113,7 +172,7 @@ export function VerifyForm() {
         return;
       }
       if (body.data?.sent === false) {
-        setError(body.data.deliveryError ?? "We could not send the code. Tap Resend again.");
+        setError(body.data.deliveryError ?? "We could not send the code. Tap Resend OTP again.");
         setResent(false);
         return;
       }
@@ -138,7 +197,7 @@ export function VerifyForm() {
         </span>
       </h1>
       <p className="mt-1.5 text-[13.5px] text-[#6b7587]">
-        Enter the latest 6-digit code we emailed. Check spam. If it is delayed, wait a few seconds before Resend.
+        Enter the latest 6-digit code we sent to your email or phone. Codes expire in 30 seconds. Wait for the countdown before Resend OTP.
       </p>
 
       <div className="mt-4" aria-live="polite">
@@ -154,7 +213,7 @@ export function VerifyForm() {
         ) : null}
         {resent && !error ? (
           <p className="rounded-lg border border-[#b7eadc] bg-[#f1fbf7] px-3 py-2 text-[12.5px] text-[#0f7a63]">
-            A new code was sent. Check inbox and spam.
+            A new OTP was sent. Check inbox and spam.
           </p>
         ) : null}
       </div>
@@ -205,7 +264,7 @@ export function VerifyForm() {
           disabled={loading}
           className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? "Checking…" : "Verify and continue"}
+          {loading ? "Checking…" : "Verify"}
           {!loading && (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M5 12h14M13 6l6 6-6 6" />
@@ -219,10 +278,11 @@ export function VerifyForm() {
         <button
           type="button"
           onClick={onResend}
-          disabled={resending || !identifier}
-          className="text-[13.5px] font-medium text-[#3665f3] hover:underline disabled:opacity-50"
+          disabled={resending || !identifier || cooldown > 0}
+          aria-label={cooldown > 0 ? `Resend OTP in ${cooldown}s` : "Resend OTP"}
+          className="text-[13.5px] font-medium text-[#3665f3] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {resending ? "Sending…" : "Resend code"}
+          {resending ? "Sending…" : cooldown > 0 ? `Resend OTP in ${cooldown}s` : "Resend OTP"}
         </button>
       </div>
     </div>

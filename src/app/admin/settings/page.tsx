@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { accountApi } from "@/lib/account-api";
 
 type Kyc = {
@@ -84,49 +85,18 @@ export default function AdminSettingsPage() {
 
       <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Identity reviews</h2>
-        <ul className="mt-3 space-y-2">
-          {kyc.map((item) => (
-            <li key={item.public_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#eef2f7] px-3 py-3 text-[13px]">
-              <span className="min-w-0">
-                <span>{item.display_name || item.email} · {item.doc_type} · {item.status}</span>
-                {item.files?.front || item.files?.selfie ? (
-                  <span className="mt-1 flex flex-wrap gap-2">
-                    {item.files.front ? <a href={item.files.front} target="_blank" rel="noreferrer" className="text-[#3665f3]">ID photo</a> : null}
-                    {item.files.back ? <a href={item.files.back} target="_blank" rel="noreferrer" className="text-[#3665f3]">Back</a> : null}
-                    {item.files.selfie ? <a href={item.files.selfie} target="_blank" rel="noreferrer" className="text-[#3665f3]">Address proof</a> : null}
-                  </span>
-                ) : null}
-              </span>
-              {item.status === "pending" ? (
-                <span className="flex gap-2">
-                  <button type="button" className="text-[#12a37e]" onClick={() => accountApi(`/api/v1/admin/kyc/${item.public_id}`, { method: "POST", body: JSON.stringify({ decision: "approved" }) }).then(load)}>Approve</button>
-                  <button type="button" className="text-[#e5484d]" onClick={() => {
-                    const why = window.prompt("Reason for rejection") ?? "";
-                    if (!why.trim()) return;
-                    accountApi(`/api/v1/admin/kyc/${item.public_id}`, { method: "POST", body: JSON.stringify({ decision: "rejected", reason: why }) }).then(load);
-                  }}>Reject</button>
-                </span>
-              ) : null}
-            </li>
-          ))}
-          {!kyc.length ? <li className="text-[13px] text-[#8a94a6]">No documents yet.</li> : null}
-        </ul>
+        <p className="mt-2 text-[13px] text-[#6b7587]">{kyc.filter((item) => item.status === "pending").length} pending applications.</p>
+        <Link href="/admin/kyc" className="mt-3 inline-block text-[13px] font-semibold text-[#3665f3] hover:underline">
+          Open KYC review console →
+        </Link>
       </section>
 
       <section className="nexlo-card p-5">
         <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Appeals</h2>
-        <ul className="mt-3 space-y-2">
-          {appeals.map((item) => (
-            <li key={item.public_id} className="rounded-xl border border-[#eef2f7] px-3 py-3 text-[13px]">
-              <p>{item.display_name || item.email}: {item.message}</p>
-              <span className="mt-2 flex gap-3">
-                <button type="button" className="text-[#12a37e]" onClick={() => accountApi(`/api/v1/admin/appeals/${item.public_id}`, { method: "POST", body: JSON.stringify({ decision: "overturned", resolution: "Appeal accepted" }) }).then(load)}>Overturn</button>
-                <button type="button" className="text-[#e5484d]" onClick={() => accountApi(`/api/v1/admin/appeals/${item.public_id}`, { method: "POST", body: JSON.stringify({ decision: "upheld", resolution: "Original action stands" }) }).then(load)}>Uphold</button>
-              </span>
-            </li>
-          ))}
-          {!appeals.length ? <li className="text-[13px] text-[#8a94a6]">No open appeals.</li> : null}
-        </ul>
+        <p className="mt-2 text-[13px] text-[#6b7587]">{appeals.length} pending standing appeals.</p>
+        <Link href="/admin/appeals" className="mt-3 inline-block text-[13px] font-semibold text-[#3665f3] hover:underline">
+          Open appeals console →
+        </Link>
       </section>
     </div>
   );

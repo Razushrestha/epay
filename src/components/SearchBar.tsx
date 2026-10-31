@@ -67,7 +67,7 @@ export function SearchBar() {
   }
 
   return (
-    <div ref={rootRef} className="flex min-w-0 flex-1 items-center gap-2">
+    <div ref={rootRef} className="flex min-w-0 flex-1 items-center gap-2" suppressHydrationWarning>
       <form action="/search" method="get" className="flex min-w-0 flex-1 items-center gap-2" autoComplete="off">
         <div className="relative flex h-10 min-w-0 flex-1 items-center rounded-full border border-[#e2e8f0] bg-white pl-3 pr-2 focus-within:border-[#3665f3] sm:h-11 sm:pl-4 sm:pr-3">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7587" strokeWidth="2.2" className="shrink-0">
@@ -86,7 +86,8 @@ export function SearchBar() {
             className="min-w-0 flex-1 bg-transparent px-3 text-[15px] outline-none placeholder:text-[#767676]"
             aria-autocomplete="list"
             aria-controls={listId}
-            aria-expanded={open && items.length > 0}
+            aria-expanded={Boolean(open && items.length)}
+            suppressHydrationWarning
           />
           <button
             type="button"

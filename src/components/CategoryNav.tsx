@@ -62,7 +62,7 @@ export function CategoryNav() {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(null);
       }}
     >
-      <ul className="mx-auto hidden w-full max-w-[1080px] items-center justify-center gap-x-7 py-2.5 text-[13px] text-[#0f1c3f] lg:flex">
+      <ul className="mx-auto hidden w-full max-w-[1080px] items-center justify-center gap-x-7 py-2.5 text-[13px] text-[#0f1c3f] md:flex">
         {items.map((item) => (
           <li key={item.name} onMouseEnter={() => setOpen(item.hub ?? null)}>
             <Link
@@ -78,7 +78,7 @@ export function CategoryNav() {
         ))}
       </ul>
 
-      <ul className="page-shell no-scrollbar flex gap-5 overflow-x-auto py-2.5 text-[13px] text-[#0f1c3f] lg:hidden">
+      <ul className="page-shell no-scrollbar flex gap-5 overflow-x-auto py-2.5 text-[13px] text-[#0f1c3f] md:hidden">
         {items.map((item) => (
           <li key={item.name} className="shrink-0">
             <Link href={item.href} className="whitespace-nowrap">
@@ -88,23 +88,41 @@ export function CategoryNav() {
         ))}
       </ul>
 
-      {Hub || (liveGroup?.children || []).length ? (
-        <div className="absolute left-0 right-0 top-full z-50 hidden lg:block">
+      {(liveGroup?.children || []).length || Hub ? (
+        <div className="absolute left-0 right-0 top-full z-50 hidden md:block">
           <div className="page-shell border-t border-[#eee] bg-white pb-5 pt-3 shadow-[0_16px_40px_-24px_rgba(15,28,63,0.35)]">
-            {Hub ? <Hub /> : (
-              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            {(liveGroup?.children || []).length ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {(liveGroup?.children || []).map((child) => (
-                  <Link
-                    key={child.id}
-                    href={categorySearchHref(child.id)}
-                    onClick={() => setOpen(null)}
-                    className="rounded-xl px-3 py-2 text-[13px] text-[#0f1c3f] hover:bg-[#f4f7ff] hover:text-[#3665f3]"
-                  >
-                    {child.name}
-                  </Link>
+                  <div key={child.id}>
+                    <Link
+                      href={categorySearchHref(child.id)}
+                      onClick={() => setOpen(null)}
+                      className="text-[14px] font-semibold text-[#0f1c3f] hover:text-[#3665f3] hover:underline"
+                    >
+                      {child.name}
+                    </Link>
+                    {(child.children || []).length ? (
+                      <ul className="mt-2 space-y-1">
+                        {(child.children || []).map((leaf) => (
+                          <li key={leaf.id}>
+                            <Link
+                              href={categorySearchHref(leaf.id)}
+                              onClick={() => setOpen(null)}
+                              className="text-[13px] text-[#3a4a66] hover:text-[#3665f3] hover:underline"
+                            >
+                              {leaf.name}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                 ))}
               </div>
-            )}
+            ) : Hub ? (
+              <Hub />
+            ) : null}
           </div>
         </div>
       ) : null}

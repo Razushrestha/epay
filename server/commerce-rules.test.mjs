@@ -22,6 +22,7 @@ test("increment table by price band", () => {
 test("VAT uses configured rate", () => {
   assert.equal(taxAmount(1000, 13), 130);
   assert.equal(taxAmount(1000, 0), 0);
+  assert.equal(taxAmount(5200, 13), 676);
 });
 
 test("shipping free above threshold", () => {

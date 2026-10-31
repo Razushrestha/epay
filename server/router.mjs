@@ -50,9 +50,9 @@ function setCors(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-session-id");
 }
 
-function json(req, res, status, body) {
+function json(req, res, status, body, extraHeaders = {}) {
   setCors(req, res);
-  res.writeHead(status, { "Content-Type": "application/json" });
+  res.writeHead(status, { "Content-Type": "application/json", ...extraHeaders });
   res.end(JSON.stringify(body));
 }
 
@@ -189,6 +189,11 @@ export async function handleRequest(req, res) {
     if (result.status === 302 && result.headers?.Location) {
       res.writeHead(302, result.headers);
       res.end();
+      return;
+    }
+    if (result.headers?.['Content-Type']?.includes('text/html')) {
+      res.writeHead(result.status, result.headers);
+      res.end(result.body);
       return;
     }
     

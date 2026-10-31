@@ -209,7 +209,7 @@ export function AdminLoginForm() {
               </span>
               Remember me
             </label>
-            <Link href="/forgot" className="text-[13.5px] font-medium text-[#3665f3] hover:underline">
+            <Link href="/forgot-password" className="text-[13.5px] font-medium text-[#3665f3] hover:underline">
               Forgot password?
             </Link>
           </div>

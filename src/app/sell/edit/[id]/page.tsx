@@ -7,8 +7,9 @@ import { accountApi, apiBase, getToken } from "@/lib/account-api";
 import { BuyShell } from "@/components/commerce/BuyShell";
 import { VariationMatrix } from "@/components/sell/VariationMatrix";
 import { comboKey, skuMinPrice, skuPayload, skuStockTotal, type SkuDraft, type VariationAxis } from "@/lib/variations";
+import { ListingPhotoGrid, type ListingPhotoItem } from "@/components/sell/ListingPhotoGrid";
 
-type ListingPhoto = { id: number; url: string; thumbnail_url?: string | null; is_primary?: boolean };
+type ListingPhoto = { id: number; url: string; thumbnail_url?: string | null; is_primary?: boolean; position?: number };
 
 type Variation = {
   id: number;
@@ -60,6 +61,7 @@ export default function EditListingPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [removeBackground, setRemoveBackground] = useState(false);
 
   const variationAxes = useMemo<VariationAxis[]>(
     () =>
@@ -85,27 +87,32 @@ export default function EditListingPage() {
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load listing"));
   }, [params.id]);
 
+  async function persist() {
+    if (!listing) return;
+    const hasSkus = skuRows.length > 0;
+    await accountApi(`/api/v1/listings/${listing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title: listing.title,
+        subtitle: listing.subtitle,
+        description: listing.description,
+        price: hasSkus ? skuMinPrice(skuRows) ?? listing.price : listing.price,
+        quantity: hasSkus ? skuStockTotal(skuRows) : listing.quantity,
+        compare_at: listing.compare_at,
+        shipping_additional: listing.shipping_additional,
+        skus: hasSkus ? skuPayload(skuRows) : undefined,
+      }),
+    });
+  }
+
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!listing) return;
     setSaving(true);
     setError(null);
     try {
-      const hasSkus = skuRows.length > 0;
-      await accountApi(`/api/v1/listings/${listing.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          title: listing.title,
-          subtitle: listing.subtitle,
-          description: listing.description,
-          price: hasSkus ? skuMinPrice(skuRows) ?? listing.price : listing.price,
-          quantity: hasSkus ? skuStockTotal(skuRows) : listing.quantity,
-          compare_at: listing.compare_at,
-          shipping_additional: listing.shipping_additional,
-          skus: hasSkus ? skuPayload(skuRows) : undefined,
-        }),
-      });
-      router.push("/sell/listings");
+      await persist();
+      router.push(listing.status === "draft" ? "/sell/listings?tab=draft" : "/sell/listings");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
     } finally {
@@ -113,7 +120,65 @@ export default function EditListingPage() {
     }
   }
 
-  async function addPhotos(files: FileList | null) {
+  async function publishDraft() {
+    if (!listing) return;
+    if (!String(listing.description || "").trim()) {
+      setError("Add a description before publishing.");
+      return;
+    }
+    if (!(Number(listing.price) > 0) && !skuRows.length) {
+      setError("Add a Buy It Now price before publishing.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await persist();
+      await accountApi(`/api/v1/listings/${listing.id}/publish`, { method: "POST" });
+      router.push(`/listing/${listing.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not publish");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function photoItems(list: ListingPhoto[] | null | undefined): ListingPhotoItem[] {
+    return (list || []).map((photo, index) => ({
+      key: String(photo.id),
+      id: photo.id,
+      label: index + 1,
+      preview: photo.thumbnail_url || photo.url,
+      url: photo.url,
+      thumbnail_url: photo.thumbnail_url || undefined,
+      is_primary: Boolean(photo.is_primary),
+    }));
+  }
+
+  async function persistPhotoLayout(items: ListingPhotoItem[]) {
+    if (!listing) return;
+    const keep = new Set(items.map((photo) => photo.id).filter((id): id is number => Number.isInteger(id)));
+    for (const photo of listing.photos || []) {
+      if (!keep.has(photo.id)) {
+        await accountApi(`/api/v1/listings/photos/${photo.id}`, { method: "DELETE" });
+      }
+    }
+    const ids = items.map((photo) => photo.id).filter((id): id is number => Number.isInteger(id));
+    if (ids.length) {
+      await accountApi(`/api/v1/listings/${listing.id}/photos/reorder`, {
+        method: "PATCH",
+        body: JSON.stringify({ photo_ids: ids }),
+      });
+    }
+    const primary = items.find((photo) => photo.is_primary && photo.id);
+    if (primary?.id) {
+      await accountApi(`/api/v1/listings/photos/${primary.id}/primary`, { method: "PATCH" });
+    }
+    const fresh = await accountApi<{ listing: Listing }>(`/api/v1/listings/${listing.id}`);
+    setListing(fresh.listing);
+  }
+
+  async function addPhotos(files: FileList | File[] | null) {
     if (!listing || !files?.length) return;
     setUploading(true);
     setError(null);
@@ -122,6 +187,7 @@ export default function EditListingPage() {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("photo", file);
+        if (removeBackground) form.append("removeBackground", "true");
         const res = await fetch(`${apiBase}/api/v1/listings/${listing.id}/photos/upload`, {
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -211,15 +277,36 @@ export default function EditListingPage() {
             </label>
             <div>
               <p className="text-[13.5px] font-semibold text-[#0f1c3f]">Photos</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {(listing.photos ?? []).map((photo) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={photo.id} src={photo.thumbnail_url || photo.url} alt="" className="h-20 w-20 rounded-xl object-cover" />
-                ))}
-                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border border-dashed border-[#c9d3e0] text-[12px] text-[#667085]">
-                  {uploading ? "…" : "Add"}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)} />
+              <div className="mt-2 rounded-xl border border-[#cfe0ff] bg-[#eef3ff] p-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={removeBackground}
+                    onChange={(e) => setRemoveBackground(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className="text-sm font-medium text-[#333]">
+                    Remove background from photos (recommended for products)
+                  </span>
                 </label>
+                <p className="mt-1 text-xs text-[#6b7587]">
+                  Automatically removes white backgrounds to make your products stand out.
+                  Works best with items photographed on plain backgrounds.
+                </p>
+              </div>
+              <div className="mt-2">
+                <ListingPhotoGrid
+                  photos={photoItems(listing.photos)}
+                  disabled={uploading}
+                  onChange={() => undefined}
+                  onAddFiles={(files) => {
+                    addPhotos(files).catch((err) => setError(err instanceof Error ? err.message : "Photo upload failed"));
+                  }}
+                  onPersist={(items) => {
+                    persistPhotoLayout(items).catch((err) => setError(err instanceof Error ? err.message : "Could not update photos"));
+                  }}
+                  onError={setError}
+                />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -290,8 +377,13 @@ export default function EditListingPage() {
             ) : null}
             <div className="flex flex-wrap gap-3 pt-2">
               <button className="nexlo-btn" disabled={saving}>
-                {saving ? "Saving…" : "Save changes"}
+                {saving ? "Saving…" : listing.status === "draft" ? "Save draft" : "Save changes"}
               </button>
+              {listing.status === "draft" ? (
+                <button type="button" className="nexlo-btn nexlo-btn-blue" disabled={saving} onClick={() => publishDraft()}>
+                  {saving ? "Publishing…" : "Publish"}
+                </button>
+              ) : null}
               <Link href="/sell/listings" className="nexlo-btn nexlo-btn-ghost">
                 Cancel
               </Link>

@@ -8,7 +8,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { PageHero } from "@/components/ui/PageHero";
 import { ListingGrid } from "@/components/browse/ListingGrid";
 import { listings } from "@/lib/home-data";
-import { CART_EVENT, loadCartBundle, removeCartItem, updateCartQuantity } from "@/lib/commerce";
+import { CART_EVENT, loadCartBundle, removeCartItem, reserveCheckout, updateCartQuantity, validateCart } from "@/lib/commerce";
 
 interface CartItem {
   cart_item_id: number;
@@ -23,6 +23,8 @@ interface CartItem {
   price_changed: boolean;
   stock: number;
   in_stock: boolean;
+  reserved?: boolean;
+  reserved_until?: string | null;
   subtotal: number;
   local?: boolean;
 }
@@ -30,6 +32,7 @@ interface CartItem {
 interface SellerGroup {
   seller_id: number;
   seller_username: string;
+  seller_display?: string;
   items: CartItem[];
   subtotal: number;
   shipping_cost: number;
@@ -52,12 +55,29 @@ export default function CartPage() {
 
   useEffect(() => {
     loadCart();
-    window.addEventListener(CART_EVENT, loadCart);
-    return () => window.removeEventListener(CART_EVENT, loadCart);
+    function onCartChange() {
+      loadCart({ silent: true });
+    }
+    window.addEventListener(CART_EVENT, onCartChange);
+    return () => window.removeEventListener(CART_EVENT, onCartChange);
   }, []);
 
-  async function loadCart() {
-    setLoading(true);
+  function applySellers(next: SellerGroup[]) {
+    const totalItems = next.reduce((sum, seller) => sum + seller.items.reduce((n, item) => n + item.quantity, 0), 0);
+    const subtotal = next.reduce((sum, seller) => sum + seller.subtotal, 0);
+    const shipping = next.reduce((sum, seller) => sum + Number(seller.shipping_cost || 0), 0);
+    setSellers(next);
+    setSummary({
+      total_items: totalItems,
+      subtotal: String(subtotal),
+      shipping: String(shipping),
+      tax: "0",
+      total: String(subtotal + shipping),
+    });
+  }
+
+  async function loadCart(options?: { silent?: boolean }) {
+    if (!options?.silent) setLoading(true);
     setError(null);
     try {
       const data = await loadCartBundle();
@@ -71,21 +91,38 @@ export default function CartPage() {
   }
 
   async function updateQuantity(cartItemId: number, quantity: number, listingId: number, local?: boolean) {
+    const nextQty = Math.max(1, quantity);
+    applySellers(
+      sellers.map((seller) => {
+        const items = seller.items.map((item) => {
+          if (item.cart_item_id !== cartItemId) return item;
+          return { ...item, quantity: nextQty, subtotal: Number(item.price) * nextQty };
+        });
+        return { ...seller, items, subtotal: items.reduce((sum, item) => sum + Number(item.subtotal), 0) };
+      }),
+    );
     try {
-      await updateCartQuantity(cartItemId, quantity, local ? listingId : undefined);
-      await loadCart();
+      setError(null);
+      await updateCartQuantity(cartItemId, nextQty, local ? listingId : undefined);
     } catch (err: any) {
-      alert(err.message);
+      await loadCart({ silent: true });
+      setError(err.message);
     }
   }
 
   async function removeItem(cartItemId: number, listingId: number, local?: boolean) {
-    if (!confirm("Remove this item from cart?")) return;
-
+    applySellers(
+      sellers
+        .map((seller) => {
+          const items = seller.items.filter((item) => item.cart_item_id !== cartItemId);
+          return { ...seller, items, subtotal: items.reduce((sum, item) => sum + Number(item.subtotal), 0) };
+        })
+        .filter((seller) => seller.items.length > 0),
+    );
     try {
       await removeCartItem(cartItemId, local ? listingId : undefined);
-      await loadCart();
     } catch (err: any) {
+      await loadCart({ silent: true });
       alert(err.message);
     }
   }
@@ -93,6 +130,19 @@ export default function CartPage() {
   async function proceedToCheckout() {
     if (!getToken()) {
       router.push("/login?redirect=/checkout");
+      return;
+    }
+
+    setError(null);
+    try {
+      const result = await validateCart();
+      if (!result.valid) {
+        setError(result.issues[0]?.message || "Only 0 items available in stock");
+        return;
+      }
+      await reserveCheckout();
+    } catch (err: any) {
+      setError(err.message);
       return;
     }
 
@@ -151,22 +201,30 @@ export default function CartPage() {
               <div key={seller.seller_id} className="nexlo-card p-5 sm:p-6">
                 <div className="mb-4 flex items-center justify-between border-b border-[#e7eef6] pb-4">
                   <div>
-                    <h3 className="text-[15px] font-bold text-[#0f1c3f]">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a94a6]">Seller group</p>
+                    <h3 className="mt-1 text-[15px] font-bold text-[#0f1c3f]">
                       Sold by{" "}
-                      {seller.seller_id < 0 ? (
-                        <span>{seller.seller_username}</span>
+                      {seller.seller_id < 0 || !seller.seller_username ? (
+                        <span>{seller.seller_display || seller.seller_username || "Nexlo seller"}</span>
                       ) : (
                         <Link href={`/seller/${seller.seller_username}`} className="nexlo-link">
-                          {seller.seller_username}
+                          {seller.seller_display || seller.seller_username}
                         </Link>
                       )}
                     </h3>
                     <p className="text-[13px] text-[#6b7587]">
-                      {seller.items.length} item{seller.items.length > 1 ? "s" : ""} · {formatPrice(seller.subtotal)}
+                      {seller.items.length} item{seller.items.length > 1 ? "s" : ""}
+                    </p>
+                    <p className="mt-1 text-[13px] font-semibold text-[#0f1c3f]">
+                      Subtotal {formatPrice(seller.subtotal)}
                     </p>
                   </div>
                   <div className="text-right text-[13px] text-[#6b7587]">
-                    {seller.shipping_cost > 0 ? <div>Shipping: {formatPrice(seller.shipping_cost)}</div> : <div>Free shipping</div>}
+                    {seller.shipping_cost > 0 ? (
+                      <div className="font-semibold text-[#0f1c3f]">Shipping {formatPrice(seller.shipping_cost)}</div>
+                    ) : (
+                      <div className="font-semibold text-[#0f1c3f]">Shipping FREE</div>
+                    )}
                     {seller.shipping_note ? <p className="mt-0.5 max-w-[220px] text-[11px] text-[#8a94a6]">{seller.shipping_note}</p> : null}
                   </div>
                 </div>
@@ -209,14 +267,17 @@ export default function CartPage() {
                             <span className="w-8 text-center text-[14px]">{item.quantity}</span>
                             <button
                                 onClick={() => updateQuantity(item.cart_item_id, item.quantity + 1, item.listing_id, item.local)}
-                              disabled={item.quantity >= item.stock}
-                              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e7eef6] text-[#0f1c3f] hover:bg-[#f4f8fd] disabled:opacity-50"
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e7eef6] text-[#0f1c3f] hover:bg-[#f4f8fd]"
                             >
                               +
                             </button>
                           </div>
-                          <span className={`text-[12px] ${item.in_stock ? "text-[#0d9488]" : "text-[#e53238]"}`}>
-                            {item.in_stock ? `In stock (${item.stock})` : `Only ${item.stock} left`}
+                          <span className={`text-[12px] ${item.reserved ? "text-[#e53238]" : item.in_stock ? "text-[#0d9488]" : "text-[#e53238]"}`}>
+                            {item.reserved
+                              ? "Item reserved by another buyer"
+                              : item.in_stock
+                                ? `In stock (${item.stock})`
+                                : `Only ${item.stock} left`}
                           </span>
                           <button onClick={() => removeItem(item.cart_item_id, item.listing_id, item.local)} className="ml-auto text-[12px] font-semibold text-[#e53238]">
                             Remove

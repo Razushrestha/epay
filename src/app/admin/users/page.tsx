@@ -41,12 +41,22 @@ function UsersBoard() {
     load().catch((err) => setError(err instanceof Error ? err.message : "Could not load users"));
   }, []);
 
-  async function act(person: Person, action: "restrict" | "suspend" | "restore") {
-    await accountApi("/api/v1/admin/actions", {
+  async function act(person: Person, action: "warn" | "restrict" | "restore") {
+    setError(null);
+    if (reason.trim().length < 3) {
+      setError("Enter a reason before applying a standing action.");
+      return;
+    }
+    const body = await accountApi<{ data: { kind: string } }>("/api/v1/admin/actions", {
       method: "POST",
-      body: JSON.stringify({ userId: person.public_id, action, reason, until: action === "restrict" ? new Date(Date.now() + 7 * 86400000).toISOString() : null }),
+      body: JSON.stringify({
+        userId: person.public_id,
+        action,
+        reason: reason.trim(),
+        until: action === "restrict" ? new Date(Date.now() + 7 * 86400000).toISOString() : null,
+      }),
     });
-    setNotice(`${person.display_name || person.email} ${action}d.`);
+    setNotice(`${body.data.kind} applied to ${person.display_name || person.email}.`);
     await load();
   }
 
@@ -94,7 +104,7 @@ function UsersBoard() {
       <section className="nexlo-card p-5">
         <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); load(); }}>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search email, username, or name" className="nexlo-field min-w-[220px] flex-1" />
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Action reason" className="nexlo-field min-w-[180px]" />
+          <input value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Restriction reason" placeholder="Action reason" required className="nexlo-field min-w-[180px]" />
           <button className="nexlo-btn-ghost h-10 px-4">Search</button>
         </form>
         <div className="mt-4 overflow-x-auto">
@@ -123,8 +133,16 @@ function UsersBoard() {
                   <td className="py-3 text-[#6b7587]">{when(person.created_at)}</td>
                   <td className="py-3">
                     <div className="flex flex-wrap gap-2">
-                      {(["restrict", "suspend", "restore"] as const).map((action) => (
-                        <button key={action} type="button" className="capitalize text-[#3665f3] hover:underline" onClick={() => act(person, action)}>{action}</button>
+                      {(
+                        [
+                          ["warn", "Warning"],
+                          ["restrict", "Temporary Suspension"],
+                          ["restore", "Restore"],
+                        ] as const
+                      ).map(([action, label]) => (
+                        <button key={action} type="button" className="text-[#3665f3] hover:underline" onClick={() => act(person, action)}>
+                          {label}
+                        </button>
                       ))}
                       <button
                         type="button"

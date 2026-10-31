@@ -6,6 +6,7 @@ import { ledgerIntegrity, reconcileGateways } from "./ledger.mjs";
 import { notify } from "./notify.mjs";
 import { query } from "./db.mjs";
 import { searchListingsAdvanced } from "./search-index.mjs";
+import { expireReservations as releaseExpiredReservations } from "./stock.mjs";
 
 let timer = null;
 let lastLedgerCheck = 0;
@@ -75,8 +76,12 @@ async function refreshSellerMetrics() {
   }
 }
 
-async function expireReservations() {
-  await query(`DELETE FROM stock_reservations WHERE expires_at < NOW()`).catch(() => {});
+export async function expireReservations() {
+  const result = await releaseExpiredReservations();
+  if (result.deleted) {
+    console.log(`[jobs] released ${result.deleted} expired stock reservation(s)`);
+  }
+  return result;
 }
 
 async function runSavedSearchAlerts() {

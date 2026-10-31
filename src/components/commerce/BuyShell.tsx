@@ -12,7 +12,8 @@ export function statusLabel(status: string) {
 
 export function statusClass(status: string) {
   const value = String(status || "").toLowerCase();
-  if (value.includes("cancel") || value.includes("fail")) return "bg-[#fff5f5] text-[#b42318]";
+  if (value.includes("cancel") || value.includes("fail") || value.includes("suspend") || value.includes("restrict")) return "bg-[#fff5f5] text-[#b42318]";
+  if (value.includes("warn")) return "bg-[#fff8e8] text-[#b45309]";
   if (value.includes("complete") || value.includes("deliver") || value.includes("released")) return "bg-[#e8f8ee] text-[#159947]";
   if (value.includes("ship")) return "bg-[#e6faf6] text-[#0d9488]";
   if (value.includes("paid") || value.includes("process")) return "bg-[#eef3ff] text-[#3665f3]";

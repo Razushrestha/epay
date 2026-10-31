@@ -19,37 +19,49 @@ const storage = new Files({
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-// Background removal settings
-const ENABLE_BACKGROUND_REMOVAL = process.env.REMOVE_BACKGROUND === 'true' || false;
+/**
+ * Apply EXIF orientation, then encode without metadata.
+ * Do not call withMetadata() — that keeps GPS, camera, and timestamps.
+ */
+async function privacySafeImage(input, { width, height, fit = 'inside', format = 'jpeg', quality = 85 } = {}) {
+  const pipeline = sharp(input)
+    .rotate()
+    .resize(width, height, {
+      fit,
+      withoutEnlargement: fit === 'inside',
+    });
+  if (format === 'png') {
+    return pipeline.png({ quality: 90, compressionLevel: 9 }).toBuffer();
+  }
+  return pipeline.jpeg({ quality, mozjpeg: true }).toBuffer();
+}
+
+const ENABLE_BACKGROUND_REMOVAL = process.env.REMOVE_BACKGROUND === 'true';
+const BACKGROUND_THRESHOLD = Number(process.env.BACKGROUND_THRESHOLD || 240);
 
 /**
- * Remove background from image (simple white background removal)
- * For production, consider using Remove.bg API or AI-based solution
+ * Punch out near-white pixels (brightness >= 240/255) to alpha.
+ * Preserves the product subject; outputs a transparent PNG.
  */
-async function removeBackground(imageBuffer) {
-  try {
-    // Get image metadata
-    const metadata = await sharp(imageBuffer).metadata();
-    
-    // Convert to PNG with alpha channel for transparency
-    const processedImage = await sharp(imageBuffer)
-      .ensureAlpha()
-      .png()
-      .toBuffer();
-    
-    // Simple threshold-based background removal
-    // This works best with white/light backgrounds
-    const removed = await sharp(processedImage)
-      .threshold(240, { greyscale: false }) // Adjust threshold as needed
-      .negate({ alpha: false })
-      .toBuffer();
-    
-    return removed;
-  } catch (err) {
-    console.error('Background removal failed:', err);
-    // Return original image if removal fails
-    return imageBuffer;
+async function stripWhiteBackground(imageBuffer, threshold = BACKGROUND_THRESHOLD) {
+  const { data, info } = await sharp(imageBuffer)
+    .rotate()
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  for (let i = 0; i < data.length; i += 4) {
+    const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    if (brightness >= threshold) {
+      data[i + 3] = 0;
+    }
   }
+
+  return sharp(data, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .png()
+    .toBuffer();
 }
 
 /**
@@ -108,20 +120,36 @@ export async function uploadPhoto(req, listingId, userId) {
     }
 
     const file = files[0];
+    const originalName = String(file.filename || '');
+    const fileExt = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')).toLowerCase() : '';
+    const allowedExt = ['.jpg', '.jpeg', '.png', '.webp'];
 
-    // Validate file type
-    if (!ALLOWED_TYPES.includes(file.contentType)) {
-      return { 
-        status: 400, 
-        body: { error: `Invalid file type. Allowed: ${ALLOWED_TYPES.join(', ')}` } 
+    if (file.data.length > MAX_FILE_SIZE) {
+      return {
+        status: 400,
+        body: { error: `${originalName || 'That file'} is too large. Only JPEG, PNG, and WebP under 10MB are accepted.` },
       };
     }
 
-    // Validate file size
-    if (file.data.length > MAX_FILE_SIZE) {
-      return { 
-        status: 400, 
-        body: { error: `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB` } 
+    if (!ALLOWED_TYPES.includes(file.contentType) || (fileExt && !allowedExt.includes(fileExt))) {
+      return {
+        status: 400,
+        body: { error: `${originalName || 'That file'} is not a supported image. Only JPEG, PNG, and WebP under 10MB are accepted.` },
+      };
+    }
+
+    try {
+      const probe = await sharp(file.data).metadata();
+      if (!['jpeg', 'png', 'webp'].includes(String(probe.format || ''))) {
+        return {
+          status: 400,
+          body: { error: `${originalName || 'That file'} is not a JPEG, PNG, or WebP image.` },
+        };
+      }
+    } catch {
+      return {
+        status: 400,
+        body: { error: `${originalName || 'That file'} is not a JPEG, PNG, or WebP image.` },
       };
     }
 
@@ -131,83 +159,49 @@ export async function uploadPhoto(req, listingId, userId) {
       [listingId]
     );
 
-    if (!ownerCheck.rows[0] || ownerCheck.rows[0].seller_id !== userId) {
+    if (!ownerCheck.rows[0] || Number(ownerCheck.rows[0].seller_id) !== Number(userId)) {
       return { status: 403, body: { error: 'Not authorized' } };
     }
 
-    // Check if background removal is requested
+    const existingCount = await query(
+      'SELECT COUNT(*)::int AS n FROM listing_photos WHERE listing_id = $1',
+      [listingId]
+    );
+    if (Number(existingCount.rows[0]?.n || 0) >= 12) {
+      return { status: 400, body: { error: 'Listings can have up to 12 photos' } };
+    }
+
     const removeBackground = fields.removeBackground === 'true' || ENABLE_BACKGROUND_REMOVAL;
-    
-    // Optionally remove background
+
     let imageData = file.data;
     let outputFormat = 'jpeg';
-    
+
     if (removeBackground) {
-      console.log('Removing background from image...');
       try {
-        // Convert to PNG with transparency
-        imageData = await sharp(file.data)
-          .ensureAlpha()
-          .png()
-          .toBuffer();
-        
-        // Apply threshold-based background removal (works best with white backgrounds)
-        imageData = await sharp(imageData)
-          .threshold(240) // Remove pixels brighter than this (white background)
-          .toBuffer();
-        
-        outputFormat = 'png'; // Must use PNG to preserve transparency
-        console.log('Background removed successfully');
+        imageData = await stripWhiteBackground(file.data);
+        outputFormat = 'png';
       } catch (err) {
         console.error('Background removal failed, using original:', err);
-        imageData = file.data; // Fallback to original
+        imageData = file.data;
         outputFormat = 'jpeg';
       }
     }
 
-    // Process image with sharp (resize, optimize, strip EXIF)
-    let processedImage;
-    
-    if (outputFormat === 'png') {
-      processedImage = await sharp(imageData)
-        .resize(1200, 1200, { 
-          fit: 'inside', 
-          withoutEnlargement: true 
-        })
-        .rotate() // Auto-rotate based on EXIF orientation
-        .withMetadata({ 
-          exif: {} // Remove all EXIF metadata (including GPS, camera info)
-        })
-        .png({ 
-          quality: 90,
-          compressionLevel: 9
-        })
-        .toBuffer();
-    } else {
-      processedImage = await sharp(imageData)
-        .resize(1200, 1200, { 
-          fit: 'inside', 
-          withoutEnlargement: true 
-        })
-        .rotate() // Auto-rotate based on EXIF orientation
-        .withMetadata({ 
-          exif: {} // Remove all EXIF metadata (including GPS, camera info)
-        })
-        .jpeg({ 
-          quality: 85, 
-          mozjpeg: true // Better compression
-        })
-        .toBuffer();
-    }
+    const processedImage = await privacySafeImage(imageData, {
+      width: 1200,
+      height: 1200,
+      fit: 'inside',
+      format: outputFormat,
+      quality: 85,
+    });
 
-    // Generate thumbnail (always JPEG for smaller size)
-    const thumbnail = await sharp(file.data)
-      .resize(300, 300, { 
-        fit: 'cover' 
-      })
-      .withMetadata({ exif: {} })
-      .jpeg({ quality: 80 })
-      .toBuffer();
+    const thumbnail = await privacySafeImage(file.data, {
+      width: 300,
+      height: 300,
+      fit: 'cover',
+      format: 'jpeg',
+      quality: 85,
+    });
 
     // Get image metadata
     const metadata = await sharp(processedImage).metadata();
@@ -306,12 +300,13 @@ export async function uploadAvatar(req, userId) {
       return { status: 400, body: { error: "Photo must be 5 MB or smaller." } };
     }
 
-    const processed = await sharp(file.data)
-      .rotate()
-      .resize(512, 512, { fit: "cover" })
-      .jpeg({ quality: 85, mozjpeg: true })
-      .withMetadata({ exif: {} })
-      .toBuffer();
+    const processed = await privacySafeImage(file.data, {
+      width: 512,
+      height: 512,
+      fit: "cover",
+      format: "jpeg",
+      quality: 85,
+    });
 
     const filename = `${userId}-${Date.now()}-${randomBytes(6).toString("hex")}.jpg`;
     const key = `avatars/${filename}`;
@@ -445,7 +440,7 @@ export async function setPrimaryPhoto(photoId, userId) {
     }
 
     const photo = result.rows[0];
-    if (photo.seller_id !== userId) {
+    if (Number(photo.seller_id) !== Number(userId)) {
       return { status: 403, body: { error: 'Not authorized' } };
     }
 
@@ -468,6 +463,47 @@ export async function setPrimaryPhoto(photoId, userId) {
     return { 
       status: 500, 
       body: { error: 'Failed to set primary photo', details: error.message } 
+    };
+  }
+}
+
+/**
+ * Persist seller drag-to-reorder of listing photos.
+ */
+export async function reorderListingPhotos(listingId, photoIds, userId) {
+  try {
+    const owner = await query('SELECT seller_id FROM listings WHERE id = $1', [listingId]);
+    if (!owner.rows[0] || Number(owner.rows[0].seller_id) !== Number(userId)) {
+      return { status: 403, body: { error: 'Not authorized' } };
+    }
+    const ids = (Array.isArray(photoIds) ? photoIds : []).map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    if (!ids.length) {
+      return { status: 400, body: { error: 'photo_ids required' } };
+    }
+
+    const existing = await query('SELECT id FROM listing_photos WHERE listing_id = $1', [listingId]);
+    const allowed = new Set(existing.rows.map((row) => Number(row.id)));
+    const ordered = [];
+    for (const id of ids) {
+      if (allowed.has(id) && !ordered.includes(id)) ordered.push(id);
+    }
+    for (const id of allowed) {
+      if (!ordered.includes(id)) ordered.push(id);
+    }
+
+    for (let position = 0; position < ordered.length; position += 1) {
+      await query(
+        'UPDATE listing_photos SET position = $1 WHERE id = $2 AND listing_id = $3',
+        [position, ordered[position], listingId]
+      );
+    }
+
+    return { status: 200, body: { success: true, photo_ids: ordered } };
+  } catch (error) {
+    console.error('Reorder photos error:', error);
+    return {
+      status: 500,
+      body: { error: 'Failed to reorder photos', details: error.message },
     };
   }
 }

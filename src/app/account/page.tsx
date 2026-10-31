@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { accountApi, apiBase, digitsCode, getToken, setToken } from "@/lib/account-api";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { accountApi, apiBase, cacheProfile, digitsCode, getToken, setToken } from "@/lib/account-api";
+import { passwordPolicyError } from "@/lib/password";
 import { AccountChrome, AccountSection, fullName, initials } from "@/components/account/AccountChrome";
 import { StatusPill, money } from "@/components/commerce/BuyShell";
 import { FeedbackBoard } from "@/components/account/FeedbackBoard";
@@ -38,6 +39,15 @@ type User = {
   business: { legalName: string; registrationCountry: string | null; taxId: string | null } | null;
   feedback: { positive: number; neutral: number; negative: number };
   kyc: { status: string; reason: string | null } | null;
+  standing?: {
+    status: string;
+    action: string | null;
+    kind: string | null;
+    reason: string | null;
+    untilAt: string | null;
+    limits: { canBuy: boolean; canSell: boolean; canBid: boolean };
+    canAppeal: boolean;
+  } | null;
   social?: string[];
   createdAt?: string | null;
 };
@@ -57,42 +67,79 @@ type Address = {
   is_default_billing: boolean;
 };
 
-const ADDRESS_SLOTS = [
-  {
-    key: "registration",
-    title: "Registration address, email and phone number",
-    hint: "Your main contact address. It's important to keep it up to date and accurate.",
-  },
-  {
-    key: "shipping",
-    title: "Shipping address",
-    hint: "Your main shipping address for purchases. This is where you'd like to receive items you purchase.",
-  },
-  {
-    key: "ship_from",
-    title: "Ship from address",
-    hint: "Your main address where you ship packages from.",
-  },
-  {
-    key: "return",
-    title: "Return address",
-    hint: "Your main return addresses where buyers can return their items to.",
-  },
-  {
-    key: "pickup",
-    title: "Payment and pick up address",
-    hint: "Your preferred address for pickup orders.",
-  },
-] as const;
+type Session = {
+  public_id: string;
+  user_agent: string;
+  ip?: string | null;
+  created_at: string;
+  last_seen_at?: string;
+  current: boolean;
+};
 
-type Session = { public_id: string; user_agent: string; created_at: string; current: boolean };
+function browserLabel(userAgent: string) {
+  const ua = userAgent || "Unknown device";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /Chrome\//.test(ua)
+      ? "Chrome"
+      : /Firefox\//.test(ua)
+        ? "Firefox"
+        : /Safari\//.test(ua)
+          ? "Safari"
+          : ua.slice(0, 48);
+  const os = /Windows/i.test(ua)
+    ? "Windows"
+    : /Android/i.test(ua)
+      ? "Android"
+      : /iPhone|iPad|iOS/i.test(ua)
+        ? "iOS"
+        : /Mac OS|Macintosh/i.test(ua)
+          ? "macOS"
+          : /Linux/i.test(ua)
+            ? "Linux"
+            : "";
+  return os ? `${browser} on ${os}` : browser;
+}
 
-function aliasTab(raw: string | null) {
-  const tab = raw ?? "account";
+function displayIp(ip?: string | null) {
+  const value = String(ip || "").replace(/^::ffff:/, "").trim();
+  return value || "Unknown IP";
+}
+
+function formatSessionTime(value?: string) {
+  if (!value) return "Unknown time";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown time";
+  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function aliasTab(raw: string | null, pathname?: string | null) {
+  const fromPath = pathname?.endsWith("/security")
+    ? "security"
+    : pathname?.endsWith("/profile")
+      ? "account"
+      : pathname?.endsWith("/addresses")
+        ? "preferences"
+        : pathname?.endsWith("/selling")
+          ? "selling"
+          : pathname?.endsWith("/standing")
+            ? "standing"
+            : null;
+  const tab = raw ?? fromPath ?? "account";
   if (tab === "profile") return "account";
   if (tab === "addresses") return "preferences";
-  if (tab === "standing") return "activity";
   return tab;
+}
+
+function splitFullName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return { firstName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) ?? "" };
+}
+
+function joinedName(first?: string | null, last?: string | null, fallback = "") {
+  return `${first ?? ""} ${last ?? ""}`.trim() || fallback;
 }
 
 function maskEmail(email: string) {
@@ -109,17 +156,14 @@ function maskPhone(phone: string) {
   return `${cc} xxxxxxxx${last2}`;
 }
 
-function findSlotAddress(list: Address[], key: string) {
-  const labeled = list.find((item) => item.label === key);
-  if (labeled) return labeled;
-  if (key === "shipping") return list.find((item) => item.is_default_shipping) ?? null;
-  if (key === "pickup") return list.find((item) => item.is_default_billing) ?? null;
-  if (key === "registration") return list.find((item) => !item.label) ?? null;
-  return null;
+function wardLabel(ward?: string | null) {
+  const value = String(ward || "").trim();
+  if (!value) return "";
+  return /^\d+$/.test(value) ? `Ward ${value}` : value;
 }
 
 function formatAddress(item: Address) {
-  return [item.full_name, item.line1, item.line2, [item.city, item.region, item.postal_code].filter(Boolean).join(" "), item.country]
+  return [item.full_name, item.line1, item.line2, [item.city, wardLabel(item.region), item.postal_code].filter(Boolean).join(" "), item.country]
     .filter(Boolean)
     .join(", ");
 }
@@ -137,6 +181,13 @@ function fileToDataUrl(file: File) {
     reader.onerror = () => reject(new Error("Could not read that file"));
     reader.readAsDataURL(file);
   });
+}
+
+function kycStatusLabel(status?: string | null) {
+  if (status === "pending") return "Pending Review";
+  if (status === "approved") return "Approved";
+  if (status === "rejected") return "Requires Additional Documents";
+  return "Not submitted";
 }
 
 function Verified() {
@@ -217,24 +268,31 @@ function SecurityField({
 function SessionList({
   sessions,
   setSessions,
+  allowRevoke = true,
 }: {
   sessions: Session[];
-  setSessions: (value: Session[] | ((list: Session[]) => Session[])) => void;
+  setSessions?: (value: Session[] | ((list: Session[]) => Session[])) => void;
+  allowRevoke?: boolean;
 }) {
   if (!sessions.length) {
-    return <p className="text-[13.5px] text-[#5b6780]">No active devices found.</p>;
+    return <p className="text-[13.5px] text-[#5b6780]">No active sessions found.</p>;
   }
   return (
     <ul className="space-y-2">
       {sessions.map((item) => (
-        <li key={item.public_id} className="flex items-center justify-between gap-3 rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]">
+        <li key={item.public_id} className="flex items-start justify-between gap-3 rounded-xl border border-[#e7eef6] px-3 py-2 text-[13px]">
           <span>
-            {item.user_agent.slice(0, 80)} {item.current ? "· This device" : ""}
+            <span className="block font-medium text-[#0f1c3f]">
+              {browserLabel(item.user_agent)}
+              {item.current ? " · This device" : ""}
+            </span>
+            <span className="mt-0.5 block text-[#5b6780]">IP {displayIp(item.ip)}</span>
+            <span className="block text-[#5b6780]">Signed in {formatSessionTime(item.created_at)}</span>
           </span>
-          {!item.current ? (
+          {allowRevoke && setSessions && !item.current ? (
             <button
               type="button"
-              className="text-red-600"
+              className="shrink-0 font-medium text-red-600 hover:underline"
               onClick={() =>
                 accountApi(`/api/v1/account/sessions/${item.public_id}`, { method: "DELETE" }).then(() =>
                   setSessions((list) => list.filter((row) => row.public_id !== item.public_id)),
@@ -299,13 +357,15 @@ function AccountDashboard({ user, levelLabel }: { user: User; levelLabel: Record
 function AccountScreen() {
   const router = useRouter();
   const params = useSearchParams();
-  const tab = aliasTab(params.get("tab"));
+  const pathname = usePathname();
+  const tab = aliasTab(params.get("tab"), pathname);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [secret, setSecret] = useState("");
+  const [otpUri, setOtpUri] = useState("");
   const [code, setCode] = useState("");
   const [secPanel, setSecPanel] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -314,7 +374,17 @@ function AccountScreen() {
   const [appeal, setAppeal] = useState("");
   const [sellerId, setSellerId] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ firstName: "", lastName: "", displayName: "", country: "", bio: "", legalName: "", username: "" });
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    fullName: "",
+    displayName: "",
+    country: "",
+    bio: "",
+    legalName: "",
+    username: "",
+    phone: "",
+  });
   const [address, setAddress] = useState({
     fullName: "",
     phone: "",
@@ -324,6 +394,8 @@ function AccountScreen() {
     region: "",
     postalCode: "",
     country: "Nepal",
+    defaultShipping: false,
+    defaultBilling: false,
   });
   const [addressSlot, setAddressSlot] = useState<string | null>(null);
   const [phoneDraft, setPhoneDraft] = useState("");
@@ -333,6 +405,15 @@ function AccountScreen() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [clearAvatar, setClearAvatar] = useState(false);
+  const [kycApplyOpen, setKycApplyOpen] = useState(false);
+  const [kycForm, setKycForm] = useState({
+    sellerType: "individual",
+    fullName: "",
+    legalName: "",
+    pan: "",
+    docType: "citizenship",
+    docNumber: "",
+  });
 
   function resetAvatarEditor() {
     setAvatarFile(null);
@@ -345,6 +426,14 @@ function AccountScreen() {
 
   function onAvatarFile(file: File | undefined) {
     if (!file) return;
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) {
+      setError("Use a JPG or PNG image.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Photo must be 2 MB or smaller.");
+      return;
+    }
     setAvatarPreview((current) => {
       if (current) URL.revokeObjectURL(current);
       return URL.createObjectURL(file);
@@ -419,20 +508,27 @@ function AccountScreen() {
   async function load() {
     const body = await accountApi<{ user: User }>("/api/v1/account");
     setUser(body.user);
+    cacheProfile(body.user);
     setForm({
       firstName: body.user.firstName ?? "",
       lastName: body.user.lastName ?? "",
+      fullName: joinedName(body.user.firstName, body.user.lastName, body.user.displayName ?? ""),
       displayName: body.user.displayName ?? "",
       country: body.user.country ?? "",
       bio: body.user.bio ?? "",
       legalName: body.user.business?.legalName ?? "",
       username: body.user.username ?? "",
+      phone: body.user.phone ?? "",
     });
   }
 
   useEffect(() => {
     load().catch(() => router.push("/login"));
   }, [router]);
+
+  useEffect(() => {
+    if (pathname?.endsWith("/profile")) setEditing("profile");
+  }, [pathname]);
 
   useEffect(() => {
     if (tab === "preferences" || tab === "account") {
@@ -447,6 +543,12 @@ function AccountScreen() {
     if (!user) return;
     setError(null);
     try {
+      const changingPassword = Boolean(currentPassword || newPassword);
+      if (changingPassword) {
+        if (!currentPassword || !newPassword) throw new Error("Enter your current password and a new password.");
+        const policy = passwordPolicyError(newPassword);
+        if (policy) throw new Error(policy);
+      }
       if (avatarFile) {
         const token = getToken();
         const payload = new FormData();
@@ -461,10 +563,14 @@ function AccountScreen() {
         if (!res.ok) throw new Error(uploaded.error ?? "Could not upload the photo.");
         if (uploaded.user) setUser(uploaded.user);
       }
+      const names = splitFullName(form.fullName || `${form.firstName} ${form.lastName}`);
       const body = await accountApi<{ user: User }>("/api/v1/account/profile", {
         method: "PATCH",
         body: JSON.stringify({
           ...form,
+          ...names,
+          displayName: form.displayName.trim() || form.fullName.trim() || `${names.firstName} ${names.lastName}`.trim(),
+          phone: form.phone.trim() || undefined,
           ...extra,
           clearAvatar: !avatarFile && clearAvatar ? true : undefined,
           accountType: user.accountType,
@@ -472,9 +578,18 @@ function AccountScreen() {
         }),
       });
       setUser(body.user);
+      cacheProfile(body.user);
+      if (changingPassword) {
+        await accountApi("/api/v1/account/password", {
+          method: "POST",
+          body: JSON.stringify({ currentPassword, password: newPassword }),
+        });
+        setCurrentPassword("");
+        setNewPassword("");
+      }
       resetAvatarEditor();
       setEditing(null);
-      setNotice("Profile saved.");
+      setNotice("Profile updated successfully");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
     }
@@ -591,7 +706,7 @@ function AccountScreen() {
                   </label>
                   <div className="min-w-0">
                     <p className="text-[13.5px] font-semibold text-[#0f1c3f]">Profile photo</p>
-                    <p className="text-[12.5px] text-[#6b7587]">JPG, PNG, or WebP. Up to 5 MB.</p>
+                    <p className="text-[12.5px] text-[#6b7587]">JPG or PNG, under 2 MB.</p>
                     <div className="mt-1.5 flex flex-wrap gap-3">
                       <label className="cursor-pointer text-[13px] font-medium text-[#3665f3] hover:underline">
                         Upload photo
@@ -621,11 +736,47 @@ function AccountScreen() {
                     </div>
                   </div>
                 </div>
-                <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} placeholder="First name" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
-                <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} placeholder="Last name" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
-                <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} placeholder="Display name" className="h-10 rounded-full border border-[#e5e7eb] px-4 sm:col-span-2" />
+                <input
+                  value={form.fullName}
+                  onChange={(e) => {
+                    const fullName = e.target.value;
+                    const names = splitFullName(fullName);
+                    setForm({ ...form, fullName, firstName: names.firstName, lastName: names.lastName });
+                  }}
+                  placeholder="Full name"
+                  aria-label="Full name"
+                  className="h-10 rounded-full border border-[#e5e7eb] px-4 sm:col-span-2"
+                />
+                <input
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="Phone number"
+                  aria-label="Phone number"
+                  autoComplete="tel"
+                  className="h-10 rounded-full border border-[#e5e7eb] px-4"
+                />
+                <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} placeholder="Display name" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
                 <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
-                <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save profile</button>
+                <p className="text-[12.5px] text-[#6b7587] sm:col-span-2">Optional password change. Use your current password — no email code is sent.</p>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Current password"
+                  aria-label="Current password"
+                  autoComplete="current-password"
+                  className="h-10 rounded-full border border-[#e5e7eb] px-4"
+                />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password"
+                  aria-label="New password"
+                  autoComplete="new-password"
+                  className="h-10 rounded-full border border-[#e5e7eb] px-4"
+                />
+                <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white sm:col-span-2">Save Changes</button>
               </form>
             ) : null}
           </section>
@@ -826,7 +977,7 @@ function AccountScreen() {
           <div className="nexlo-card mt-4 p-5">
             <p className="text-[16px] font-bold text-[#0f1c3f]">Seller payouts</p>
             <p className="mt-1 text-[13px] text-[#6b7587]">Bank, eSewa, or Khalti accounts live under Selling.</p>
-            <Link href="/account?tab=selling" className="mt-3 inline-block text-[13px] font-semibold text-[#3665f3] hover:underline">
+            <Link href="/account/selling" className="mt-3 inline-block text-[13px] font-semibold text-[#3665f3] hover:underline">
               Open Selling →
             </Link>
           </div>
@@ -847,113 +998,175 @@ function AccountScreen() {
 
       {tab === "preferences" && (
         <section className="nexlo-card px-6 py-6 sm:px-8">
-          <h1 className="text-[28px] font-bold tracking-tight text-[#0f1c3f]">Addresses</h1>
-          <div className="mt-2">
-            {ADDRESS_SLOTS.map((slot) => {
-              const saved = findSlotAddress(addresses, slot.key);
-              const open = addressSlot === slot.key;
-              return (
-                <div key={slot.key} className="border-b border-[#e8edf3] py-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <h2 className="text-[16px] font-bold text-[#0f1c3f]">{slot.title}</h2>
-                      <p className="mt-1 max-w-[560px] text-[14px] leading-relaxed text-[#6b7587]">{slot.hint}</p>
-                      {saved && !open ? (
-                        <p className="mt-2 text-[13.5px] text-[#3a4a66]">{formatAddress(saved)}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-[28px] font-bold tracking-tight text-[#0f1c3f]">Addresses</h1>
+              <p className="mt-1 text-[14px] text-[#6b7587]">Save shipping and billing addresses. The default shipping address fills in at checkout.</p>
+            </div>
+            <button
+              type="button"
+              className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white"
+              onClick={() => {
+                setAddressSlot("new");
+                setAddress({
+                  fullName: name,
+                  phone: user.phone || "",
+                  line1: "",
+                  line2: "",
+                  city: "",
+                  region: "",
+                  postalCode: "",
+                  country: user.country || "Nepal",
+                  defaultShipping: addresses.length === 0,
+                  defaultBilling: false,
+                });
+              }}
+            >
+              Add New Address
+            </button>
+          </div>
+
+          {addressSlot ? (
+            <form
+              className="mt-5 grid max-w-[560px] gap-2 sm:grid-cols-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setError(null);
+                try {
+                  const payload = {
+                    fullName: address.fullName,
+                    phone: address.phone,
+                    line1: address.line1,
+                    line2: address.line2,
+                    city: address.city,
+                    region: address.region,
+                    postalCode: address.postalCode,
+                    country: address.country || "Nepal",
+                    defaultShipping: address.defaultShipping,
+                    defaultBilling: address.defaultBilling,
+                  };
+                  if (addressSlot !== "new") {
+                    await accountApi(`/api/v1/account/addresses/${addressSlot}`, {
+                      method: "PATCH",
+                      body: JSON.stringify(payload),
+                    });
+                  } else {
+                    await accountApi("/api/v1/account/addresses", {
+                      method: "POST",
+                      body: JSON.stringify(payload),
+                    });
+                  }
+                  const body = await accountApi<{ data: Address[] }>("/api/v1/account/addresses");
+                  setAddresses(body.data);
+                  setAddressSlot(null);
+                  setNotice("Address saved.");
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Could not save address");
+                }
+              }}
+            >
+              <input value={address.fullName} onChange={(e) => setAddress({ ...address, fullName: e.target.value })} placeholder="Full name" aria-label="Full name" required className="h-10 rounded-full border px-4 sm:col-span-2" />
+              <input value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} placeholder="Phone" aria-label="Phone" required className="h-10 rounded-full border px-4 sm:col-span-2" />
+              <input value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} placeholder="Street address" aria-label="Street address" required className="h-10 rounded-full border px-4 sm:col-span-2" />
+              <input value={address.line2} onChange={(e) => setAddress({ ...address, line2: e.target.value })} placeholder="Landmark" aria-label="Landmark" className="h-10 rounded-full border px-4 sm:col-span-2" />
+              <input value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} placeholder="City" aria-label="City" required className="h-10 rounded-full border px-4" />
+              <input value={address.region} onChange={(e) => setAddress({ ...address, region: e.target.value })} placeholder="Ward" aria-label="Ward" required className="h-10 rounded-full border px-4" />
+              <label className="flex items-center gap-2 text-[13.5px] text-[#0f1c3f] sm:col-span-2">
+                <input type="checkbox" checked={address.defaultShipping} onChange={(e) => setAddress({ ...address, defaultShipping: e.target.checked })} className="accent-[#3665f3]" />
+                Set as Default Shipping Address
+              </label>
+              <label className="flex items-center gap-2 text-[13.5px] text-[#0f1c3f] sm:col-span-2">
+                <input type="checkbox" checked={address.defaultBilling} onChange={(e) => setAddress({ ...address, defaultBilling: e.target.checked })} className="accent-[#3665f3]" />
+                Set as Default Billing Address
+              </label>
+              <div className="flex gap-2 sm:col-span-2">
+                <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save</button>
+                <button type="button" className="h-10 rounded-full px-4 text-[14px] text-[#5b6780]" onClick={() => setAddressSlot(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          <ul className="mt-5 space-y-3">
+            {addresses.length === 0 && !addressSlot ? (
+              <li className="text-[14px] text-[#6b7587]">No addresses yet. Add a shipping address to use at checkout.</li>
+            ) : null}
+            {addresses.map((item) => (
+              <li key={item.public_id} className="rounded-2xl border border-[#e7eef6] px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-[#0f1c3f]">{item.full_name}</p>
+                    <p className="mt-1 text-[13.5px] text-[#3a4a66]">{item.line1}</p>
+                    {item.line2 ? <p className="text-[13.5px] text-[#3a4a66]">{item.line2}</p> : null}
+                    <p className="text-[13.5px] text-[#3a4a66]">
+                      {item.city}
+                      {item.region ? `, ${wardLabel(item.region)}` : ""}
+                    </p>
+                    {item.phone ? <p className="text-[13.5px] text-[#3a4a66]">{item.phone}</p> : null}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {item.is_default_shipping ? (
+                        <span className="rounded-full bg-[#d1fae5] px-2 py-0.5 text-[11px] font-semibold text-[#0d9488]">Default shipping</span>
                       ) : null}
-                      {slot.key === "registration" && !open ? (
-                        <p className="mt-1 text-[13px] text-[#6b7587]">
-                          {user.email ?? "No email"} · {user.phone ?? "No phone"}
-                        </p>
+                      {item.is_default_billing ? (
+                        <span className="rounded-full bg-[#eaf1ff] px-2 py-0.5 text-[11px] font-semibold text-[#3665f3]">Default billing</span>
                       ) : null}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (open) {
-                          setAddressSlot(null);
-                          return;
-                        }
-                        setAddressSlot(slot.key);
-                        setAddress({
-                          fullName: saved?.full_name || name,
-                          phone: saved?.phone || user.phone || "",
-                          line1: saved?.line1 || "",
-                          line2: saved?.line2 || "",
-                          city: saved?.city || "",
-                          region: saved?.region || "",
-                          postalCode: saved?.postal_code || "",
-                          country: saved?.country || user.country || "Nepal",
-                        });
-                      }}
-                      className="h-9 shrink-0 rounded-full border border-[#3665f3] px-5 text-[14px] font-semibold text-[#3665f3] hover:bg-[#f5f8ff]"
-                    >
-                      {saved ? "Edit" : "Add"}
-                    </button>
                   </div>
-                  {open ? (
-                    <form
-                      className="mt-4 grid max-w-[560px] gap-2 sm:grid-cols-2"
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        setError(null);
-                        try {
-                          const payload = {
-                            ...address,
-                            label: slot.key,
-                            defaultShipping: slot.key === "shipping",
-                            defaultBilling: slot.key === "pickup",
-                          };
-                          if (saved) {
-                            await accountApi(`/api/v1/account/addresses/${saved.public_id}`, {
-                              method: "PATCH",
-                              body: JSON.stringify(payload),
-                            });
-                          } else {
-                            await accountApi("/api/v1/account/addresses", {
-                              method: "POST",
-                              body: JSON.stringify(payload),
-                            });
-                          }
+                  <div className="flex flex-wrap gap-2">
+                    {!item.is_default_shipping ? (
+                      <button
+                        type="button"
+                        className="h-9 rounded-full border px-3 text-[13px] font-medium text-[#3665f3]"
+                        onClick={async () => {
+                          await accountApi(`/api/v1/account/addresses/${item.public_id}`, {
+                            method: "PATCH",
+                            body: JSON.stringify({ defaultShipping: true }),
+                          });
                           const body = await accountApi<{ data: Address[] }>("/api/v1/account/addresses");
                           setAddresses(body.data);
-                          setAddressSlot(null);
-                          setNotice("Address saved.");
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : "Could not save address");
-                        }
+                        }}
+                      >
+                        Set default shipping
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="h-9 rounded-full border px-3 text-[13px] font-medium text-[#3665f3]"
+                      onClick={() => {
+                        setAddressSlot(item.public_id);
+                        setAddress({
+                          fullName: item.full_name,
+                          phone: item.phone || "",
+                          line1: item.line1,
+                          line2: item.line2 || "",
+                          city: item.city,
+                          region: item.region || "",
+                          postalCode: item.postal_code || "",
+                          country: item.country || "Nepal",
+                          defaultShipping: item.is_default_shipping,
+                          defaultBilling: item.is_default_billing,
+                        });
                       }}
                     >
-                      <input value={address.fullName} onChange={(e) => setAddress({ ...address, fullName: e.target.value })} placeholder="Full name" required className="h-10 rounded-full border px-4" />
-                      <input value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} placeholder="Phone" className="h-10 rounded-full border px-4" />
-                      <input value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} placeholder="Street address" required className="h-10 rounded-full border px-4 sm:col-span-2" />
-                      <input value={address.line2} onChange={(e) => setAddress({ ...address, line2: e.target.value })} placeholder="Apartment, suite (optional)" className="h-10 rounded-full border px-4 sm:col-span-2" />
-                      <input value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} placeholder="City" required className="h-10 rounded-full border px-4" />
-                      <input value={address.region} onChange={(e) => setAddress({ ...address, region: e.target.value })} placeholder="State / region" className="h-10 rounded-full border px-4" />
-                      <input value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value })} placeholder="Postal code" className="h-10 rounded-full border px-4" />
-                      <input value={address.country} onChange={(e) => setAddress({ ...address, country: e.target.value })} placeholder="Country" className="h-10 rounded-full border px-4" />
-                      <div className="flex gap-2 sm:col-span-2">
-                        <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save</button>
-                        {saved ? (
-                          <button
-                            type="button"
-                            className="h-10 rounded-full px-4 text-[14px] text-red-600"
-                            onClick={async () => {
-                              await accountApi(`/api/v1/account/addresses/${saved.public_id}`, { method: "DELETE" });
-                              setAddresses((list) => list.filter((row) => row.public_id !== saved.public_id));
-                              setAddressSlot(null);
-                            }}
-                          >
-                            Remove
-                          </button>
-                        ) : null}
-                      </div>
-                    </form>
-                  ) : null}
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="h-9 rounded-full px-3 text-[13px] font-medium text-red-600"
+                      onClick={async () => {
+                        await accountApi(`/api/v1/account/addresses/${item.public_id}`, { method: "DELETE" });
+                        setAddresses((list) => list.filter((row) => row.public_id !== item.public_id));
+                        if (addressSlot === item.public_id) setAddressSlot(null);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
@@ -997,6 +1210,7 @@ function AccountScreen() {
                   }
                 }}
               >
+                <p className="text-[12.5px] text-[#6b7587]">Enter your current password to choose a new one. No email code is required.</p>
                 <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" className="h-10 w-full rounded-full border px-4" required />
                 <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" minLength={8} className="h-10 w-full rounded-full border px-4" required />
                 <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Save password</button>
@@ -1013,23 +1227,44 @@ function AccountScreen() {
               <p className="text-[14px] text-[#0f1c3f]">Status: <strong>{user.twoFactor ?? "Off"}</strong></p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" className="h-9 rounded-full border px-4 text-[13px]" onClick={async () => {
-                  const body = await accountApi<{ data: { secret?: string; devCode?: string } }>("/api/v1/account/2fa/start", { method: "POST", body: JSON.stringify({ method: "authenticator" }) });
+                  const body = await accountApi<{ data: { secret?: string; uri?: string; devCode?: string } }>("/api/v1/account/2fa/start", { method: "POST", body: JSON.stringify({ method: "authenticator" }) });
                   setSecret(body.data.secret ?? "");
-                  setNotice("Add this key to an authenticator app, then enter the 6-digit code.");
+                  setOtpUri(body.data.uri ?? "");
+                  setNotice("Scan the QR code with Google Authenticator or Authy, then enter the 6-digit code.");
                 }}>Use authenticator app</button>
                 <button type="button" className="h-9 rounded-full border px-4 text-[13px]" onClick={async () => {
                   const body = await accountApi<{ data: { devCode?: string } }>("/api/v1/account/2fa/start", { method: "POST", body: JSON.stringify({ method: "otp" }) });
+                  setOtpUri("");
+                  setSecret("");
                   setNotice(body.data.devCode ? `Your code is ${body.data.devCode}` : "Enter the code we sent.");
                 }}>Use email or phone code</button>
               </div>
+              {otpUri ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt="Authenticator QR code"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(otpUri)}`}
+                  width={180}
+                  height={180}
+                  className="mt-3 rounded-xl border border-[#e3e8f0] bg-white p-2"
+                />
+              ) : null}
               {secret ? <p className="mt-3 break-all rounded-lg bg-[#f6f8fb] px-3 py-2 font-mono text-[13px]">{secret}</p> : null}
               <form className="mt-3 flex max-w-md gap-2" onSubmit={async (e) => {
                 e.preventDefault();
-                await accountApi("/api/v1/account/2fa/confirm", { method: "POST", body: JSON.stringify({ code }) });
-                setNotice("Two-factor is on.");
-                await load();
+                setError(null);
+                try {
+                  await accountApi("/api/v1/account/2fa/confirm", { method: "POST", body: JSON.stringify({ code }) });
+                  setNotice("Two-factor is on.");
+                  setSecret("");
+                  setOtpUri("");
+                  setCode("");
+                  await load();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "That code is not valid");
+                }
               }}>
-                <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6-digit code" className="h-10 flex-1 rounded-full border px-4" />
+                <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" className="h-10 flex-1 rounded-full border px-4" />
                 <button className="h-10 rounded-full bg-[#3665f3] px-4 text-[14px] font-semibold text-white">Confirm</button>
               </form>
             </SecurityField>
@@ -1042,13 +1277,23 @@ function AccountScreen() {
             />
 
             <SecurityField
-              title="Devices you trust"
-              description="Review the devices you've decided to trust."
+              title="Active Sessions"
+              description="Review browsers currently signed in to your account. Revoke a session to sign that device out immediately."
               action="View"
               open={secPanel === "devices"}
               onToggle={() => setSecPanel(secPanel === "devices" ? null : "devices")}
             >
               <SessionList sessions={sessions} setSessions={setSessions} />
+            </SecurityField>
+
+            <SecurityField
+              title="Devices you trust"
+              description="Review the devices you've decided to trust."
+              action="View"
+              open={secPanel === "trusted"}
+              onToggle={() => setSecPanel(secPanel === "trusted" ? null : "trusted")}
+            >
+              <p className="text-[13.5px] text-[#5b6780]">You have not marked any extra devices as trusted.</p>
             </SecurityField>
 
             <SecurityField
@@ -1058,7 +1303,7 @@ function AccountScreen() {
               open={secPanel === "activity"}
               onToggle={() => setSecPanel(secPanel === "activity" ? null : "activity")}
             >
-              <SessionList sessions={sessions} setSessions={setSessions} />
+              <SessionList sessions={sessions} allowRevoke={false} />
             </SecurityField>
 
             <SecurityField
@@ -1114,39 +1359,182 @@ function AccountScreen() {
           <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Selling</h1>
           <p className="mt-1 text-[14px]">Seller level: <strong>{levelLabel[user.sellerLevel] ?? user.sellerLevel}</strong></p>
           <p className="mt-1 text-[13px] text-[#667085]">Positive {user.feedback.positive} · Neutral {user.feedback.neutral} · Negative {user.feedback.negative}</p>
-          <div className="mt-6"><SellerHub /></div>
-          <SellingOrders />
-          <PendingOffers />
-          {!(user.isSeller || user.accountType === "business") ? (
-            <button type="button" className="mt-4 h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white" onClick={async () => {
-              const body = await accountApi<{ data: { twoFactorRequired: boolean } }>("/api/v1/account/seller", { method: "POST", body: "{}" });
-              setNotice(body.data.twoFactorRequired ? "You can sell after two-factor is turned on." : "Seller tools are on.");
-              await load();
-            }}>Start selling</button>
-          ) : <p className="mt-3 text-[14px]">This account can buy and sell.</p>}
-          <h2 className="mt-8 text-[16px] font-bold">Identity check</h2>
-          <p className="mt-1 text-[13px] text-[#667085]">Status: {user.kyc?.status ?? "not submitted"}{user.kyc?.reason ? `, ${user.kyc.reason}` : ""}.</p>
-          <form className="mt-3 space-y-2" onSubmit={async (e) => {
-            e.preventDefault();
-            const data = new FormData(e.currentTarget);
-            const front = data.get("front");
-            const addressProof = data.get("address");
-            if (!(front instanceof File) || !(addressProof instanceof File)) return;
-            await accountApi("/api/v1/account/kyc", {
-              method: "POST",
-              body: JSON.stringify({
-                docType: "citizenship",
-                front: await fileToDataUrl(front),
-                addressProof: await fileToDataUrl(addressProof),
-              }),
-            });
-            setNotice("Documents submitted for review.");
-            await load();
-          }}>
-            <label className="block text-[13px]">ID photo<input name="front" type="file" accept="image/*,.pdf" required className="mt-1 block" /></label>
-            <label className="block text-[13px]">Address proof<input name="address" type="file" accept="image/*,.pdf" required className="mt-1 block" /></label>
-            <button className="h-10 rounded-full bg-[#121826] px-5 text-[14px] font-semibold text-white">Submit for review</button>
-          </form>
+
+          <div className="mt-6 rounded-2xl border border-[#e7eef6] p-5">
+            <h2 className="text-[16px] font-bold text-[#0f1c3f]">Seller application</h2>
+            <p className="mt-1 text-[13px] text-[#667085]">
+              Status: <strong>{kycStatusLabel(user.kyc?.status)}</strong>
+              {user.kyc?.reason ? ` — ${user.kyc.reason}` : ""}
+            </p>
+            {user.kyc?.status === "pending" ? (
+              <p className="mt-3 rounded-xl bg-[#fff8eb] px-4 py-3 text-[13.5px] leading-relaxed text-[#8a5a00]">
+                Your application is <strong>Pending Review</strong>. We review citizenship or passport photos within 1–3 business days and email you when a decision is ready.
+              </p>
+            ) : null}
+            {user.kyc?.status === "approved" ? (
+              <p className="mt-3 text-[14px] text-[#0f1c3f]">This account can buy and sell.</p>
+            ) : null}
+            {user.kyc?.status === "rejected" ? (
+              <div className="mt-3 rounded-xl bg-[#fff5f5] px-4 py-3 text-[13.5px] leading-relaxed text-[#b42318]">
+                <p>
+                  Status: <strong>Requires Additional Documents</strong>
+                </p>
+                {user.kyc.reason ? (
+                  <p className="mt-2">
+                    Rejection reason: <span className="font-medium">{user.kyc.reason}</span>
+                  </p>
+                ) : null}
+                <p className="mt-2 text-[#0f1c3f]">Please re-upload clear photos of your citizenship or passport and submit again.</p>
+              </div>
+            ) : null}
+
+            {!user.kyc || user.kyc.status === "rejected" ? (
+              !kycApplyOpen ? (
+                <button
+                  type="button"
+                  className="mt-4 h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white"
+                  onClick={() => {
+                    setKycForm({
+                      sellerType: user.accountType === "business" ? "business" : "individual",
+                      fullName: fullName(user),
+                      legalName: user.business?.legalName || "",
+                      pan: user.business?.taxId || "",
+                      docType: "citizenship",
+                      docNumber: "",
+                    });
+                    setKycApplyOpen(true);
+                  }}
+                >
+                  {user.kyc?.status === "rejected" ? "Re-upload documents" : "Apply as Seller"}
+                </button>
+              ) : (
+                <form
+                  className="mt-4 grid max-w-[560px] gap-3"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setError(null);
+                    const data = new FormData(e.currentTarget);
+                    const front = data.get("front");
+                    const back = data.get("back");
+                    if (!(front instanceof File) || !front.size) {
+                      setError("Upload a clear photo of the front of your ID.");
+                      return;
+                    }
+                    if (kycForm.docType === "citizenship" && (!(back instanceof File) || !back.size)) {
+                      setError("Upload the back of your Nepali citizenship card.");
+                      return;
+                    }
+                    try {
+                      await accountApi("/api/v1/account/kyc", {
+                        method: "POST",
+                        body: JSON.stringify({
+                          sellerType: kycForm.sellerType,
+                          fullName: kycForm.fullName,
+                          legalName: kycForm.sellerType === "business" ? kycForm.legalName : kycForm.fullName,
+                          pan: kycForm.pan,
+                          docType: kycForm.docType,
+                          docNumber: kycForm.docNumber,
+                          front: await fileToDataUrl(front),
+                          back: back instanceof File && back.size ? await fileToDataUrl(back) : undefined,
+                        }),
+                      });
+                      setKycApplyOpen(false);
+                      setNotice("Application submitted. Status: Pending Review. We review documents within 1–3 business days.");
+                      await load();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Could not submit application");
+                    }
+                  }}
+                >
+                  <fieldset className="flex gap-4 text-[14px] text-[#0f1c3f]">
+                    <legend className="sr-only">Account type</legend>
+                    {(["individual", "business"] as const).map((type) => (
+                      <label key={type} className="flex items-center gap-2 capitalize">
+                        <input
+                          type="radio"
+                          name="sellerType"
+                          value={type}
+                          checked={kycForm.sellerType === type}
+                          onChange={() => setKycForm({ ...kycForm, sellerType: type })}
+                          className="accent-[#3665f3]"
+                        />
+                        {type}
+                      </label>
+                    ))}
+                  </fieldset>
+                  {kycForm.sellerType === "business" ? (
+                    <input
+                      value={kycForm.legalName}
+                      onChange={(e) => setKycForm({ ...kycForm, legalName: e.target.value })}
+                      placeholder="Business legal name"
+                      aria-label="Business legal name"
+                      required
+                      className="h-10 rounded-full border px-4"
+                    />
+                  ) : (
+                    <input
+                      value={kycForm.fullName}
+                      onChange={(e) => setKycForm({ ...kycForm, fullName: e.target.value })}
+                      placeholder="Full name"
+                      aria-label="Full name"
+                      required
+                      className="h-10 rounded-full border px-4"
+                    />
+                  )}
+                  <input
+                    value={kycForm.pan}
+                    onChange={(e) => setKycForm({ ...kycForm, pan: e.target.value })}
+                    placeholder="PAN number"
+                    aria-label="PAN number"
+                    required
+                    className="h-10 rounded-full border px-4"
+                  />
+                  <select
+                    value={kycForm.docType}
+                    onChange={(e) => setKycForm({ ...kycForm, docType: e.target.value })}
+                    aria-label="ID type"
+                    className="h-10 rounded-full border px-4"
+                  >
+                    <option value="citizenship">Nepali Citizenship</option>
+                    <option value="passport">Passport</option>
+                  </select>
+                  <input
+                    value={kycForm.docNumber}
+                    onChange={(e) => setKycForm({ ...kycForm, docNumber: e.target.value })}
+                    placeholder={kycForm.docType === "passport" ? "Passport number" : "Citizenship number"}
+                    aria-label={kycForm.docType === "passport" ? "Passport number" : "Citizenship number"}
+                    required
+                    className="h-10 rounded-full border px-4"
+                  />
+                  <label className="block text-[13px] text-[#0f1c3f]">
+                    {kycForm.docType === "passport" ? "Passport photo" : "Citizenship (Front)"}
+                    <input name="front" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required aria-label="Citizenship front" className="mt-1 block text-[13px]" />
+                  </label>
+                  {kycForm.docType === "citizenship" ? (
+                    <label className="block text-[13px] text-[#0f1c3f]">
+                      Citizenship (Back)
+                      <input name="back" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required aria-label="Citizenship back" className="mt-1 block text-[13px]" />
+                    </label>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Submit application</button>
+                    <button type="button" className="h-10 rounded-full px-4 text-[14px] text-[#5b6780]" onClick={() => setKycApplyOpen(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )
+            ) : null}
+          </div>
+
+          {user.kyc?.status === "approved" || user.isSeller ? (
+            <>
+              <div className="mt-6"><SellerHub /></div>
+              <SellingOrders />
+              <PendingOffers />
+            </>
+          ) : null}
+
           <h2 className="mt-8 text-[16px] font-bold">Leave feedback for a seller</h2>
           <form className="mt-2 flex flex-wrap gap-2" onSubmit={async (e) => {
             e.preventDefault();
@@ -1169,9 +1557,12 @@ function AccountScreen() {
 
       {tab === "following" && <FollowedSellers />}
 
+      {tab === "standing" && (
+        <Standing user={user} appeal={appeal} setAppeal={setAppeal} onDone={() => load()} />
+      )}
+
       {tab === "activity" && (
         <AccountSection title="Activity" body="Bids, Best Offers, saved searches, and account standing.">
-          <Standing user={user} appeal={appeal} setAppeal={setAppeal} onDone={() => load()} />
           <BiddingActivity />
           <PendingOffers />
           <SavedSearchList />
@@ -1528,36 +1919,78 @@ function BiddingActivity() {
 }
 
 function Standing({ user, appeal, setAppeal, onDone }: { user: User; appeal: string; setAppeal: (v: string) => void; onDone: () => void }) {
-  const [rows, setRows] = useState<{ public_id: string; message: string; status: string; reason: string | null }[]>([]);
+  const [rows, setRows] = useState<{ public_id: string; message: string; status: string; reason: string | null; evidence_url?: string | null }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const standing = user.standing;
+  const restricted = Boolean(standing?.canAppeal) || user.status === "restricted" || user.status === "suspended";
   useEffect(() => {
-    accountApi<{ data: { public_id: string; message: string; status: string; reason: string | null }[] }>("/api/v1/account/appeals").then((b) => setRows(b.data)).catch(() => undefined);
+    accountApi<{ data: { public_id: string; message: string; status: string; reason: string | null; evidence_url?: string | null }[] }>("/api/v1/account/appeals").then((b) => setRows(b.data)).catch(() => undefined);
   }, []);
+  const until = standing?.untilAt ? new Date(standing.untilAt).toLocaleString() : null;
   return (
     <section className="nexlo-card p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[16px] font-bold text-[#0f1c3f]">Account standing</h2>
-        <StatusPill status={user.status} />
+        <div>
+          <h1 className="text-[22px] font-extrabold text-[#0f1c3f]">Account standing</h1>
+          <p className="mt-1 text-[13px] text-[#6b7587]">Warnings, temporary suspensions, and appeals.</p>
+        </div>
+        <StatusPill status={standing?.kind || user.status} />
       </div>
-      <p className="mt-1 text-[13px] text-[#6b7587]">If staff restrict or suspend the account, you can appeal.</p>
-      {user.status === "restricted" || user.status === "suspended" ? (
+
+      {restricted ? (
+        <div className="mt-4 rounded-2xl bg-[#fff5f5] px-4 py-3 text-[13.5px] leading-relaxed text-[#b42318]">
+          <p className="font-semibold text-[#0f1c3f]">{standing?.kind || (user.status === "restricted" ? "Temporary Suspension" : "Restriction")}</p>
+          {standing?.reason ? <p className="mt-1">Reason: {standing.reason}</p> : null}
+          {until ? <p className="mt-1">Until {until}</p> : null}
+          <p className="mt-2 text-[#0f1c3f]">
+            {standing?.limits.canBuy && standing?.limits.canSell
+              ? "This is a warning. Marketplace access stays on, but further issues can lead to a suspension."
+              : "Feature limits: you cannot buy, sell, or place bids until this is lifted."}
+          </p>
+        </div>
+      ) : (
+        <p className="mt-4 text-[14px] text-[#0f1c3f]">This account is in good standing.</p>
+      )}
+
+      {restricted ? (
         <form
-          className="mt-4 space-y-2"
+          className="mt-4 grid max-w-[560px] gap-3"
           onSubmit={async (e) => {
             e.preventDefault();
-            await accountApi("/api/v1/account/appeals", { method: "POST", body: JSON.stringify({ message: appeal }) });
-            setAppeal("");
-            const body = await accountApi<{ data: typeof rows }>("/api/v1/account/appeals");
-            setRows(body.data);
-            onDone();
+            setError(null);
+            const data = new FormData(e.currentTarget);
+            const file = data.get("evidence");
+            try {
+              await accountApi("/api/v1/account/appeals", {
+                method: "POST",
+                body: JSON.stringify({
+                  message: appeal,
+                  evidence: file instanceof File && file.size ? await fileToDataUrl(file) : undefined,
+                }),
+              });
+              setAppeal("");
+              const body = await accountApi<{ data: typeof rows }>("/api/v1/account/appeals");
+              setRows(body.data);
+              onDone();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Could not submit appeal");
+            }
           }}
         >
+          {error ? <p className="text-[13px] text-[#b42318]">{error}</p> : null}
           <textarea
             value={appeal}
             onChange={(e) => setAppeal(e.target.value)}
-            placeholder="Why should this be reviewed?"
+            aria-label="Appeal explanation"
+            placeholder="Explain why this restriction should be lifted"
+            required
             className="nexlo-field h-auto min-h-24 rounded-2xl py-3"
           />
-          <button type="submit" className="nexlo-btn nexlo-btn-blue">
+          <label className="block text-[13px] text-[#0f1c3f]">
+            Evidence (photo or PDF)
+            <input name="evidence" type="file" accept="image/*,.pdf" aria-label="Appeal evidence" className="mt-1 block text-[13px]" />
+          </label>
+          <button type="submit" className="nexlo-btn nexlo-btn-blue w-fit">
             Submit appeal
           </button>
         </form>

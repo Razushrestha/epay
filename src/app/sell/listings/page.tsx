@@ -95,6 +95,11 @@ export default function SellerListingsPage() {
   });
 
   useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab") || new URLSearchParams(window.location.search).get("status");
+    if (tab === "draft" || tab === "drafts") setFilter("draft");
+  }, []);
+
+  useEffect(() => {
     loadListings();
     loadAnalytics();
   }, [filter]);
@@ -152,10 +157,28 @@ export default function SellerListingsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to end listing");
+      setFilter("ended");
       loadListings();
       loadAnalytics();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not end listing");
+    }
+  }
+
+  async function handleRelistListing(listingId: number) {
+    try {
+      const token = accountApi.getToken();
+      if (!token) return;
+      const res = await fetch(`${apiBase}/api/v1/listings/${listingId}/relist`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to relist listing");
+      setFilter("active");
+      loadListings();
+      loadAnalytics();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not relist listing");
     }
   }
 
@@ -212,7 +235,10 @@ export default function SellerListingsPage() {
           <button type="button" onClick={() => handlePublishListing(listing.id)} className="font-semibold text-[#3665f3]">Publish</button>
         ) : null}
         {listing.status === "active" ? (
-          <button type="button" onClick={() => handleEndListing(listing.id)} className="font-semibold text-[#8a6d1f]">End</button>
+          <button type="button" onClick={() => handleEndListing(listing.id)} className="font-semibold text-[#8a6d1f]">End Listing</button>
+        ) : null}
+        {listing.status === "ended" || listing.status === "sold" ? (
+          <button type="button" onClick={() => handleRelistListing(listing.id)} className="font-semibold text-[#16a34a]">Relist</button>
         ) : null}
         <Link href={`/sell/edit/${listing.id}`} className="font-semibold text-[#3665f3]">Edit</Link>
         <button type="button" onClick={() => handleDeleteListing(listing.id)} className="font-semibold text-[#e53238]">Delete</button>
@@ -342,7 +368,7 @@ export default function SellerListingsPage() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {visible.map((listing) => (
                   <article key={listing.id} className="rounded-2xl border border-[#e7eef6] p-3">
-                    <Link href={`/listing/${listing.id}`} className="block overflow-hidden rounded-xl bg-[#f4f7fb]">
+                    <Link href={listing.status === "draft" ? `/sell/edit/${listing.id}` : `/listing/${listing.id}`} className="block overflow-hidden rounded-xl bg-[#f4f7fb]">
                       {listing.primary_photo ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={listing.primary_photo} alt="" className="h-40 w-full object-cover" />
@@ -352,7 +378,7 @@ export default function SellerListingsPage() {
                     </Link>
                     <div className="mt-3 flex items-start justify-between gap-2">
                       <div>
-                        <Link href={`/listing/${listing.id}`} className="text-[14px] font-bold text-[#0f1c3f] hover:text-[#3665f3]">
+                        <Link href={listing.status === "draft" ? `/sell/edit/${listing.id}` : `/listing/${listing.id}`} className="text-[14px] font-bold text-[#0f1c3f] hover:text-[#3665f3]">
                           {prettyTitle(listing.title)}
                         </Link>
                         <p className="text-[12px] text-[#6b7587]">{listing.category_name}</p>
@@ -394,7 +420,7 @@ export default function SellerListingsPage() {
                               <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#f4f7fb] text-[11px] text-[#8a94a6]">No photo</span>
                             )}
                             <div>
-                              <Link href={`/listing/${listing.id}`} className="text-[14px] font-semibold text-[#0f1c3f] hover:text-[#3665f3]">
+                              <Link href={listing.status === "draft" ? `/sell/edit/${listing.id}` : `/listing/${listing.id}`} className="text-[14px] font-semibold text-[#0f1c3f] hover:text-[#3665f3]">
                                 {prettyTitle(listing.title)}
                               </Link>
                               <div className="text-[12px] text-[#6b7587]">{listing.category_name}</div>

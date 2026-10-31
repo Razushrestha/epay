@@ -109,9 +109,9 @@ export default function AdvancedSearchPage() {
                 Sort
                 <select name="sort" className="nexlo-field h-11 w-[200px] font-normal">
                   <option value="best_match">Best Match</option>
-                  <option value="newest">Newest</option>
-                  <option value="price_low">Price: low to high</option>
-                  <option value="price_high">Price: high to low</option>
+                  <option value="newest">Newest First</option>
+                  <option value="price_low">Price: Low to High</option>
+                  <option value="price_high">Price: High to Low</option>
                   <option value="ending_soon">Ending soon</option>
                 </select>
               </label>

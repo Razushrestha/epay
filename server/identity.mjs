@@ -1,4 +1,5 @@
 import {
+  createCipheriv,
   createHash,
   createHmac,
   randomBytes,
@@ -6,13 +7,14 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
-import { hashPassword, verifyPassword } from "./passwords.mjs";
+import { hashPassword, passwordPolicyError, verifyPassword } from "./passwords.mjs";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool, initDb } from "./db.mjs";
 import { rateLimit, RateLimitConfig, clearRateLimit } from "./security/rate-limit.mjs";
 import { deliverCode, maskDestination } from "./mail.mjs";
+import { nepalMobileDigits, normalizePhone, phoneLookupKeys } from "./phones.mjs";
 import { handleStaffExtras } from "./staff.mjs";
 import { cdnify } from "./cdn.mjs";
 import { evaluateUser, recordDevice } from "./trust.mjs";
@@ -38,8 +40,12 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
+const appealsDir = join(__dirname, "..", ".data", "appeals");
+mkdirSync(appealsDir, { recursive: true });
 const API = "/api/v1";
 const devCodes = process.env.NODE_ENV !== "production";
+const VERIFY_OTP_SECONDS = 30;
+const VERIFY_RESEND_SECONDS = 30;
 
 /** Personal and business storefront accounts skip OTP/2FA so QA can sign in with a password. Staff still use 2FA. */
 function skipStorefrontOtp(user) {
@@ -133,17 +139,8 @@ function looksLikeEmail(value) {
   return value.includes("@");
 }
 
-function normalizePhone(value) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
-  const plus = raw.startsWith("+");
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length < 8) return "";
-  return plus ? `+${digits}` : `+${digits}`;
-}
-
 async function findUser(identifier) {
-  const key = String(identifier ?? "").trim().toLowerCase();
+  const { key, e164, last10 } = phoneLookupKeys(identifier);
   const { rows } = await (await db()).query(
     `SELECT u.*, p.display_name, p.first_name, p.last_name, p.country, p.bio, p.avatar_url, p.buyer_only,
             b.legal_name, b.registration_country, b.tax_id, b.website,
@@ -153,8 +150,15 @@ async function findUser(identifier) {
      LEFT JOIN business_profiles b ON b.user_id = u.id
      LEFT JOIN two_factor t ON t.user_id = u.id
      WHERE u.deleted_at IS NULL
-       AND (lower(u.email) = $1 OR u.phone = $1 OR lower(u.username) = $1 OR u.public_id::text = $1)`,
-    [key],
+       AND (
+         lower(u.email) = $1
+         OR u.phone = $1
+         OR ($2 <> '' AND u.phone = $2)
+         OR ($3 <> '' AND right(regexp_replace(COALESCE(u.phone, ''), '\\D', '', 'g'), 10) = $3)
+         OR lower(u.username) = $1
+         OR u.public_id::text = $1
+       )`,
+    [key, e164, last10],
   );
   return rows[0] ?? null;
 }
@@ -187,6 +191,35 @@ async function enableSeller(userId) {
   await (await db()).query(`UPDATE user_profiles SET buyer_only = FALSE WHERE user_id = $1`, [userId]);
 }
 
+function kycStatusLabel(status) {
+  if (status === "pending") return "Pending Review";
+  if (status === "approved") return "Approved";
+  if (status === "rejected") return "Requires Additional Documents";
+  return status || "Not submitted";
+}
+
+function presentAdminKyc(row) {
+  const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || row.display_name || row.email;
+  return {
+    public_id: row.public_id,
+    applicationId: row.public_id,
+    doc_type: row.doc_type,
+    status: row.status,
+    statusLabel: kycStatusLabel(row.status),
+    rejection_reason: row.rejection_reason,
+    created_at: row.created_at,
+    reviewed_at: row.reviewed_at || null,
+    email: row.email,
+    user_id: row.user_id,
+    display_name: name,
+    first_name: row.first_name || null,
+    last_name: row.last_name || null,
+    pan: row.tax_id || null,
+    is_seller: Boolean(row.is_seller),
+    files: signedKycFiles(row.public_id, { front: row.front_url, back: row.back_url, selfie: row.selfie_url }),
+  };
+}
+
 async function ensureFollowsTable() {
   await (await db()).query(`
     CREATE TABLE IF NOT EXISTS seller_follows (
@@ -198,7 +231,66 @@ async function ensureFollowsTable() {
   `);
 }
 
-function publicUser(user, score, kyc) {
+async function ensureStandingSchema() {
+  await (await db()).query(`ALTER TABLE appeals ADD COLUMN IF NOT EXISTS evidence_url TEXT`);
+  await (await db()).query(`
+    DO $$ BEGIN
+      ALTER TABLE account_actions DROP CONSTRAINT IF EXISTS account_actions_action_check;
+      ALTER TABLE account_actions ADD CONSTRAINT account_actions_action_check
+        CHECK (action IN ('warn', 'restrict', 'suspend', 'restore'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+  `);
+}
+
+async function latestAction(userId) {
+  const { rows } = await (await db()).query(
+    `SELECT action, reason, until_at, created_at FROM account_actions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [userId],
+  );
+  return rows[0] ?? null;
+}
+
+function standingKind(action) {
+  if (action === "warn") return "Warning";
+  if (action === "restrict") return "Temporary Suspension";
+  if (action === "suspend") return "Suspension";
+  return null;
+}
+
+function presentStanding(status, action) {
+  const blocked = status === "restricted" || status === "suspended";
+  const kind = standingKind(action?.action);
+  const restored = action?.action === "restore";
+  return {
+    status,
+    action: restored ? null : action?.action || null,
+    kind: restored ? null : kind,
+    reason: restored ? null : action?.reason || null,
+    untilAt: restored ? null : action?.until_at || null,
+    limits: {
+      canBuy: !blocked,
+      canSell: !blocked,
+      canBid: !blocked,
+    },
+    canAppeal: Boolean((blocked || action?.action === "warn") && !restored),
+  };
+}
+
+function saveAppealFile(userId, dataUrl) {
+  const match = String(dataUrl).match(/^data:([\w/+.-]+);base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) return null;
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length < 32 || bytes.length > 5_000_000) return null;
+  const ext = match[1].includes("png") ? "png" : match[1].includes("pdf") ? "pdf" : "jpg";
+  const dir = join(appealsDir, String(userId));
+  mkdirSync(dir, { recursive: true });
+  const file = `evidence-${randomUUID()}.${ext}`;
+  writeFileSync(join(dir, file), bytes);
+  return file;
+}
+
+function publicUser(user, score, kyc, action) {
   return {
     id: user.public_id,
     username: user.username,
@@ -234,21 +326,29 @@ function publicUser(user, score, kyc) {
       negative: Number(score.negative_count),
     },
     kyc: kyc
-      ? { id: kyc.public_id, type: kyc.doc_type, status: kyc.status, reason: kyc.rejection_reason }
+      ? {
+          id: kyc.public_id,
+          type: kyc.doc_type,
+          status: kyc.status,
+          statusLabel: kycStatusLabel(kyc.status),
+          reason: kyc.rejection_reason,
+        }
       : null,
     createdAt: user.created_at,
+    standing: presentStanding(user.status, action),
   };
 }
 
 async function loadPublic(user) {
-  const [score, kyc, social, consents] = await Promise.all([
+  const [score, kyc, social, consents, action] = await Promise.all([
     feedbackFor(user.id),
     latestKyc(user.id),
     (await db()).query(`SELECT provider FROM social_accounts WHERE user_id = $1`, [user.id]),
     listConsents(user.id).catch(() => null),
+    latestAction(user.id),
   ]);
   return {
-    ...publicUser(user, score, kyc),
+    ...publicUser(user, score, kyc, action),
     social: social.rows.map((row) => row.provider),
     consents: consents?.currentAccepted ?? null,
     policyVersions: consents?.current ?? null,
@@ -265,7 +365,19 @@ function deliveryFields(delivery, code) {
   };
 }
 
-async function issueCode(user, purpose, destination, channel) {
+function codeTtlSeconds(purpose) {
+  return purpose === "verify" ? VERIFY_OTP_SECONDS : 600;
+}
+
+function appOrigin(req) {
+  const env = String(process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_URL || process.env.WEBAUTHN_ORIGIN || "").replace(/\/$/, "");
+  if (env) return env.replace(/:4000$/, ":3000");
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "localhost:3000").split(",")[0].trim();
+  const proto = String(req.headers["x-forwarded-proto"] || "http").split(",")[0].trim();
+  return `${proto}://${host}`.replace(/:4000$/, ":3000");
+}
+
+async function issueCode(user, purpose, destination, channel, extras = {}) {
   const code = String(randomInt(100000, 1000000));
   const pool = await db();
   await pool.query(
@@ -276,10 +388,10 @@ async function issueCode(user, purpose, destination, channel) {
   );
   await pool.query(
     `INSERT INTO verification_codes (user_id, channel, purpose, destination, code_hash, expires_at)
-     VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '10 minutes')`,
-    [user.id, channel, purpose, destination, hashCode(code)],
+     VALUES ($1, $2, $3, $4, $5, NOW() + ($6 * INTERVAL '1 second'))`,
+    [user.id, channel, purpose, destination, hashCode(code), codeTtlSeconds(purpose)],
   );
-  const delivery = await deliverCode(channel, destination, code, purpose);
+  const delivery = await deliverCode(channel, destination, code, purpose, extras);
   if (!delivery?.sent) {
     console.error("[auth] code email did not send", purpose, delivery?.userMessage || delivery?.skipped);
   }
@@ -291,38 +403,98 @@ async function consumeCode(userId, purpose, code) {
   const { rows } = await (await db()).query(
     `SELECT id, code_hash, attempts, expires_at, verified_at
      FROM verification_codes
-     WHERE user_id = $1 AND purpose = $2 AND verified_at IS NULL AND expires_at > NOW()
+     WHERE user_id = $1 AND purpose = $2 AND verified_at IS NULL
      ORDER BY created_at DESC`,
     [userId, purpose],
   );
   if (!rows.length) return "missing";
-  const unlocked = rows.filter((row) => row.attempts < 5);
-  if (!unlocked.length) return "locked";
-  const match = unlocked.find((row) => codesMatch(given, row.code_hash));
-  if (!match) {
-    await (await db()).query(`UPDATE verification_codes SET attempts = attempts + 1 WHERE id = $1`, [unlocked[0].id]);
-    return "invalid";
+  const now = Date.now();
+  const live = (row) => new Date(row.expires_at).getTime() > now;
+  const match = rows.find((row) => codesMatch(given, row.code_hash));
+  if (match) {
+    if (!live(match)) return "expired";
+    if (match.attempts >= 5) return "locked";
+    await (await db()).query(`UPDATE verification_codes SET verified_at = NOW() WHERE id = $1`, [match.id]);
+    return "ok";
   }
-  await (await db()).query(`UPDATE verification_codes SET verified_at = NOW() WHERE id = $1`, [match.id]);
-  return "ok";
+  const active = rows.filter(live);
+  if (!active.length) return "expired";
+  const unlocked = active.filter((row) => row.attempts < 5);
+  if (!unlocked.length) return "locked";
+  await (await db()).query(`UPDATE verification_codes SET attempts = attempts + 1 WHERE id = $1`, [unlocked[0].id]);
+  return "invalid";
+}
+
+async function verifyResendWait(userId) {
+  const { rows } = await (await db()).query(
+    `SELECT created_at FROM verification_codes
+     WHERE user_id = $1 AND purpose = 'verify'
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId],
+  );
+  if (!rows[0]) return 0;
+  const waitMs = VERIFY_RESEND_SECONDS * 1000 - (Date.now() - new Date(rows[0].created_at).getTime());
+  return waitMs > 0 ? Math.ceil(waitMs / 1000) : 0;
 }
 
 function clientMeta(req, remember) {
   const days = remember ? 30 : 1;
+  const forwarded = String(req.headers["x-forwarded-for"] ?? req.headers["x-real-ip"] ?? req.socket?.remoteAddress ?? "");
   return {
     agent: String(req.headers["user-agent"] ?? "Unknown device").slice(0, 240),
-    ip: String(req.headers["x-forwarded-for"] ?? req.socket?.remoteAddress ?? "").slice(0, 64),
+    ip: forwarded.split(",")[0].trim().slice(0, 64),
     expires: new Date(Date.now() + days * 86400000).toISOString(),
   };
 }
 
+function jwtSecret() {
+  return String(process.env.JWT_SECRET || process.env.SESSION_SECRET || "nexlo-dev-jwt");
+}
+
+function signSessionJwt({ sub, sid, exp }) {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub,
+      sid,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(new Date(exp).getTime() / 1000),
+    }),
+  ).toString("base64url");
+  const data = `${header}.${payload}`;
+  const sig = createHmac("sha256", jwtSecret()).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+
+function readSessionJwt(token) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3) return null;
+  const data = `${parts[0]}.${parts[1]}`;
+  const expected = createHmac("sha256", jwtSecret()).update(data).digest("base64url");
+  const a = Buffer.from(parts[2]);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 async function openSession(user, req, remember) {
-  const token = randomBytes(32).toString("hex");
+  const sessionId = randomUUID();
   const meta = clientMeta(req, remember);
+  const token = signSessionJwt({
+    sub: user.public_id || user.id,
+    sid: sessionId,
+    exp: meta.expires,
+  });
   await (await db()).query(
     `INSERT INTO auth_sessions (public_id, user_id, token_hash, user_agent, ip, remember, expires_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [randomUUID(), user.id, sha256(token), meta.agent, meta.ip, Boolean(remember), meta.expires],
+    [sessionId, user.id, sha256(token), meta.agent, meta.ip, Boolean(remember), meta.expires],
   );
   return token;
 }
@@ -331,6 +503,7 @@ async function sessionUser(req) {
   const header = String(req.headers.authorization ?? "");
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
   if (!token) return null;
+  if (token.includes(".") && !readSessionJwt(token)) return null;
   const { rows } = await (await db()).query(
     `SELECT s.id AS session_id, s.expires_at, s.revoked_at, u.*,
             p.display_name, p.first_name, p.last_name, p.country, p.bio, p.avatar_url, p.buyer_only,
@@ -440,11 +613,25 @@ async function recomputeLevel(sellerId) {
   return level;
 }
 
+function kycCryptoKey() {
+  return createHash("sha256")
+    .update(process.env.KYC_URL_SECRET || process.env.SESSION_SECRET || process.env.JWT_SECRET || "nexlo-kyc-dev")
+    .digest();
+}
+
+function encryptDocNumber(value) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", kycCryptoKey(), iv);
+  const enc = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `v1:${iv.toString("base64url")}:${tag.toString("base64url")}:${enc.toString("base64url")}`;
+}
+
 function saveKycFile(userId, name, dataUrl) {
   const match = String(dataUrl).match(/^data:([\w/+.-]+);base64,([A-Za-z0-9+/=]+)$/);
   if (!match) return null;
   const bytes = Buffer.from(match[2], "base64");
-  if (bytes.length < 32 || bytes.length > 1_500_000) return null;
+  if (bytes.length < 32 || bytes.length > 5_000_000) return null;
   const ext = match[1].includes("png") ? "png" : match[1].includes("pdf") ? "pdf" : "jpg";
   const dir = join(kycDir, String(userId));
   mkdirSync(dir, { recursive: true });
@@ -504,7 +691,6 @@ async function finishSocial(req, res, json, provider, sub, email, name) {
      ON CONFLICT (provider, provider_user_id) DO NOTHING`,
     [user.id, provider, sub, email || user.email],
   );
-  if (user.status === "suspended") return json(req, res, 403, { error: "This account is suspended" });
   if (!skipStorefrontOtp(user) && (user.is_seller || user.is_staff) && !user.two_factor_enabled) {
     const challengeToken = await createChallenge(user, "enroll_2fa", 20);
     return json(req, res, 200, { step: "enroll", challengeToken });
@@ -523,6 +709,7 @@ export async function handleIdentity(req, res, ctx) {
     pathname.startsWith(`${API}/members`);
   if (!inIdentity) return false;
   await ensureM1Tables();
+  await ensureStandingSchema();
   if (await handleM1Public(req, res, ctx)) return true;
   await promoteAdmin();
 
@@ -530,17 +717,22 @@ export async function handleIdentity(req, res, ctx) {
     // Rate limit check
     const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_REGISTER);
     if (rateLimitResult) {
-      if (rateLimitResult.headers) {
-        Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
-          res.setHeader(key, value);
-        });
-      }
-      return json(req, res, rateLimitResult.status, rateLimitResult.body);
+      return json(req, res, rateLimitResult.status, rateLimitResult.body, rateLimitResult.headers);
     }
 
     const body = await readJson(req);
     const email = String(body.email ?? "").trim().toLowerCase() || null;
-    const phone = String(body.phone ?? "").replace(/\s/g, "") || null;
+    const rawPhone = String(body.phone ?? "").replace(/\s/g, "") || null;
+    let phone = null;
+    if (rawPhone) {
+      const local = nepalMobileDigits(rawPhone);
+      if (!local) {
+        return json(req, res, 400, {
+          error: "Enter a valid 10-digit Nepal mobile number starting with 97 or 98.",
+        });
+      }
+      phone = `+977${local}`;
+    }
     const password = String(body.password ?? "");
     const accountType = body.accountType === "business" ? "business" : "individual";
     const firstName = String(body.firstName ?? "").trim() || null;
@@ -549,16 +741,34 @@ export async function handleIdentity(req, res, ctx) {
     const country = String(body.country ?? "").trim() || null;
     if (!email && !phone) return json(req, res, 400, { error: "Email or phone is required" });
     if (email && !email.includes("@")) return json(req, res, 400, { error: "Enter a valid email" });
-    if (password.length < 8) return json(req, res, 400, { error: "Password must be at least 8 characters" });
+    const passwordError = passwordPolicyError(password);
+    if (passwordError) return json(req, res, 400, { error: passwordError });
+    if (email) {
+      const takenEmail = await (await db()).query(
+        `SELECT 1 FROM users WHERE lower(email) = $1 AND deleted_at IS NULL LIMIT 1`,
+        [email],
+      );
+      if (takenEmail.rows[0]) return json(req, res, 409, { error: "Email already registered" });
+    }
+    if (phone) {
+      const takenPhone = await (await db()).query(
+        `SELECT 1 FROM users
+         WHERE deleted_at IS NULL
+           AND right(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 10) = $1
+         LIMIT 1`,
+        [nepalMobileDigits(phone)],
+      );
+      if (takenPhone.rows[0]) return json(req, res, 409, { error: "Phone already registered" });
+    }
     const client = await (await db()).connect();
     try {
       await client.query("BEGIN");
       const isSeller = accountType === "business";
       const { rows } = await client.query(
         `INSERT INTO users (public_id, email, phone, password_hash, status, account_type, is_seller, email_verified_at, phone_verified_at)
-         VALUES ($1, $2, $3, $4, 'active', $5, $6, $7, $8)
+         VALUES ($1, $2, $3, $4, 'pending', $5, $6, NULL, NULL)
          RETURNING id, public_id, email, phone`,
-        [randomUUID(), email, phone, await hashPassword(password), accountType, isSeller, email ? new Date() : null, phone ? new Date() : null],
+        [randomUUID(), email, phone, await hashPassword(password), accountType, isSeller],
       );
       const user = rows[0];
       await client.query(
@@ -588,15 +798,29 @@ export async function handleIdentity(req, res, ctx) {
       }
       await recordDevice(user.id, body.deviceHash).catch(() => {});
       const full = await findUser(email || phone);
-      const token = await openSession(full, req, true);
+      const destination = email || phone;
+      const channel = email ? "email" : "phone";
+      const issued = await issueCode(full, "verify", destination, channel);
       return json(req, res, 201, {
-        token,
-        user: await loadPublic(full),
-        data: { id: user.public_id, skipVerify: true, review: Boolean(risk?.flagged) },
+        data: {
+          id: user.public_id,
+          skipVerify: false,
+          destination,
+          channel,
+          review: Boolean(risk?.flagged),
+          expiresIn: VERIFY_OTP_SECONDS,
+          resendAfter: VERIFY_RESEND_SECONDS,
+          ...deliveryFields(issued.delivery, issued.code),
+        },
       });
     } catch (err) {
       await client.query("ROLLBACK");
-      if (err.code === "23505") return json(req, res, 409, { error: "That email or phone is already registered" });
+      if (err.code === "23505") {
+        const constraint = String(err.constraint || err.detail || "");
+        if (constraint.includes("email")) return json(req, res, 409, { error: "Email already registered" });
+        if (constraint.includes("phone")) return json(req, res, 409, { error: "Phone already registered" });
+        return json(req, res, 409, { error: "Email already registered" });
+      }
       throw err;
     } finally {
       client.release();
@@ -617,13 +841,24 @@ export async function handleIdentity(req, res, ctx) {
     const body = await readJson(req);
     const user = await findUser(body.identifier);
     if (!user) return json(req, res, 200, { data: { sent: true, destinationMasked: maskDestination(body.identifier) } });
+    const wait = await verifyResendWait(user.id);
+    if (wait > 0) {
+      res.setHeader("Retry-After", String(wait));
+      return json(req, res, 429, { error: "Wait before requesting a new code", retryAfter: wait });
+    }
     const identifier = String(body.identifier ?? "").trim();
     const channel = looksLikeEmail(identifier) && user.email ? "email" : user.phone && !looksLikeEmail(identifier) ? "phone" : user.email ? "email" : "phone";
     const destination = channel === "phone" ? user.phone : user.email;
     if (!destination) return json(req, res, 400, { error: "This account has no email or phone" });
     const issued = await issueCode(user, "verify", destination, channel);
     return json(req, res, 200, {
-      data: { destination, channel, ...deliveryFields(issued.delivery, issued.code) },
+      data: {
+        destination,
+        channel,
+        expiresIn: VERIFY_OTP_SECONDS,
+        resendAfter: VERIFY_RESEND_SECONDS,
+        ...deliveryFields(issued.delivery, issued.code),
+      },
     });
   }
 
@@ -631,49 +866,41 @@ export async function handleIdentity(req, res, ctx) {
     // Rate limit check
     const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_VERIFY);
     if (rateLimitResult) {
-      if (rateLimitResult.headers) {
-        Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
-          res.setHeader(key, value);
-        });
-      }
-      return json(req, res, rateLimitResult.status, rateLimitResult.body);
+      return json(req, res, rateLimitResult.status, rateLimitResult.body, rateLimitResult.headers);
     }
 
     const body = await readJson(req);
     const user = await findUser(body.identifier);
     if (!user) return json(req, res, 400, { error: "Account not found" });
     const result = await consumeCode(user.id, "verify", body.code);
+    if (result === "expired") return json(req, res, 400, { error: "Code expired" });
     if (result !== "ok") return json(req, res, 400, { error: "That code is not valid" });
     const channel = looksLikeEmail(String(body.identifier)) ? "email_verified_at" : "phone_verified_at";
     await (await db()).query(
       `UPDATE users SET status = 'active', ${channel} = NOW(), updated_at = NOW() WHERE id = $1`,
       [user.id],
     );
-    user.status = "active";
-    const token = await openSession(user, req, true);
-    return json(req, res, 200, { token, user: await loadPublic(user) });
+    const verified = (await findUser(body.identifier)) ?? user;
+    verified.status = "active";
+    const token = await openSession(verified, req, true);
+    return json(req, res, 200, { token, user: await loadPublic(verified) });
   }
 
   if (pathname === `${API}/auth/login` && method === "POST") {
-    // Rate limit check
-    const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_LOGIN);
+    const body = await readJson(req);
+    const accountKey = body.identifier ?? body.email;
+    const rateLimitResult = rateLimit(req, RateLimitConfig.AUTH_LOGIN, accountKey);
     if (rateLimitResult) {
-      if (rateLimitResult.headers) {
-        Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
-          res.setHeader(key, value);
-        });
-      }
-      return json(req, res, rateLimitResult.status, rateLimitResult.body);
+      return json(req, res, rateLimitResult.status, rateLimitResult.body, rateLimitResult.headers);
     }
 
-    const body = await readJson(req);
-    const user = await findUser(body.identifier ?? body.email);
+    const user = await findUser(accountKey);
     if (!user || !(await verifyPassword(String(body.password ?? ""), user.password_hash))) {
-      return json(req, res, 401, { error: "Invalid email, phone, or password" });
+      return json(req, res, 401, { error: "Invalid email or password" });
     }
     
     // Clear rate limit on successful authentication
-    clearRateLimit(req);
+    clearRateLimit(req, accountKey);
     
     await refreshStanding(user);
     if (user.status === "pending") {
@@ -685,28 +912,25 @@ export async function handleIdentity(req, res, ctx) {
         });
       }
     }
-    if (user.status === "suspended") {
-      return json(req, res, 403, { error: "This account is suspended. You can appeal from the sign-in page after a reset, or contact support." });
+    if (user.two_factor_enabled) {
+      const challengeToken = await createChallenge(user, "login_2fa");
+      let issued;
+      if (user.two_factor_method === "otp") {
+        const channel = user.email ? "email" : "phone";
+        issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
+      }
+      return json(req, res, 200, {
+        step: "challenge",
+        method: user.two_factor_method,
+        challengeToken,
+        ...(issued ? deliveryFields(issued.delivery, issued.code) : {}),
+      });
     }
     if (!skipStorefrontOtp(user)) {
       const must2fa = user.is_seller || user.is_staff;
       if (must2fa && !user.two_factor_enabled && !(body.adminPortal && user.is_staff)) {
         const challengeToken = await createChallenge(user, "enroll_2fa", 20);
         return json(req, res, 200, { step: "enroll", challengeToken });
-      }
-      if (user.two_factor_enabled) {
-        const challengeToken = await createChallenge(user, "login_2fa");
-        let issued;
-        if (user.two_factor_method === "otp") {
-          const channel = user.email ? "email" : "phone";
-          issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
-        }
-        return json(req, res, 200, {
-          step: "challenge",
-          method: user.two_factor_method,
-          challengeToken,
-          ...(issued ? deliveryFields(issued.delivery, issued.code) : {}),
-        });
       }
     }
     const token = await openSession(user, req, body.remember !== false);
@@ -742,9 +966,6 @@ export async function handleIdentity(req, res, ctx) {
     if (!result.ok) return json(req, res, 401, { error: result.error });
     const user = result.user;
     await refreshStanding(user);
-    if (user.status === "suspended") {
-      return json(req, res, 403, { error: "This account is suspended. You can appeal from the sign-in page after a reset, or contact support." });
-    }
     if (user.status === "pending") {
       if (skipStorefrontOtp(user)) await activatePendingStorefrontUser(user);
       else return json(req, res, 403, { error: "Verify the code we sent before signing in." });
@@ -861,7 +1082,6 @@ export async function handleIdentity(req, res, ctx) {
        ON CONFLICT (provider, provider_user_id) DO NOTHING`,
       [user.id, sub, email],
     );
-    if (user.status === "suspended") return json(req, res, 403, { error: "This account is suspended" });
     if (!skipStorefrontOtp(user) && (user.is_seller || user.is_staff) && !user.two_factor_enabled) {
       const challengeToken = await createChallenge(user, "enroll_2fa", 20);
       return json(req, res, 200, { step: "enroll", challengeToken });
@@ -914,17 +1134,36 @@ export async function handleIdentity(req, res, ctx) {
     const channel = user.email && looksLikeEmail(String(body.identifier)) ? "email" : user.phone ? "phone" : "email";
     const destination = channel === "phone" ? user.phone : user.email;
     if (!destination) return json(req, res, 400, { error: "This account has no email or phone to reset with" });
-    const issued = await issueCode(user, "reset", destination, channel);
-    return json(req, res, 200, { data: { destination, ...deliveryFields(issued.delivery, issued.code) } });
+    const resetToken = channel === "email" ? await createChallenge(user, "reset", 30) : null;
+    const resetUrl = resetToken ? `${appOrigin(req)}/reset?token=${encodeURIComponent(resetToken)}` : null;
+    const issued = await issueCode(user, "reset", destination, channel, { resetUrl });
+    return json(req, res, 200, {
+      data: {
+        destination,
+        ...(devCodes && resetUrl ? { resetUrl } : {}),
+        ...deliveryFields(issued.delivery, issued.code),
+      },
+    });
   }
 
   if (pathname === `${API}/auth/reset` && method === "POST") {
     const body = await readJson(req);
-    const user = await findUser(body.identifier);
+    const passwordError = passwordPolicyError(body.password);
+    if (passwordError) return json(req, res, 400, { error: passwordError });
+    let user = null;
+    if (body.token) {
+      const challenge = await readChallenge(body.token, "reset");
+      if (!challenge) return json(req, res, 400, { error: "This reset link is invalid or has expired" });
+      user = await findUser(challenge.public_id);
+      await expireChallenge(body.token, "reset");
+    } else {
+      user = await findUser(body.identifier);
+      if (!user) return json(req, res, 400, { error: "Account not found" });
+      const result = await consumeCode(user.id, "reset", body.code);
+      if (result === "expired") return json(req, res, 400, { error: "This reset link is invalid or has expired" });
+      if (result !== "ok") return json(req, res, 400, { error: "That code is not valid" });
+    }
     if (!user) return json(req, res, 400, { error: "Account not found" });
-    if (String(body.password ?? "").length < 8) return json(req, res, 400, { error: "Password must be at least 8 characters" });
-    const result = await consumeCode(user.id, "reset", body.code);
-    if (result !== "ok") return json(req, res, 400, { error: "That code is not valid" });
     await (await db()).query(`UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, [
       user.id,
       await hashPassword(String(body.password)),
@@ -995,23 +1234,34 @@ export async function handleIdentity(req, res, ctx) {
     if (body.clearAvatar === true) {
       await clearAvatar(actor.id);
     }
+    const firstName = body.firstName != null ? blankToNull(body.firstName) : null;
+    const lastName = body.lastName != null ? blankToNull(body.lastName) : null;
+    const displayName = body.displayName != null ? blankToNull(body.displayName) : null;
+    const bio = body.bio != null ? blankToNull(body.bio) : null;
+    const country = body.country != null ? blankToNull(body.country) : null;
     await (await db()).query(
-      `UPDATE user_profiles
-       SET first_name = COALESCE($2, first_name),
-           last_name = COALESCE($3, last_name),
-           display_name = COALESCE($4, display_name),
-           bio = COALESCE($5, bio),
-           country = COALESCE($6, country)
-       WHERE user_id = $1`,
-      [
-        actor.id,
-        body.firstName != null ? blankToNull(body.firstName) : null,
-        body.lastName != null ? blankToNull(body.lastName) : null,
-        body.displayName != null ? blankToNull(body.displayName) : null,
-        body.bio != null ? blankToNull(body.bio) : null,
-        body.country != null ? blankToNull(body.country) : null,
-      ],
+      `INSERT INTO user_profiles (user_id, first_name, last_name, display_name, bio, country)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_id) DO UPDATE SET
+         first_name = COALESCE(EXCLUDED.first_name, user_profiles.first_name),
+         last_name = COALESCE(EXCLUDED.last_name, user_profiles.last_name),
+         display_name = COALESCE(EXCLUDED.display_name, user_profiles.display_name),
+         bio = COALESCE(EXCLUDED.bio, user_profiles.bio),
+         country = COALESCE(EXCLUDED.country, user_profiles.country)`,
+      [actor.id, firstName, lastName, displayName, bio, country],
     );
+    if (body.phone != null && String(body.phone).trim()) {
+      const phone = normalizePhone(body.phone);
+      if (!phone) return json(req, res, 400, { error: "Enter a valid phone number." });
+      if (phone !== normalizePhone(actor.phone)) {
+        const taken = await (await db()).query(`SELECT id FROM users WHERE phone = $1 AND id <> $2 LIMIT 1`, [phone, actor.id]);
+        if (taken.rows[0]) return json(req, res, 409, { error: "That phone number is already in use." });
+        await (await db()).query(
+          `UPDATE users SET phone = $2, phone_verified_at = NULL, updated_at = NOW() WHERE id = $1`,
+          [actor.id, phone],
+        );
+      }
+    }
     if (typeof body.username === "string") {
       const username = body.username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 32);
       if (username.length >= 3) {
@@ -1102,7 +1352,7 @@ export async function handleIdentity(req, res, ctx) {
     const { rows } = await (await db()).query(
       `SELECT public_id, label, full_name, phone, line1, line2, city, region, postal_code, country,
               is_default_shipping, is_default_billing
-       FROM addresses WHERE user_id = $1 ORDER BY created_at`,
+       FROM addresses WHERE user_id = $1 ORDER BY is_default_shipping DESC, created_at`,
       [actor.id],
     );
     return json(req, res, 200, { data: rows, addresses: rows });
@@ -1195,9 +1445,8 @@ export async function handleIdentity(req, res, ctx) {
     if (!(await verifyPassword(String(body.currentPassword ?? ""), actor.password_hash))) {
       return json(req, res, 400, { error: "Current password is not correct" });
     }
-    if (String(body.password ?? "").length < 8) {
-      return json(req, res, 400, { error: "Password must be at least 8 characters" });
-    }
+    const passwordError = passwordPolicyError(body.password);
+    if (passwordError) return json(req, res, 400, { error: passwordError });
     await (await db()).query(`UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, [
       actor.id,
       await hashPassword(String(body.password)),
@@ -1219,11 +1468,19 @@ export async function handleIdentity(req, res, ctx) {
 
   const sessionMatch = pathname.match(new RegExp(`^${API}/account/sessions/([^/]+)$`));
   if (sessionMatch && method === "DELETE") {
-    await (await db()).query(
-      `UPDATE auth_sessions SET revoked_at = NOW() WHERE public_id = $1 AND user_id = $2`,
+    const current = sha256(String(req.headers.authorization ?? "").slice(7));
+    const { rows } = await (await db()).query(
+      `SELECT public_id, token_hash FROM auth_sessions
+       WHERE public_id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > NOW()`,
       [sessionMatch[1], actor.id],
     );
-    return json(req, res, 200, { data: { revoked: true } });
+    const target = rows[0];
+    if (!target) return json(req, res, 404, { error: "That session is no longer active" });
+    if (target.token_hash === current) {
+      return json(req, res, 400, { error: "You cannot revoke this device. Sign out instead." });
+    }
+    await (await db()).query(`DELETE FROM auth_sessions WHERE public_id = $1 AND user_id = $2`, [target.public_id, actor.id]);
+    return json(req, res, 200, { data: { revoked: true, public_id: target.public_id } });
   }
 
   if (pathname === `${API}/account/passkeys` && method === "GET") {
@@ -1271,17 +1528,54 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/account/kyc` && method === "POST") {
     const body = await readJson(req);
-    const front = saveKycFile(actor.id, "front", body.front);
-    const back = body.back ? saveKycFile(actor.id, "back", body.back) : null;
-    const address = saveKycFile(actor.id, "address", body.addressProof);
-    if (!front || !address) return json(req, res, 400, { error: "Upload a photo of your ID and an address proof" });
+    const docType = String(body.docType || "citizenship").toLowerCase();
+    if (!["citizenship", "passport"].includes(docType)) {
+      return json(req, res, 400, { error: "Use Nepali citizenship or a passport" });
+    }
+    const latest = await latestKyc(actor.id);
+    if (latest?.status === "approved") {
+      return json(req, res, 409, { error: "Your identity is already verified" });
+    }
+    if (latest?.status === "pending") {
+      return json(req, res, 409, { error: "Your application is already pending review" });
+    }
+    const pan = String(body.pan || body.taxId || "").replace(/\s+/g, "").trim();
+    const docNumber = String(body.docNumber || body.citizenshipNumber || "").trim();
+    const legalName = String(body.legalName || body.fullName || actor.display_name || "").trim();
+    if (!legalName) return json(req, res, 400, { error: "Enter your name or business legal name" });
+    if (!pan) return json(req, res, 400, { error: "Enter your PAN number" });
+    if (!docNumber) return json(req, res, 400, { error: "Enter your citizenship or passport number" });
+    const prefix = docType === "passport" ? "passport" : "citizenship";
+    const front = saveKycFile(actor.id, `${prefix}_front`, body.front);
+    const back = body.back ? saveKycFile(actor.id, `${prefix}_back`, body.back) : null;
+    const address = body.addressProof ? saveKycFile(actor.id, "address", body.addressProof) : null;
+    if (!front) return json(req, res, 400, { error: "Upload a clear photo of the front of your ID" });
+    if (docType === "citizenship" && !back) {
+      return json(req, res, 400, { error: "Upload the back of your Nepali citizenship card" });
+    }
+    const sellerType = body.sellerType === "business" ? "business" : "individual";
+    if (sellerType === "business") {
+      await (await db()).query(`UPDATE users SET account_type = 'business', updated_at = NOW() WHERE id = $1`, [actor.id]);
+    }
+    await (await db()).query(
+      `INSERT INTO business_profiles (user_id, legal_name, registration_country, tax_id)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id) DO UPDATE
+       SET legal_name = EXCLUDED.legal_name,
+           registration_country = COALESCE(EXCLUDED.registration_country, business_profiles.registration_country),
+           tax_id = EXCLUDED.tax_id,
+           updated_at = NOW()`,
+      [actor.id, legalName, actor.country || "Nepal", pan],
+    );
     const publicId = randomUUID();
     await (await db()).query(
-      `INSERT INTO kyc_documents (public_id, user_id, doc_type, front_url, back_url, selfie_url, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
-      [publicId, actor.id, String(body.docType || "citizenship"), front, back, address],
+      `INSERT INTO kyc_documents (public_id, user_id, doc_type, doc_number_encrypted, front_url, back_url, selfie_url, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
+      [publicId, actor.id, docType, encryptDocNumber(docNumber), front, back, address],
     );
-    return json(req, res, 201, { data: { id: publicId, status: "pending" } });
+    return json(req, res, 201, {
+      data: { id: publicId, status: "pending", statusLabel: "Pending Review" },
+    });
   }
 
   if (pathname === `${API}/account/feedback` && method === "GET") {
@@ -1351,7 +1645,7 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/account/appeals` && method === "GET") {
     const { rows } = await (await db()).query(
-      `SELECT a.public_id, a.message, a.status, a.resolution, a.created_at, c.action, c.reason
+      `SELECT a.public_id, a.message, a.status, a.resolution, a.created_at, a.evidence_url, c.action, c.reason
        FROM appeals a
        LEFT JOIN account_actions c ON c.id = a.action_id
        WHERE a.user_id = $1 ORDER BY a.created_at DESC`,
@@ -1364,16 +1658,18 @@ export async function handleIdentity(req, res, ctx) {
     const body = await readJson(req);
     const message = String(body.message ?? "").trim();
     if (message.length < 8) return json(req, res, 400, { error: "Tell us what you want reviewed" });
-    if (actor.status !== "restricted" && actor.status !== "suspended") {
-      return json(req, res, 400, { error: "This account is not restricted" });
-    }
+    const action = await latestAction(actor.id);
+    const canAppeal =
+      actor.status === "restricted" || actor.status === "suspended" || action?.action === "warn";
+    if (!canAppeal) return json(req, res, 400, { error: "This account is not restricted" });
     const { rows: actions } = await (await db()).query(
       `SELECT id FROM account_actions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
       [actor.id],
     );
+    const evidence = body.evidence ? saveAppealFile(actor.id, body.evidence) : null;
     await (await db()).query(
-      `INSERT INTO appeals (public_id, user_id, action_id, message) VALUES ($1, $2, $3, $4)`,
-      [randomUUID(), actor.id, actions[0]?.id ?? null, message],
+      `INSERT INTO appeals (public_id, user_id, action_id, message, evidence_url) VALUES ($1, $2, $3, $4, $5)`,
+      [randomUUID(), actor.id, actions[0]?.id ?? null, message, evidence],
     );
     return json(req, res, 201, { data: { status: "pending" } });
   }
@@ -1414,39 +1710,58 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/admin/kyc` && method === "GET") {
     const { rows } = await (await db()).query(
-      `SELECT k.public_id, k.doc_type, k.status, k.rejection_reason, k.created_at,
+      `SELECT k.public_id, k.doc_type, k.status, k.rejection_reason, k.created_at, k.reviewed_at,
               k.front_url, k.back_url, k.selfie_url,
-              u.email, u.public_id AS user_id, p.display_name
+              u.email, u.public_id AS user_id, u.is_seller,
+              p.display_name, p.first_name, p.last_name, b.tax_id
        FROM kyc_documents k
        JOIN users u ON u.id = k.user_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
-       ORDER BY k.created_at DESC LIMIT 50`,
+       LEFT JOIN business_profiles b ON b.user_id = u.id
+       ORDER BY (k.status = 'pending') DESC, k.created_at DESC LIMIT 50`,
     );
-    return json(req, res, 200, {
-      data: rows.map((row) => ({
-        ...row,
-        files: signedKycFiles(row.public_id, { front: row.front_url, back: row.back_url, selfie: row.selfie_url }),
-        front_url: undefined,
-        back_url: undefined,
-        selfie_url: undefined,
-      })),
-    });
+    return json(req, res, 200, { data: rows.map(presentAdminKyc) });
   }
 
   const kycDecision = pathname.match(new RegExp(`^${API}/admin/kyc/([^/]+)$`));
+  if (kycDecision && method === "GET") {
+    const { rows } = await (await db()).query(
+      `SELECT k.public_id, k.doc_type, k.status, k.rejection_reason, k.created_at, k.reviewed_at,
+              k.front_url, k.back_url, k.selfie_url,
+              u.email, u.public_id AS user_id, u.is_seller,
+              p.display_name, p.first_name, p.last_name, b.tax_id
+       FROM kyc_documents k
+       JOIN users u ON u.id = k.user_id
+       LEFT JOIN user_profiles p ON p.user_id = u.id
+       LEFT JOIN business_profiles b ON b.user_id = u.id
+       WHERE k.public_id = $1`,
+      [kycDecision[1]],
+    );
+    if (!rows[0]) return json(req, res, 404, { error: "KYC application not found" });
+    return json(req, res, 200, { data: presentAdminKyc(rows[0]) });
+  }
   if (kycDecision && method === "POST") {
     const body = await readJson(req);
     const decision = body.decision === "approved" ? "approved" : "rejected";
     if (decision === "rejected" && !String(body.reason ?? "").trim()) {
       return json(req, res, 400, { error: "A rejection needs a reason" });
     }
-    await (await db()).query(
+    const { rows } = await (await db()).query(
       `UPDATE kyc_documents
        SET status = $2, rejection_reason = $3, reviewed_by = $4, reviewed_at = NOW()
-       WHERE public_id = $1`,
+       WHERE public_id = $1
+       RETURNING user_id`,
       [kycDecision[1], decision, decision === "rejected" ? body.reason : null, actor.id],
     );
-    return json(req, res, 200, { data: { status: decision } });
+    if (!rows[0]) return json(req, res, 404, { error: "KYC application not found" });
+    if (decision === "approved") await enableSeller(rows[0].user_id);
+    return json(req, res, 200, {
+      data: {
+        status: decision,
+        statusLabel: kycStatusLabel(decision),
+        isSeller: decision === "approved",
+      },
+    });
   }
 
   if (pathname === `${API}/admin/users` && method === "GET") {
@@ -1482,37 +1797,66 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/admin/actions` && method === "POST") {
     const body = await readJson(req);
-    const action = ["restrict", "suspend", "restore"].includes(body.action) ? body.action : null;
+    const action = ["warn", "restrict", "suspend", "restore"].includes(body.action) ? body.action : null;
     const reason = String(body.reason ?? "").trim();
     if (!action || reason.length < 3) return json(req, res, 400, { error: "Choose an action and a reason" });
     const target = await findUser(body.userId);
     if (!target) return json(req, res, 404, { error: "User not found" });
-    const status = action === "restore" ? "active" : action === "suspend" ? "suspended" : "restricted";
+    const status =
+      action === "restore" ? "active" : action === "suspend" ? "suspended" : action === "restrict" ? "restricted" : "active";
     await (await db()).query(`UPDATE users SET status = $2, updated_at = NOW() WHERE id = $1`, [target.id, status]);
     await (await db()).query(
       `INSERT INTO account_actions (public_id, user_id, action, reason, until_at, created_by)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [randomUUID(), target.id, action, reason, body.until || null, actor.id],
     );
-    return json(req, res, 200, { data: { status } });
+    return json(req, res, 200, { data: { status, kind: standingKind(action) || "Restored" } });
   }
 
   if (pathname === `${API}/admin/appeals` && method === "GET") {
     const { rows } = await (await db()).query(
-      `SELECT a.public_id, a.message, a.status, a.created_at, u.email, u.public_id AS user_id, p.display_name
+      `SELECT a.public_id, a.message, a.status, a.evidence_url, a.created_at,
+              u.email, u.public_id AS user_id, p.display_name,
+              c.action, c.reason, c.until_at
        FROM appeals a
        JOIN users u ON u.id = a.user_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
+       LEFT JOIN account_actions c ON c.id = a.action_id
        WHERE a.status = 'pending'
        ORDER BY a.created_at`,
     );
-    return json(req, res, 200, { data: rows });
+    return json(req, res, 200, {
+      data: rows.map((row) => ({
+        ...row,
+        evidence: row.evidence_url ? `/api/v1/admin/appeals/${row.public_id}/file` : null,
+        evidence_url: undefined,
+        kind: standingKind(row.action),
+      })),
+    });
+  }
+
+  const appealFile = pathname.match(new RegExp(`^${API}/admin/appeals/([^/]+)/file$`));
+  if (appealFile && method === "GET") {
+    const { rows } = await (await db()).query(
+      `SELECT user_id, evidence_url FROM appeals WHERE public_id = $1`,
+      [appealFile[1]],
+    );
+    const doc = rows[0];
+    if (!doc?.evidence_url) return json(req, res, 404, { error: "No evidence file" });
+    const path = join(appealsDir, String(doc.user_id), doc.evidence_url);
+    if (!existsSync(path)) return json(req, res, 404, { error: "No evidence file" });
+    const bytes = readFileSync(path);
+    const type = doc.evidence_url.endsWith(".png") ? "image/png" : doc.evidence_url.endsWith(".pdf") ? "application/pdf" : "image/jpeg";
+    res.writeHead(200, { "Content-Type": type, "Content-Length": bytes.length, "Cache-Control": "private, max-age=60" });
+    res.end(bytes);
+    return true;
   }
 
   const appealDecision = pathname.match(new RegExp(`^${API}/admin/appeals/([^/]+)$`));
   if (appealDecision && method === "POST") {
     const body = await readJson(req);
-    const decision = body.decision === "overturned" ? "overturned" : "upheld";
+    const lift = body.decision === "overturned" || body.decision === "lift";
+    const decision = lift ? "overturned" : "upheld";
     const { rows } = await (await db()).query(`SELECT user_id FROM appeals WHERE public_id = $1`, [appealDecision[1]]);
     if (!rows[0]) return json(req, res, 404, { error: "Appeal not found" });
     await (await db()).query(
@@ -1524,7 +1868,7 @@ export async function handleIdentity(req, res, ctx) {
       await (await db()).query(
         `INSERT INTO account_actions (public_id, user_id, action, reason, created_by)
          VALUES ($1, $2, 'restore', $3, $4)`,
-        [randomUUID(), rows[0].user_id, body.resolution || "Appeal overturned", actor.id],
+        [randomUUID(), rows[0].user_id, body.resolution || "Restriction lifted after appeal", actor.id],
       );
     }
     return json(req, res, 200, { data: { status: decision } });

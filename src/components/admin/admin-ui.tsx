@@ -49,7 +49,7 @@ export function StatusPill({ status }: { status: string }) {
       ? "bg-[#e8f8ee] text-[#159947]"
       : /process|ship/.test(status)
         ? "bg-[#eef3ff] text-[#3665f3]"
-        : /pend|draft|neutral|open|flag/.test(status)
+        : /pend|draft|neutral|open|flag|additional|require|warn|warning/.test(status.toLowerCase())
           ? "bg-[#fff8e8] text-[#b45309]"
           : /cancel|refund|suspend|reject|negative|removed|inactive/.test(status)
             ? "bg-[#fff5f5] text-[#b42318]"

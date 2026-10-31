@@ -48,6 +48,7 @@ export function LoginForm() {
   const [challengeToken, setChallengeToken] = useState("");
   const [code, setCode] = useState("");
   const [secret, setSecret] = useState("");
+  const [otpUri, setOtpUri] = useState("");
   const [enrollMethod, setEnrollMethod] = useState<"" | "authenticator" | "otp">("");
   const [passkeyOk, setPasskeyOk] = useState(false);
 
@@ -74,7 +75,8 @@ export function LoginForm() {
       });
       const body = await res.json();
       if (!res.ok) {
-        setError(body.error ?? "We could not sign you in. Check your details and try again.");
+        setPassword("");
+        setError(body.error ?? "Invalid email or password");
         return;
       }
       if (body.step === "challenge") {
@@ -83,11 +85,13 @@ export function LoginForm() {
         const filled = digitsCode(body.devCode);
         if (filled) setCode(filled);
         setNotice(
-          filled
-            ? "Email is not sending from this computer yet. The code is filled in."
-            : body.sent === false
-              ? body.deliveryError ?? "We could not send the sign-in code. Sign in again to resend it."
-              : "Enter the code from your authenticator or the message we sent.",
+          body.method === "authenticator"
+            ? "Enter the 6-digit code from your authenticator app."
+            : filled
+              ? "Email is not sending from this computer yet. The code is filled in."
+              : body.sent === false
+                ? body.deliveryError ?? "We could not send the sign-in code. Sign in again to resend it."
+                : "Enter the code from your authenticator or the message we sent.",
         );
         return;
       }
@@ -147,6 +151,7 @@ export function LoginForm() {
       }
       setEnrollMethod(body.data.method);
       setSecret(body.data.secret ?? "");
+      setOtpUri(body.data.uri ?? "");
       const filled = digitsCode(body.data.devCode);
       setCode(filled);
       setNotice(
@@ -255,6 +260,16 @@ export function LoginForm() {
               Use email or phone code
             </button>
           </div>
+          {otpUri ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt="Authenticator QR code"
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(otpUri)}`}
+              width={180}
+              height={180}
+              className="rounded-xl border border-[#e3e8f0] bg-white p-2"
+            />
+          ) : null}
           {secret ? <p className="break-all rounded-lg bg-[#f6f8fb] px-3 py-2 font-mono text-[13px]">{secret}</p> : null}
           {enrollMethod ? (
             <form onSubmit={confirmEnroll} className="space-y-3">
@@ -342,7 +357,7 @@ export function LoginForm() {
             </span>
             Remember me
           </label>
-          <Link href="/forgot" className="text-[13.5px] font-medium text-[#3665f3] hover:underline">
+          <Link href="/forgot-password" className="text-[13.5px] font-medium text-[#3665f3] hover:underline">
             Forgot password?
           </Link>
         </div>
@@ -352,7 +367,7 @@ export function LoginForm() {
           disabled={loading}
           className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(54,101,243,0.75)] transition hover:bg-[#2953c6] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? "Signing in…" : "Continue"}
+          {loading ? "Signing in…" : "Sign In"}
           {!loading && (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M5 12h14M13 6l6 6-6 6" />

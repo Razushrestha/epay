@@ -69,13 +69,23 @@ async function snapshot(listingId) {
   );
   const state = await query(`SELECT * FROM auction_states WHERE listing_id = $1`, [listingId]);
   const inc = await incrementFor(listing.rows[0]?.auction_current_price || listing.rows[0]?.auction_start_price);
-  return {
+  return publicizeAuctionSnapshot({
     listing: listing.rows[0],
     bids: publicBids(bids.rows),
     bidCount: bids.rows.length,
     state: state.rows[0] || null,
     increment: inc,
-  };
+  });
+}
+
+function publicizeAuctionSnapshot(snap) {
+  if (!snap?.listing) return snap;
+  const listing = { ...snap.listing };
+  const reserve = Number(listing.auction_reserve_price || 0);
+  listing.has_reserve = reserve > 0;
+  listing.reserve_met = Boolean(snap.state?.reserve_met);
+  delete listing.auction_reserve_price;
+  return { ...snap, listing };
 }
 
 export async function relistAfterUnpaid(listingId) {
@@ -414,7 +424,9 @@ export async function handleAuctions(method, pathParts, auth, body) {
   }
   if (pathParts[0] === "auctions" && pathParts[1] && pathParts[2] === "bid" && method === "POST") {
     if (!auth) return { status: 401, body: { error: "Sign in to bid" } };
-    if (auth.status !== "active") return { status: 403, body: { error: "This account cannot bid" } };
+    if (auth.status !== "active") {
+      return { status: 403, body: { error: "Your account is restricted. Open Account standing to appeal." } };
+    }
     const verified = await enforceVerification(auth.user_id);
     if (verified) return verified;
     const risk = await evaluateUser(auth.user_id, { kind: "bid" });

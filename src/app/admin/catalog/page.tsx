@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { accountApi, apiBase } from "@/lib/account-api";
 import { Empty, StatusPill } from "@/components/admin/admin-ui";
+import { AuthenticityBadge } from "@/components/catalog/AuthenticityBadge";
 
 interface Category {
   id: number;
@@ -19,6 +20,9 @@ interface Category {
   is_active: boolean;
   sort_order: number;
   child_count: number;
+  insertion_fee?: number | string | null;
+  final_value_fee_percentage?: number | string | null;
+  commission_percentage?: number | string | null;
 }
 
 interface Brand {
@@ -41,7 +45,7 @@ interface Condition {
 }
 
 export default function CatalogAdminPage() {
-  const [view, setView] = useState<"categories" | "brands" | "conditions">("categories");
+  const [view, setView] = useState<"categories" | "brands" | "fees" | "conditions">("categories");
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [conditions, setConditions] = useState<Condition[]>([]);
@@ -72,6 +76,13 @@ export default function CatalogAdminPage() {
     is_verified: false,
   });
 
+  const [feeForm, setFeeForm] = useState({
+    category_id: "",
+    insertion_fee: "50",
+    final_value_fee_percentage: "5",
+  });
+  const [feeSaved, setFeeSaved] = useState<string | null>(null);
+
   useEffect(() => {
     loadData();
   }, [view]);
@@ -80,12 +91,25 @@ export default function CatalogAdminPage() {
     setLoading(true);
     setError(null);
     try {
-      if (view === "categories") {
-        const res = await fetch(`${apiBase}/api/v1/catalog/categories`);
+      if (view === "categories" || view === "fees") {
+        const res = await fetch(`${apiBase}/api/v1/catalog/categories?active=false`);
         const data = await res.json();
-        setCategories(data.categories || []);
+        const rows: Category[] = data.categories || [];
+        setCategories(rows);
+        const laptops = rows.find((cat) => cat.slug === "laptops" || cat.name === "Laptops");
+        if (laptops) {
+          setFeeForm((current) =>
+            current.category_id
+              ? current
+              : {
+                  category_id: String(laptops.id),
+                  insertion_fee: String(laptops.insertion_fee ?? 50),
+                  final_value_fee_percentage: String(laptops.final_value_fee_percentage ?? 5),
+                },
+          );
+        }
       } else if (view === "brands") {
-        const res = await fetch(`${apiBase}/api/v1/catalog/brands`);
+        const res = await fetch(`${apiBase}/api/v1/catalog/brands?limit=200`);
         const data = await res.json();
         setBrands(data.brands || []);
       } else if (view === "conditions") {
@@ -174,6 +198,60 @@ export default function CatalogAdminPage() {
     }
   }
 
+  async function handleSaveFees(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setFeeSaved(null);
+    try {
+      const token = accountApi.getToken();
+      if (!token) throw new Error("Not authenticated");
+      if (!feeForm.category_id) throw new Error("Choose a category");
+
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/fees/${feeForm.category_id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          insertion_fee: Number(feeForm.insertion_fee),
+          final_value_fee_percentage: Number(feeForm.final_value_fee_percentage),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to save fee rules");
+      }
+
+      const body = await res.json();
+      const catName = body.category?.name || "Category";
+      setFeeSaved(`${catName}: insertion NPR ${feeForm.insertion_fee}, FVF ${feeForm.final_value_fee_percentage}%`);
+      loadData();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function handleToggleBrandVerified(brand: Brand) {
+    try {
+      const token = accountApi.getToken();
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/brands/${brand.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ is_verified: !brand.is_verified }),
+      });
+      if (!res.ok) throw new Error("Failed to update authenticity badge");
+      loadData();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
   async function handleToggleCategoryActive(categoryId: number, isActive: boolean) {
     try {
       const token = accountApi.getToken();
@@ -253,13 +331,14 @@ export default function CatalogAdminPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-[26px] font-extrabold tracking-tight text-[#0f1c3f]">Catalog</h1>
-        <p className="mt-1 text-[14px] text-[#6b7587]">Categories, brands, and item conditions used on every listing.</p>
+        <p className="mt-1 text-[14px] text-[#6b7587]">Categories, brands, authenticity badges, and category fee rules used on every listing.</p>
       </div>
 
       {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
+      {feeSaved ? <p className="nexlo-alert nexlo-alert-ok">{feeSaved}</p> : null}
 
       <div className="flex flex-wrap gap-2">
-        {(["categories", "brands", "conditions"] as const).map((id) => (
+        {(["categories", "brands", "fees", "conditions"] as const).map((id) => (
           <button
             key={id}
             type="button"
@@ -268,7 +347,7 @@ export default function CatalogAdminPage() {
               view === id ? "bg-[#3665f3] text-white" : "border border-[#e7eef6] bg-white text-[#3a4a66]"
             }`}
           >
-            {id}
+            {id === "fees" ? "Fees" : id}
           </button>
         ))}
       </div>
@@ -321,21 +400,23 @@ export default function CatalogAdminPage() {
                     Parent category
                     <select
                       value={categoryForm.parent_id || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const parentId = e.target.value ? parseInt(e.target.value) : null;
+                        const parent = categories.find((c) => c.id === parentId);
                         setCategoryForm({
                           ...categoryForm,
-                          parent_id: e.target.value ? parseInt(e.target.value) : null,
-                          level: e.target.value ? 2 : 1,
-                        })
-                      }
+                          parent_id: parentId,
+                          level: parent ? parent.level + 1 : 1,
+                        });
+                      }}
                       className="nexlo-field mt-1"
                     >
                       <option value="">None (root)</option>
                       {categories
-                        .filter((c) => c.level === 1)
+                        .filter((c) => Number(c.level) < 3)
                         .map((c) => (
                           <option key={c.id} value={c.id}>
-                            {c.name}
+                            {`${"\u2014 ".repeat(Math.max(c.level - 1, 0))}${c.name}`}
                           </option>
                         ))}
                     </select>
@@ -399,6 +480,8 @@ export default function CatalogAdminPage() {
                       <th className="px-4 py-3">Slug</th>
                       <th className="px-4 py-3">Level</th>
                       <th className="px-4 py-3">Items</th>
+                      <th className="px-4 py-3">Insertion</th>
+                      <th className="px-4 py-3">FVF</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
@@ -415,6 +498,10 @@ export default function CatalogAdminPage() {
                         <td className="px-4 py-3 text-[#6b7587]">{cat.slug}</td>
                         <td className="px-4 py-3 text-[#6b7587]">L{cat.level}</td>
                         <td className="px-4 py-3 text-[#6b7587]">{cat.item_count}</td>
+                        <td className="px-4 py-3 text-[#6b7587]">
+                          NPR {Number(cat.insertion_fee || 0).toLocaleString("en-NP")}
+                        </td>
+                        <td className="px-4 py-3 text-[#6b7587]">{Number(cat.final_value_fee_percentage || 0)}%</td>
                         <td className="px-4 py-3">
                           <button type="button" onClick={() => handleToggleCategoryActive(cat.id, cat.is_active)}>
                             <StatusPill status={cat.is_active ? "active" : "inactive"} />
@@ -511,7 +598,7 @@ export default function CatalogAdminPage() {
                       checked={brandForm.is_verified}
                       onChange={(e) => setBrandForm({ ...brandForm, is_verified: e.target.checked })}
                     />
-                    Verified brand
+                    Authenticity badge
                   </label>
                 </div>
                 <button type="submit" className="nexlo-btn nexlo-btn-blue">
@@ -534,7 +621,7 @@ export default function CatalogAdminPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-[#0f1c3f]">{brand.name}</h3>
-                          {brand.is_verified ? <StatusPill status="verified" /> : null}
+                          {brand.is_verified ? <AuthenticityBadge /> : null}
                         </div>
                         <p className="text-[12.5px] text-[#6b7587]">{brand.slug}</p>
                         {brand.description ? <p className="mt-2 text-[13px] text-[#5b6780]">{brand.description}</p> : null}
@@ -542,16 +629,117 @@ export default function CatalogAdminPage() {
                           {brand.listing_count} listing{brand.listing_count === 1 ? "" : "s"}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteBrand(brand.id)}
-                        className="text-[12.5px] font-semibold text-[#e5484d]"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBrandVerified(brand)}
+                          className="text-[12.5px] font-semibold text-[#3665f3]"
+                        >
+                          {brand.is_verified ? "Remove badge" : "Grant authenticity"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBrand(brand.id)}
+                          className="text-[12.5px] font-semibold text-[#e5484d]"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === "fees" && (
+          <div>
+            <h2 className="mb-4 text-[16px] font-bold text-[#0f1c3f]">Category fees</h2>
+            <form onSubmit={handleSaveFees} className="mb-4 nexlo-card space-y-3 p-5">
+              <p className="text-[13px] text-[#6b7587]">
+                Insertion fee is charged when a listing goes live. Final value fee (FVF) is a percentage of the sale price.
+              </p>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                  Category *
+                  <select
+                    required
+                    value={feeForm.category_id}
+                    onChange={(e) => {
+                      const next = categories.find((c) => String(c.id) === e.target.value);
+                      setFeeForm({
+                        category_id: e.target.value,
+                        insertion_fee: String(next?.insertion_fee ?? feeForm.insertion_fee),
+                        final_value_fee_percentage: String(next?.final_value_fee_percentage ?? feeForm.final_value_fee_percentage),
+                      });
+                      setFeeSaved(null);
+                    }}
+                    className="nexlo-field mt-1"
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {`${"\u2014 ".repeat(Math.max(c.level - 1, 0))}${c.name}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                  Insertion fee (NPR) *
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    step="1"
+                    value={feeForm.insertion_fee}
+                    onChange={(e) => setFeeForm({ ...feeForm, insertion_fee: e.target.value })}
+                    className="nexlo-field mt-1"
+                  />
+                </label>
+                <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                  Final value fee (%) *
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    value={feeForm.final_value_fee_percentage}
+                    onChange={(e) => setFeeForm({ ...feeForm, final_value_fee_percentage: e.target.value })}
+                    className="nexlo-field mt-1"
+                  />
+                </label>
+              </div>
+              <button type="submit" className="nexlo-btn nexlo-btn-blue">
+                Save fee rules
+              </button>
+            </form>
+
+            {loading ? (
+              <p className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</p>
+            ) : (
+              <div className="nexlo-card overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-[13.5px]">
+                  <thead>
+                    <tr className="border-b border-[#eef2f7] text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a94a6]">
+                      <th className="px-4 py-3">Category</th>
+                      <th className="px-4 py-3">Slug</th>
+                      <th className="px-4 py-3">Insertion (NPR)</th>
+                      <th className="px-4 py-3">FVF</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categories.map((cat) => (
+                      <tr key={cat.id} className="border-b border-[#f3f6fa]">
+                        <td className="px-4 py-3 font-semibold text-[#0f1c3f]">{cat.name}</td>
+                        <td className="px-4 py-3 text-[#6b7587]">{cat.slug}</td>
+                        <td className="px-4 py-3 text-[#6b7587]">NPR {Number(cat.insertion_fee || 0).toLocaleString("en-NP")}</td>
+                        <td className="px-4 py-3 text-[#6b7587]">{Number(cat.final_value_fee_percentage || 0)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

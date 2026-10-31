@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
+import { nepalPhoneError } from "@/lib/nepal-phone";
+import { passwordPolicyError } from "@/lib/password";
 import { SocialSignIn } from "@/components/auth/SocialSignIn";
 
 function Icon({ children }: { children: React.ReactNode }) {
@@ -49,8 +51,16 @@ export function RegisterForm() {
       setError("Enter an email or a phone number.");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (phone.trim()) {
+      const phoneError = nepalPhoneError(phone);
+      if (phoneError) {
+        setError(phoneError);
+        return;
+      }
+    }
+    const passwordError = passwordPolicyError(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     setLoading(true);
@@ -84,7 +94,18 @@ export function RegisterForm() {
       clearTimeout(timeout);
 
       const text = await res.text();
-      let body: { error?: string; token?: string; data?: { skipVerify?: boolean } } = {};
+      let body: {
+        error?: string;
+        token?: string;
+        data?: {
+          skipVerify?: boolean;
+          destinationMasked?: string;
+          devCode?: string;
+          sent?: boolean;
+          deliveryError?: string;
+          channel?: string;
+        };
+      } = {};
       try {
         body = text ? JSON.parse(text) : {};
       } catch {
@@ -93,7 +114,7 @@ export function RegisterForm() {
       }
       if (!res.ok) {
         if (res.status === 409) {
-          setError(`${body.error ?? "That email or phone is already registered."} Sign in instead.`);
+          setError(body.error ?? "Email already registered");
           return;
         }
         setError(body.error ?? "We could not create your account.");
@@ -105,7 +126,20 @@ export function RegisterForm() {
         router.refresh();
         return;
       }
-      router.push("/login");
+      const identifier = email.trim() || phone.trim();
+      sessionStorage.setItem("nexlo_verify_id", identifier);
+      if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", String(body.data.destinationMasked));
+      else sessionStorage.removeItem("nexlo_verify_dest");
+      if (body.data?.devCode) sessionStorage.setItem("nexlo_dev_code", String(body.data.devCode));
+      else sessionStorage.removeItem("nexlo_dev_code");
+      sessionStorage.setItem("nexlo_verify_channel", body.data?.channel === "phone" ? "phone" : "email");
+      sessionStorage.setItem("nexlo_otp_sent_at", String(Date.now()));
+      if (body.data?.sent === false) {
+        sessionStorage.setItem("nexlo_code_error", body.data.deliveryError ?? "We could not send the code. Tap Resend on the next screen.");
+      } else {
+        sessionStorage.removeItem("nexlo_code_error");
+      }
+      router.push("/verify");
     } catch (err) {
       setError(apiUnreachableMessage(err));
     } finally {
@@ -341,7 +375,7 @@ export function RegisterForm() {
           disabled={loading}
           className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#3665f3] to-[#12c4b0] text-[15px] font-semibold text-white disabled:opacity-60"
         >
-          {loading ? "Creating…" : accountType === "business" ? "Create business account" : "Create account"}
+          {loading ? "Creating…" : "Register"}
           {!loading && (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
               <path d="M5 12h14M13 6l6 6-6 6" />

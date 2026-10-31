@@ -33,7 +33,12 @@ const nextConfig: NextConfig = {
     remotePatterns,
   },
   async redirects() {
-    return [{ source: "/help/buyer-protection", destination: "/buyer-protection", permanent: false }];
+    return [
+      { source: "/help/buyer-protection", destination: "/buyer-protection", permanent: false },
+      { source: "/forgot", destination: "/forgot-password", permanent: false },
+      { source: "/auth/forgot", destination: "/forgot-password", permanent: false },
+      { source: "/auth/reset", destination: "/reset", permanent: false },
+    ];
   },
   async rewrites() {
     return [

@@ -36,6 +36,8 @@ export type CartItemView = {
   price_changed: boolean;
   stock: number;
   in_stock: boolean;
+  reserved?: boolean;
+  reserved_until?: string | null;
   subtotal: number;
   local?: boolean;
 };
@@ -43,6 +45,7 @@ export type CartItemView = {
 export type SellerGroupView = {
   seller_id: number;
   seller_username: string;
+  seller_display?: string;
   items: CartItemView[];
   subtotal: number;
   shipping_cost: number;
@@ -130,15 +133,19 @@ export async function addToCart(input: {
         body: JSON.stringify({ listing_id: input.listingId, quantity, variation_sku_id: input.variationSkuId || null }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((body as { error?: string }).error || "Could not add to cart");
-      writeLocal(
-        localCartKey,
-        getLocalCart().filter((item) => item.listing_id !== input.listingId),
-      );
-      emit(CART_EVENT);
-      return;
-    } catch {
-      /* catalog / guest fallback below */
+      if (!res.ok) {
+        const message = (body as { error?: string }).error || "Could not add to cart";
+        if (res.status < 500) throw new Error(message);
+      } else {
+        writeLocal(
+          localCartKey,
+          getLocalCart().filter((item) => item.listing_id !== input.listingId),
+        );
+        emit(CART_EVENT);
+        return;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message !== "Failed to fetch") throw err;
     }
   }
 
@@ -156,6 +163,37 @@ export async function addToCart(input: {
     writeLocal(localCartKey, local);
   }
   emit(CART_EVENT);
+}
+
+export async function reserveCheckout() {
+  const headers = commerceHeaders();
+  const res = await fetch(`${apiBase}/api/v1/cart/checkout/reserve`, {
+    method: "POST",
+    headers,
+  });
+  const body = await res.json().catch(() => ({})) as {
+    success?: boolean;
+    expires_at?: string;
+    reserved_minutes?: number;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(body.error || "Could not reserve stock");
+  return body;
+}
+
+export async function validateCart() {
+  const headers = commerceHeaders();
+  const res = await fetch(`${apiBase}/api/v1/cart/validate`, {
+    method: "POST",
+    headers,
+  });
+  const body = await res.json().catch(() => ({})) as {
+    valid?: boolean;
+    issues?: { message?: string }[];
+    error?: string;
+  };
+  if (!res.ok) throw new Error(body.error || "Could not validate cart");
+  return { valid: Boolean(body.valid), issues: body.issues || [] };
 }
 
 export async function updateCartQuantity(cartItemId: number, quantity: number, listingId?: number) {
@@ -281,17 +319,13 @@ export async function toggleWatch(input: {
 }) {
   const token = getToken();
   if (token && !input.localOnly) {
-    try {
-      const res = await fetch(`${apiBase}/api/v1/listings/${input.listingId}/watch`, {
-        method: input.saved ? "DELETE" : "POST",
-        headers: commerceHeaders(),
-      });
-      if (!res.ok && res.status !== 404) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || "Watchlist update failed");
-      }
-    } catch {
-      /* keep a local copy so the heart still updates */
+    const res = await fetch(`${apiBase}/api/v1/listings/${input.listingId}/watch`, {
+      method: input.saved ? "DELETE" : "POST",
+      headers: commerceHeaders(),
+    });
+    if (!res.ok && res.status !== 404) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error || "Watchlist update failed");
     }
   }
   const local = getLocalWatch();

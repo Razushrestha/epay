@@ -8,6 +8,16 @@ export function ensureM2ListingColumns() {
   if (!ready) {
     ready = query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS compare_at NUMERIC(12,2)`)
       .then(() => query(`ALTER TABLE listing_variation_options ADD COLUMN IF NOT EXISTS photo_url TEXT`))
+      .then(() => query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS relisted_from_id INTEGER`))
+      .then(() => query(`
+        ALTER TABLE listings ADD COLUMN IF NOT EXISTS search_vector tsvector
+        GENERATED ALWAYS AS (
+          setweight(to_tsvector('english', COALESCE(title, '')), 'A') ||
+          setweight(to_tsvector('english', COALESCE(subtitle, '')), 'B') ||
+          setweight(to_tsvector('english', COALESCE(description, '')), 'C')
+        ) STORED
+      `))
+      .then(() => query(`CREATE INDEX IF NOT EXISTS idx_listings_search_weighted ON listings USING gin(search_vector)`))
       .catch((err) => {
         ready = null;
         throw err;
@@ -40,7 +50,11 @@ export function rankListings(rows, sort) {
         freeShipping: row.shipping_free,
       }),
     }))
-    .sort((a, b) => b.match_score - a.match_score);
+    .sort((a, b) => {
+      const rank = Number(b.text_rank || 0) - Number(a.text_rank || 0);
+      if (Math.abs(rank) > 1e-9) return rank;
+      return Number(b.match_score || 0) - Number(a.match_score || 0);
+    });
 }
 
 export async function listingFacets(whereSql, values) {

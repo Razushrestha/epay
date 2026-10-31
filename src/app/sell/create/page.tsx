@@ -14,6 +14,8 @@ import {
   type SkuDraft,
   type VariationAxis,
 } from "@/lib/variations";
+import { AuthenticityBadge } from "@/components/catalog/AuthenticityBadge";
+import { ListingPhotoGrid, type ListingPhotoItem } from "@/components/sell/ListingPhotoGrid";
 
 interface Category {
   id: number;
@@ -34,15 +36,10 @@ interface Brand {
   id: number;
   name: string;
   slug: string;
+  is_verified?: boolean;
 }
 
-interface Photo {
-  id?: number;
-  url?: string;
-  thumbnail_url?: string;
-  file?: File;
-  preview: string;
-}
+type Photo = ListingPhotoItem;
 
 interface Specific {
   id: number;
@@ -52,7 +49,26 @@ interface Specific {
   is_required: boolean;
   unit?: string | null;
   help_text?: string | null;
+  min_value?: number | string | null;
+  max_value?: number | string | null;
   options?: { id: number; value: string }[] | null;
+}
+
+function specificFieldError(spec: Specific, raw: string) {
+  const value = String(raw ?? "").trim();
+  if (spec.input_type === "number" && value) {
+    const num = Number(value);
+    const min = spec.min_value == null ? 0 : Number(spec.min_value);
+    const max = spec.max_value == null ? Number.POSITIVE_INFINITY : Number(spec.max_value);
+    const unit = spec.unit ? ` ${spec.unit}` : "";
+    if (!Number.isFinite(num)) return `${spec.name} must be a number${unit}.`;
+    if (num < min || num > max) {
+      const high = Number.isFinite(max) ? String(max) : "∞";
+      return `${spec.name} must be between ${min} and ${high}${unit}. Negative or out-of-range values are not allowed.`;
+    }
+  }
+  if (spec.is_required && !value) return `Fill in ${spec.name} for this category.`;
+  return null;
 }
 
 function Hint({ children }: { children: ReactNode }) {
@@ -69,6 +85,7 @@ function Hint({ children }: { children: ReactNode }) {
 
 export default function CreateListingPage() {
   const router = useRouter();
+  const [sellerOk, setSellerOk] = useState<boolean | null>(null);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +102,7 @@ export default function CreateListingPage() {
   const [skuEdits, setSkuEdits] = useState<Record<string, Partial<SkuDraft>>>({});
   const [specifics, setSpecifics] = useState<Specific[]>([]);
   const [specificValues, setSpecificValues] = useState<Record<string, string>>({});
+  const [specificErrors, setSpecificErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     category_id: "",
@@ -114,14 +132,33 @@ export default function CreateListingPage() {
     upc: "",
     size_options: "",
     color_options: "",
-    publish_immediately: false,
+    use_variations: false,
+    publish_immediately: true,
   });
 
   useEffect(() => {
-    loadFormData();
-  }, []);
+    const token = accountApi.getToken();
+    if (!token) {
+      router.replace("/login?redirect=/sell/create");
+      return;
+    }
+    accountApi<{ user: { isSeller?: boolean; isStaff?: boolean; kyc?: { status?: string } | null } }>("/api/v1/account")
+      .then((body) => {
+        if (body.user.isSeller || body.user.isStaff) {
+          setSellerOk(true);
+          return;
+        }
+        router.replace("/account/selling");
+      })
+      .catch(() => router.replace("/login?redirect=/sell/create"));
+  }, [router]);
+
+  useEffect(() => {
+    if (sellerOk) loadFormData();
+  }, [sellerOk]);
 
   const variationAxes = useMemo<VariationAxis[]>(() => {
+    if (!formData.use_variations) return [];
     if (formData.format !== "fixed" && formData.format !== "both") return [];
     const sizes = parseOptionList(formData.size_options);
     const colors = parseOptionList(formData.color_options);
@@ -129,7 +166,7 @@ export default function CreateListingPage() {
       ...(sizes.length ? [{ name: "Size", values: sizes }] : []),
       ...(colors.length ? [{ name: "Color", values: colors }] : []),
     ];
-  }, [formData.format, formData.size_options, formData.color_options]);
+  }, [formData.use_variations, formData.format, formData.size_options, formData.color_options]);
 
   const skuRows = useMemo(
     () =>
@@ -151,6 +188,7 @@ export default function CreateListingPage() {
     if (!formData.category_id) {
       setSpecifics([]);
       setSpecificValues({});
+      setSpecificErrors({});
       return;
     }
     fetch(`${apiBase}/api/v1/catalog/categories/${formData.category_id}/specifics`)
@@ -158,6 +196,7 @@ export default function CreateListingPage() {
       .then((body) => {
         setSpecifics(body.specifics || []);
         setSpecificValues({});
+        setSpecificErrors({});
       })
       .catch(() => setSpecifics([]));
   }, [formData.category_id]);
@@ -165,9 +204,14 @@ export default function CreateListingPage() {
   async function loadFormData() {
     try {
       // Load categories (level 1 for now - can add cascading later)
-      const catRes = await fetch(`${apiBase}/api/v1/catalog/categories?level=1`);
+      const catRes = await fetch(`${apiBase}/api/v1/catalog/categories/tree`);
       const catData = await catRes.json();
-      setCategories(catData.categories || []);
+      const flatten = (nodes: Category[] = [], trail: string[] = []): Category[] =>
+        nodes.flatMap((node) => {
+          const path = [...trail, node.name];
+          return [{ ...node, name: path.join(" › ") }, ...flatten((node as Category & { children?: Category[] }).children, path)];
+        });
+      setCategories(flatten(catData.tree || []));
 
       // Load conditions
       const condRes = await fetch(`${apiBase}/api/v1/catalog/conditions`);
@@ -183,57 +227,42 @@ export default function CreateListingPage() {
     }
   }
 
-  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const newPhotos: Photo[] = [];
-    
-    for (let i = 0; i < Math.min(files.length, 12 - photos.length); i++) {
-      const file = files[i];
-      
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setError(`${file.name} is not an image file`);
-        continue;
-      }
-
-      // Validate file size (10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setError(`${file.name} is too large. Maximum size is 10MB`);
-        continue;
-      }
-
-      // Create preview
-      const preview = URL.createObjectURL(file);
-      newPhotos.push({ file, preview });
+  async function persistPhotoLayout(listingId: number, list: Photo[]) {
+    const token = accountApi.getToken();
+    const ids = list.map((photo) => photo.id).filter((id): id is number => Number.isInteger(id));
+    if (ids.length) {
+      await fetch(`${apiBase}/api/v1/listings/${listingId}/photos/reorder`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ photo_ids: ids }),
+      });
     }
-
-    setPhotos([...photos, ...newPhotos]);
-  }
-
-  function removePhoto(index: number) {
-    const newPhotos = [...photos];
-    // Revoke preview URL to free memory
-    if (newPhotos[index].preview) {
-      URL.revokeObjectURL(newPhotos[index].preview);
+    const primary = list.find((photo) => photo.is_primary && photo.id);
+    if (primary?.id) {
+      await fetch(`${apiBase}/api/v1/listings/photos/${primary.id}/primary`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
     }
-    newPhotos.splice(index, 1);
-    setPhotos(newPhotos);
   }
 
   async function uploadPhotos(listingId: number) {
-    const pending = photos.filter((photo) => photo.file);
-    if (pending.length === 0) return true;
+    if (!photos.length) return true;
 
     setUploadingPhotos(true);
     const token = accountApi.getToken();
     let failed = false;
+    const next = [...photos];
 
-    for (const photo of pending) {
+    for (let index = 0; index < next.length; index += 1) {
+      const photo = next[index];
+      if (!photo.file) continue;
       try {
         const formData = new FormData();
-        formData.append("photo", photo.file as File);
+        formData.append("photo", photo.file);
         if (removeBackground) {
           formData.append("removeBackground", "true");
         }
@@ -250,6 +279,13 @@ export default function CreateListingPage() {
         if (!res.ok) {
           throw new Error(data.error || "Upload failed");
         }
+        next[index] = {
+          ...photo,
+          id: data.photo?.id,
+          url: data.photo?.url,
+          thumbnail_url: data.photo?.thumbnail_url,
+          file: undefined,
+        };
       } catch (err: unknown) {
         failed = true;
         const message = err instanceof Error ? err.message : "Upload failed";
@@ -258,12 +294,68 @@ export default function CreateListingPage() {
       }
     }
 
+    setPhotos(next);
+    if (!failed) {
+      try {
+        await persistPhotoLayout(listingId, next);
+      } catch (err: unknown) {
+        failed = true;
+        setError(err instanceof Error ? err.message : "Could not save photo order");
+      }
+    }
     setUploadingPhotos(false);
     return !failed;
   }
 
+  async function saveDraft() {
+    if (!formData.category_id || !formData.title.trim()) {
+      setError("Enter a title and category to save this draft.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const token = accountApi.getToken();
+      if (!token) {
+        router.push("/login?redirect=/sell/create");
+        return;
+      }
+      const payload = {
+        ...formData,
+        category_id: parseInt(formData.category_id, 10),
+        brand_id: formData.brand_id ? parseInt(formData.brand_id, 10) : null,
+        condition_id: formData.condition_id ? parseInt(formData.condition_id, 10) : null,
+        price: formData.price ? parseFloat(formData.price) : null,
+        quantity: parseInt(formData.quantity, 10) || 1,
+        auction_start_price: formData.auction_start_price ? parseFloat(formData.auction_start_price) : null,
+        auction_reserve_price: formData.auction_reserve_price ? parseFloat(formData.auction_reserve_price) : null,
+        auction_duration: parseInt(formData.auction_duration, 10) || 168,
+        specifics: specificValues,
+        publish_immediately: false,
+        save_as_draft: true,
+      };
+      const res = await fetch(`${apiBase}/api/v1/listings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to save draft");
+      router.push("/sell/listings?tab=draft");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save draft");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!validateStep1()) return;
+    if (!validateStep2()) return;
     setError(null);
     setLoading(true);
 
@@ -298,7 +390,9 @@ export default function CreateListingPage() {
             ? parseFloat(formData.shipping_international_cost)
             : null,
           specifics: specificValues,
-          variations: variationAxes.map((axis) => ({ name: axis.name, options: axis.values })),
+          variations: variationAxes.length
+            ? variationAxes.map((axis) => ({ name: axis.name, options: axis.values }))
+            : undefined,
           skus,
         };
 
@@ -373,14 +467,110 @@ export default function CreateListingPage() {
   }
 
   function validateStep1() {
+    const nextErrors: Record<string, string> = {};
+    for (const spec of specifics) {
+      const message = specificFieldError(spec, specificValues[spec.slug] ?? "");
+      if (message && spec.input_type === "number" && String(specificValues[spec.slug] ?? "").trim()) {
+        nextErrors[spec.slug] = message;
+      }
+    }
+    if (Object.keys(nextErrors).length) {
+      setSpecificErrors(nextErrors);
+      setError(Object.values(nextErrors)[0]);
+      return false;
+    }
     if (!formData.category_id || !formData.title.trim() || !formData.description.trim() || !formData.condition_id) {
       setError("Fill in category, title, description, and condition first.");
       return false;
     }
-    const missing = specifics.find((item) => item.is_required && !String(specificValues[item.slug] ?? "").trim());
-    if (missing) {
-      setError(`Fill in ${missing.name} for this category.`);
+    for (const spec of specifics) {
+      const message = specificFieldError(spec, specificValues[spec.slug] ?? "");
+      if (message) nextErrors[spec.slug] = message;
+    }
+    if (Object.keys(nextErrors).length) {
+      setSpecificErrors(nextErrors);
+      setError(Object.values(nextErrors)[0]);
       return false;
+    }
+    setSpecificErrors({});
+    setError(null);
+    return true;
+  }
+
+  function validateStep2() {
+    if (formData.format === "fixed" || formData.format === "both") {
+      if (formData.use_variations) {
+        if (!variationAxes.length) {
+          setError("Add Size and/or Color options for this variation listing.");
+          return false;
+        }
+        const priced = skuRows.some((row) => Number(row.price) > 0);
+        const total = skuStockTotal(skuRows);
+        if (!priced) {
+          setError("Set a price for each SKU combination.");
+          return false;
+        }
+        if (total < 1) {
+          setError("Set quantity for at least one SKU combination.");
+          return false;
+        }
+      } else {
+        const price = Number(formData.price);
+        const qty = parseInt(formData.quantity, 10);
+        if (!Number.isFinite(price) || price <= 0) {
+          setError("Enter a Buy It Now price in NPR.");
+          return false;
+        }
+        if (!Number.isFinite(qty) || qty < 1) {
+          setError("Stock quantity must be at least 1.");
+          return false;
+        }
+      }
+    }
+    if (formData.format === "auction" || formData.format === "both") {
+      const start = Number(formData.auction_start_price);
+      const reserve = formData.auction_reserve_price === "" ? null : Number(formData.auction_reserve_price);
+      if (!Number.isFinite(start) || start <= 0) {
+        setError("Enter a starting bid in NPR.");
+        return false;
+      }
+      if (reserve != null && (!Number.isFinite(reserve) || reserve < start)) {
+        setError("Reserve price must be at least the starting bid.");
+        return false;
+      }
+      if (!["72", "120", "168", "240"].includes(String(formData.auction_duration))) {
+        setError("Select a duration of 3, 5, 7, or 10 days.");
+        return false;
+      }
+    }
+    if (formData.format === "both") {
+      const start = Number(formData.auction_start_price);
+      const bin = Number(formData.price);
+      if (Number.isFinite(start) && Number.isFinite(bin) && bin <= start) {
+        setError("Buy It Now price must be higher than the starting bid.");
+        return false;
+      }
+    }
+    if (formData.allow_best_offer && (formData.format === "fixed" || formData.format === "both")) {
+      const listed = Number(formData.price);
+      const accept = formData.auto_accept_price === "" ? null : Number(formData.auto_accept_price);
+      const decline = formData.auto_decline_price === "" ? null : Number(formData.auto_decline_price);
+      if (accept != null && (!Number.isFinite(accept) || accept <= 0)) {
+        setError("Enter a valid auto-accept amount, or leave it blank.");
+        return false;
+      }
+      if (decline != null && (!Number.isFinite(decline) || decline <= 0)) {
+        setError("Enter a valid auto-decline amount, or leave it blank.");
+        return false;
+      }
+      if (accept != null && Number.isFinite(listed) && accept > listed) {
+        setError("Auto-accept must be at or below the listed price.");
+        return false;
+      }
+      if (decline != null && accept != null && decline >= accept) {
+        setError("Auto-decline must be lower than auto-accept.");
+        return false;
+      }
     }
     setError(null);
     return true;
@@ -394,11 +584,19 @@ export default function CreateListingPage() {
     { n: 3, label: "Photos & publish" },
   ];
 
+  if (sellerOk !== true) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f8fd] text-[14px] text-[#6b7587]">
+        Checking seller access…
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f8fd] py-5 sm:py-8">
       <div className="page-shell mx-auto max-w-[920px]">
         {error && (
-          <div className="mb-5 rounded-2xl border border-[#f5c2c7] bg-[#fff5f5] px-4 py-3 text-[14px] text-[#e53238]">
+          <div role="alert" className="mb-5 rounded-2xl border border-[#f5c2c7] bg-[#fff5f5] px-4 py-3 text-[14px] text-[#e53238]">
             {error}
           </div>
         )}
@@ -427,7 +625,7 @@ export default function CreateListingPage() {
           })}
         </ol>
 
-        <form onSubmit={handleSubmit} className="rounded-[28px] border border-[#e8eef6] bg-white p-5 shadow-[0_18px_50px_-32px_rgba(15,40,80,0.35)] sm:p-8">
+        <form noValidate onSubmit={handleSubmit} className="rounded-[28px] border border-[#e8eef6] bg-white p-5 shadow-[0_18px_50px_-32px_rgba(15,40,80,0.35)] sm:p-8">
           {step === 1 && (
             <div className="space-y-5">
               <div>
@@ -526,8 +724,11 @@ export default function CreateListingPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                    Brand <span className="text-[#e11d48]">*</span>
+                  <label className="mb-1.5 flex flex-wrap items-center gap-2 text-[13.5px] font-semibold text-[#0f1c3f]">
+                    <span>
+                      Brand <span className="text-[#e11d48]">*</span>
+                    </span>
+                    {brands.find((brand) => String(brand.id) === formData.brand_id)?.is_verified ? <AuthenticityBadge /> : null}
                   </label>
                   <select
                     value={formData.brand_id}
@@ -537,12 +738,35 @@ export default function CreateListingPage() {
                     <option value="">No brand</option>
                     {brands.map((brand) => (
                       <option key={brand.id} value={brand.id}>
-                        {brand.name}
+                        {brand.is_verified ? `${brand.name} · Authentic` : brand.name}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
+
+              {formData.condition_id ? (
+                <div>
+                  <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
+                    Seller notes
+                    {conditions.find((cond) => String(cond.id) === formData.condition_id)?.name ? (
+                      <span className="font-normal text-[#8a94a6]">
+                        {" "}
+                        ({conditions.find((cond) => String(cond.id) === formData.condition_id)?.name})
+                      </span>
+                    ) : null}
+                  </label>
+                  <textarea
+                    value={formData.condition_description}
+                    onChange={(e) => updateField("condition_description", e.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    placeholder="Describe wear, repairs, battery health, or restoration work for this condition."
+                    className={`${field} min-h-[88px] resize-y`}
+                  />
+                  <Hint>Shown on the product page next to the condition badge.</Hint>
+                </div>
+              ) : null}
 
               {specifics.length ? (
                 <div>
@@ -557,7 +781,14 @@ export default function CreateListingPage() {
                           <select
                             required={spec.is_required}
                             value={specificValues[spec.slug] ?? ""}
-                            onChange={(e) => setSpecificValues((prev) => ({ ...prev, [spec.slug]: e.target.value }))}
+                            onChange={(e) => {
+                              setSpecificValues((prev) => ({ ...prev, [spec.slug]: e.target.value }));
+                              setSpecificErrors((prev) => {
+                                const next = { ...prev };
+                                delete next[spec.slug];
+                                return next;
+                              });
+                            }}
                             className={`${field} mt-1.5 font-normal`}
                           >
                             <option value="">Select</option>
@@ -577,6 +808,23 @@ export default function CreateListingPage() {
                             <option value="Yes">Yes</option>
                             <option value="No">No</option>
                           </select>
+                        ) : spec.input_type === "number" ? (
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            required={spec.is_required}
+                            value={specificValues[spec.slug] ?? ""}
+                            onChange={(e) => {
+                              setSpecificValues((prev) => ({ ...prev, [spec.slug]: e.target.value }));
+                              setSpecificErrors((prev) => {
+                                const next = { ...prev };
+                                delete next[spec.slug];
+                                return next;
+                              });
+                            }}
+                            className={`${field} mt-1.5 font-normal ${specificErrors[spec.slug] ? "border-[#e53238] focus:border-[#e53238] focus:ring-[#e53238]/15" : ""}`}
+                            placeholder={spec.unit ? `Number (${spec.unit})` : "Number"}
+                          />
                         ) : (
                           <input
                             required={spec.is_required}
@@ -585,7 +833,13 @@ export default function CreateListingPage() {
                             className={`${field} mt-1.5 font-normal`}
                           />
                         )}
-                        {spec.help_text ? <Hint>{spec.help_text}</Hint> : null}
+                        {specificErrors[spec.slug] ? (
+                          <p className="mt-1.5 text-[12.5px] font-normal text-[#e53238]" role="alert">
+                            {specificErrors[spec.slug]}
+                          </p>
+                        ) : spec.help_text ? (
+                          <Hint>{spec.help_text}</Hint>
+                        ) : null}
                       </label>
                     ))}
                   </div>
@@ -594,15 +848,16 @@ export default function CreateListingPage() {
 
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
                 <button
-                  type="submit"
+                  type="button"
                   disabled={loading}
+                  onClick={() => saveDraft()}
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#d8dee8] bg-white px-5 text-[14.5px] font-semibold text-[#0f3d4c] hover:bg-[#f7fafc] disabled:opacity-60"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
                     <path d="M7 3h8l5 5v13H7V3Z" />
                     <path d="M15 3v6h6M9 13h6M9 17h6" />
                   </svg>
-                  Save draft
+                  {loading ? "Saving…" : "Save as Draft"}
                 </button>
                 <button
                   type="button"
@@ -655,17 +910,21 @@ export default function CreateListingPage() {
                 <div className="grid gap-5 md:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                      Price (NPR) <span className="text-[#e11d48]">*</span>
+                      {formData.format === "both" ? "Buy It Now price (NPR)" : "Price (NPR)"}{" "}
+                      <span className="text-[#e11d48]">*</span>
                     </label>
                     <input
                       type="number"
-                      required
+                      required={!formData.use_variations}
                       step="0.01"
                       min="0"
                       value={formData.price}
                       onChange={(e) => updateField("price", e.target.value)}
                       className={field}
                     />
+                    {formData.use_variations ? (
+                      <Hint>Used as the default for new SKU rows. Each combination can override this.</Hint>
+                    ) : null}
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Was price (NPR)</label>
@@ -682,7 +941,8 @@ export default function CreateListingPage() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                      {skuRows.length ? "Default quantity per combination" : "Quantity"}
+                      {skuRows.length ? "Default quantity per combination" : "Stock quantity"}{" "}
+                      <span className="text-[#e11d48]">*</span>
                     </label>
                     <input
                       type="number"
@@ -698,21 +958,81 @@ export default function CreateListingPage() {
                 </div>
               )}
 
+              {(formData.format === "fixed" || formData.format === "both") && (
+                <div className="space-y-4 rounded-2xl border border-[#e4eaf2] bg-white px-4 py-4">
+                  <label className="flex items-center gap-2 text-[14px] font-medium text-[#0f1c3f]">
+                    <input
+                      type="checkbox"
+                      checked={formData.allow_best_offer}
+                      onChange={(e) => updateField("allow_best_offer", e.target.checked)}
+                      className="h-4 w-4 rounded border-[#c5cedb] text-[#13948e]"
+                    />
+                    Allow Best Offer
+                  </label>
+                  {formData.allow_best_offer ? (
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
+                          Auto-Accept Threshold (NPR)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.auto_accept_price}
+                          onChange={(e) => updateField("auto_accept_price", e.target.value)}
+                          placeholder="e.g. 9000"
+                          className={field}
+                        />
+                        <Hint>Offers at or above this amount are accepted immediately.</Hint>
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
+                          Auto-Decline Threshold (NPR)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.auto_decline_price}
+                          onChange={(e) => updateField("auto_decline_price", e.target.value)}
+                          placeholder="e.g. 7000"
+                          className={field}
+                        />
+                        <Hint>Offers below this amount are declined immediately. Amounts in between wait for review.</Hint>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
               {formData.format === "fixed" || formData.format === "both" ? (
                 <div className="space-y-4">
+                  <label className="flex items-center gap-2 text-[14px] font-medium text-[#0f1c3f]">
+                    <input
+                      type="checkbox"
+                      checked={formData.use_variations}
+                      onChange={(e) => updateField("use_variations", e.target.checked)}
+                      className="h-4 w-4 rounded border-[#d8dee8] text-[#13948e]"
+                    />
+                    Variations
+                  </label>
+                  <Hint>Turn on to add Size and Color options with a unique price, quantity, and SKU for each combination.</Hint>
+                  {formData.use_variations ? (
+                  <>
                   <div className="grid gap-5 md:grid-cols-2">
                     <div>
-                      <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Sizes (optional)</label>
+                      <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Option 1: Size</label>
                       <input
                         type="text"
                         value={formData.size_options}
                         onChange={(e) => updateField("size_options", e.target.value)}
-                        placeholder="S, M, L, XL"
+                        placeholder="S, M, L"
                         className={field}
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Colors (optional)</label>
+                      <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Option 2: Color</label>
                       <input
                         type="text"
                         value={formData.color_options}
@@ -758,6 +1078,8 @@ export default function CreateListingPage() {
                     onChange={setSkuRows}
                     defaultPrice={formData.price}
                   />
+                  </>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -766,13 +1088,13 @@ export default function CreateListingPage() {
                   <div className="grid gap-5 md:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                        Starting bid (NPR) <span className="text-[#e11d48]">*</span>
+                        Starting price (NPR) <span className="text-[#e11d48]">*</span>
                       </label>
                       <input
                         type="number"
                         required
                         step="0.01"
-                        min="0"
+                        min="1"
                         value={formData.auction_start_price}
                         onChange={(e) => updateField("auction_start_price", e.target.value)}
                         className={field}
@@ -788,16 +1110,18 @@ export default function CreateListingPage() {
                         onChange={(e) => updateField("auction_reserve_price", e.target.value)}
                         className={field}
                       />
+                      <Hint>Optional. Buyers never see this amount — only whether the reserve is met.</Hint>
                     </div>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Duration</label>
+                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
+                      Duration <span className="text-[#e11d48]">*</span>
+                    </label>
                     <select
                       value={formData.auction_duration}
                       onChange={(e) => updateField("auction_duration", e.target.value)}
                       className={field}
                     >
-                      <option value="24">1 day</option>
                       <option value="72">3 days</option>
                       <option value="120">5 days</option>
                       <option value="168">7 days</option>
@@ -817,7 +1141,7 @@ export default function CreateListingPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep(3)}
+                  onClick={() => validateStep2() && setStep(3)}
                   className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#0f3d4c] px-6 text-[14.5px] font-semibold text-white sm:max-w-[420px]"
                 >
                   Continue to photos & publish
@@ -833,51 +1157,13 @@ export default function CreateListingPage() {
             <div className="space-y-5">
               <div>
                 <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Photos (up to 12)</label>
-                <Hint>Add photos to showcase your item. The first photo is the primary image.</Hint>
-                
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-                  {/* Photo Grid */}
-                  {photos.map((photo, index) => (
-                    <div key={index} className="relative aspect-square group">
-                      <img
-                        src={photo.preview}
-                        alt={`Photo ${index + 1}`}
-                        className="h-full w-full rounded-lg border-2 border-[#e7eef6] object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removePhoto(index)}
-                        className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1.5 text-white opacity-0 shadow-lg transition-opacity hover:bg-red-600 group-hover:opacity-100"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                      {index === 0 && (
-                        <div className="absolute bottom-2 left-2 rounded bg-[#0f1c3f] px-2 py-1 text-xs text-white">
-                          Primary
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Add Photo Button */}
-                  {photos.length < 12 && (
-                    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#e7eef6] bg-[#f4f8fd] hover:border-[#3665f3] hover:bg-[#eef3ff]">
-                      <svg className="h-8 w-8 text-[#6b7587]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      <span className="mt-2 text-sm text-[#6b7587]">Add Photo</span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/jpg,image/png,image/webp"
-                        multiple
-                        onChange={handlePhotoSelect}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
-                </div>
+                <Hint>Drop up to 12 photos at once, drag to reorder, and choose the primary image. Only JPEG, PNG, and WebP under 10MB are accepted.</Hint>
+                <ListingPhotoGrid
+                  photos={photos}
+                  onChange={setPhotos}
+                  onError={setError}
+                  disabled={loading || uploadingPhotos}
+                />
 
                 {photos.length === 0 && (
                   <p className="mt-2 text-sm text-yellow-600">

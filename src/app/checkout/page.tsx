@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { accountApi, apiBase } from "@/lib/account-api";
-import { commerceHeaders } from "@/lib/commerce";
+import { commerceHeaders, reserveCheckout, validateCart } from "@/lib/commerce";
 import { useRouter } from "next/navigation";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PageHero } from "@/components/ui/PageHero";
@@ -37,13 +37,26 @@ export default function CheckoutPage() {
     total: "0",
   });
   const [error, setError] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
   const [buyerNotes, setBuyerNotes] = useState("");
   const [selectedGateway, setSelectedGateway] = useState<"esewa" | "khalti">("esewa");
   const [donate, setDonate] = useState(false);
   const [charityName, setCharityName] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("cancelled")) {
+      setCancelled(true);
+    }
     loadAddresses();
+    validateCart()
+      .then(async (result) => {
+        if (!result.valid) {
+          setError(result.issues[0]?.message || "Only 0 items available in stock");
+          return;
+        }
+        await reserveCheckout();
+      })
+      .catch((err: any) => setError(err.message));
     accountApi<{ prefs: { enabled: boolean; charity_id: number | null }; charities: { id: number; name: string }[] }>("/api/v1/account/donations")
       .then((body) => {
         setDonate(Boolean(body.prefs?.enabled));
@@ -75,11 +88,12 @@ export default function CheckoutPage() {
     }
   }
 
-  async function calculateTotals(coupon?: string) {
+  async function calculateTotals(coupon?: string | null) {
     try {
       const token = accountApi.getToken();
-      if (!token) return;
+      if (!token) return false;
 
+      const code = coupon !== undefined ? coupon : couponApplied ? couponCode : null;
       const headers = commerceHeaders();
       headers.set("Content-Type", "application/json");
       const res = await fetch(`${apiBase}/api/v1/cart/checkout/calculate`, {
@@ -87,7 +101,7 @@ export default function CheckoutPage() {
         headers,
         body: JSON.stringify({
           shipping_address_id: selectedAddressId,
-          coupon_code: coupon || couponCode,
+          coupon_code: code || null,
           donate,
         }),
       });
@@ -99,22 +113,25 @@ export default function CheckoutPage() {
 
       const data = await res.json();
       setTotals(data);
+      return true;
     } catch (err: any) {
       setError(err.message);
+      return false;
     }
   }
 
   async function applyCoupon() {
     if (!couponCode.trim()) return;
+    setError(null);
+    const ok = await calculateTotals(couponCode.trim());
+    setCouponApplied(ok);
+  }
 
-    try {
-      setError(null);
-      await calculateTotals(couponCode);
-      setCouponApplied(true);
-    } catch (err: any) {
-      setError(err.message);
-      setCouponApplied(false);
-    }
+  async function removeCoupon() {
+    setError(null);
+    setCouponApplied(false);
+    setCouponCode("");
+    await calculateTotals(null);
   }
 
   async function placeOrder() {
@@ -162,6 +179,7 @@ export default function CheckoutPage() {
         headers: paymentHeaders,
         body: JSON.stringify({
           order_id: orderId,
+          checkout_session_id: orderData.checkout_session_id || null,
           gateway: selectedGateway,
         }),
       });
@@ -195,8 +213,13 @@ export default function CheckoutPage() {
         href="/cart"
       />
       <main className="page-shell py-8">
+        {cancelled ? (
+          <div role="alert" className="mb-6 rounded-xl border border-[#f5c2c7] bg-[#fff5f5] p-4 text-[14px] text-[#e53238]">
+            Payment cancelled
+          </div>
+        ) : null}
         {error ? (
-          <div className="mb-6 rounded-xl border border-[#f5c2c7] bg-[#fff5f5] p-4 text-[14px] text-[#e53238]">
+          <div role="alert" className="mb-6 rounded-xl border border-[#f5c2c7] bg-[#fff5f5] p-4 text-[14px] text-[#e53238]">
             {error}
           </div>
         ) : null}
@@ -208,7 +231,7 @@ export default function CheckoutPage() {
               {addresses.length === 0 ? (
                 <div className="mt-4 text-center">
                   <p className="mb-4 text-[13px] text-[#6b7587]">No addresses yet.</p>
-                  <button onClick={() => router.push("/account?tab=preferences")} className="nexlo-btn nexlo-btn-blue">
+                  <button onClick={() => router.push("/account/addresses")} className="nexlo-btn nexlo-btn-blue">
                     Add address
                   </button>
                 </div>
@@ -233,15 +256,17 @@ export default function CheckoutPage() {
                         <div className="font-semibold text-[#0f1c3f]">{addr.full_name}</div>
                         <div className="text-[#6b7587]">
                           {addr.line1}
-                          {addr.line2 ? `, ${addr.line2}` : ""}
+                          {addr.line2 ? ` · ${addr.line2}` : ""}
                         </div>
                         <div className="text-[#6b7587]">
-                          {addr.city}{addr.region ? `, ${addr.region}` : ""} {addr.postal_code || ""}
+                          {addr.city}
+                          {addr.region ? `, ${/^\d+$/.test(addr.region) ? `Ward ${addr.region}` : addr.region}` : ""}
+                          {addr.postal_code ? ` ${addr.postal_code}` : ""}
                         </div>
                         {addr.phone ? <div className="text-[#6b7587]">{addr.phone}</div> : null}
                         {addr.is_default_shipping ? (
                           <span className="mt-1 inline-block rounded-full bg-[#d1fae5] px-2 py-0.5 text-[11px] font-semibold text-[#0d9488]">
-                            Default
+                            Default shipping
                           </span>
                         ) : null}
                       </div>
@@ -262,11 +287,24 @@ export default function CheckoutPage() {
                   className="nexlo-field flex-1"
                   disabled={couponApplied}
                 />
-                <button onClick={applyCoupon} disabled={!couponCode.trim() || couponApplied} className="nexlo-btn nexlo-btn-blue disabled:opacity-50">
-                  Apply
-                </button>
+                {couponApplied ? (
+                  <button onClick={removeCoupon} className="nexlo-btn nexlo-btn-blue">
+                    Remove
+                  </button>
+                ) : (
+                  <button onClick={applyCoupon} disabled={!couponCode.trim()} className="nexlo-btn nexlo-btn-blue disabled:opacity-50">
+                    Apply
+                  </button>
+                )}
               </div>
-              {couponApplied ? <div className="mt-2 text-[13px] text-[#0d9488]">Coupon applied.</div> : null}
+              {couponApplied ? (
+                <div role="alert" className="mt-3 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-3 py-2 text-[13px] font-semibold text-[#047857]">
+                  {couponCode} applied.{" "}
+                  {parseFloat(totals.shipping) === 0 && parseFloat(totals.discount) > 0
+                    ? "Shipping is free."
+                    : `You saved ${formatPrice(totals.discount)}.`}
+                </div>
+              ) : null}
             </section>
 
             <section className="nexlo-card p-5 sm:p-6">
@@ -363,8 +401,12 @@ export default function CheckoutPage() {
               <span>Total</span>
               <span className="text-[#3665f3]">{formatPrice(totals.total)}</span>
             </div>
-            <button onClick={placeOrder} disabled={loading || !selectedAddressId} className="nexlo-btn nexlo-btn-blue mt-6 h-11 w-full disabled:opacity-50">
-              {loading ? "Processing…" : "Place order"}
+            <button
+              onClick={placeOrder}
+              disabled={loading || !selectedAddressId || Boolean(error && /available in stock/i.test(error))}
+              className="nexlo-btn nexlo-btn-blue mt-6 h-11 w-full disabled:opacity-50"
+            >
+              {loading ? "Processing…" : "Pay Now"}
             </button>
             <p className="mt-4 text-center text-[12px] text-[#6b7587]">
               By placing your order you agree to our Terms and Privacy Policy. Escrow holds funds until delivery.

@@ -4,9 +4,12 @@
  */
 
 import { query } from './db.mjs';
-import { uploadPhoto, deletePhoto, setPrimaryPhoto } from './upload.mjs';
+import { reservationState } from './stock.mjs';
+import { uploadPhoto, deletePhoto, setPrimaryPhoto, reorderListingPhotos } from './upload.mjs';
 import { enforceVerification, evaluateUser } from './trust.mjs';
-import { indexListing, searchListingsAdvanced, suggestListings } from './search-index.mjs';
+import { commerceBlock } from './standing.mjs';
+import { validateListingSpecifics } from './catalog.mjs';
+import { conditionMatchSql, indexListing, listingSearchVectorSql, searchListingsAdvanced, suggestListings } from './search-index.mjs';
 import { notify } from './notify.mjs';
 import { sellerDsr } from './m3-commerce.mjs';
 import { cdnifyListing } from './cdn.mjs';
@@ -89,7 +92,11 @@ export async function handleListings(req, method, urlPath, headers, body, ipAddr
       return await updateListing(pathParts[0], body, auth.userId);
     }
 
-    if (method === 'DELETE' && pathParts[0] && !isNaN(pathParts[0])) {
+    if (method === 'DELETE' && pathParts[0] && pathParts[1] === 'watch') {
+      return await removeFromWatchlist(Number(pathParts[0]), auth.userId);
+    }
+
+    if (method === 'DELETE' && pathParts[0] && !isNaN(pathParts[0]) && !pathParts[1]) {
       return await deleteListing(pathParts[0], auth.userId);
     }
 
@@ -111,6 +118,10 @@ export async function handleListings(req, method, urlPath, headers, body, ipAddr
       return await uploadPhoto(req, pathParts[0], auth.userId);
     }
 
+    if (method === 'PATCH' && pathParts[0] && pathParts[1] === 'photos' && pathParts[2] === 'reorder') {
+      return await reorderListingPhotos(pathParts[0], body.photo_ids, auth.userId);
+    }
+
     if (method === 'POST' && pathParts[0] && pathParts[1] === 'photos') {
       // Legacy URL-based photo add
       return await addListingPhoto(pathParts[0], body, auth.userId);
@@ -127,10 +138,6 @@ export async function handleListings(req, method, urlPath, headers, body, ipAddr
     // Watchlist
     if (method === 'POST' && pathParts[0] && pathParts[1] === 'watch') {
       return await addToWatchlist(Number(pathParts[0]), auth.userId);
-    }
-
-    if (method === 'DELETE' && pathParts[0] && pathParts[1] === 'watch') {
-      return await removeFromWatchlist(Number(pathParts[0]), auth.userId);
     }
 
     if (method === 'GET' && pathParts[0] === 'watchlist') {
@@ -249,7 +256,11 @@ async function getListings(params) {
   ];
 
   if (categoryId) {
-    filters.push(`l.category_id = $${paramCount++}`);
+    filters.push(`EXISTS (
+      SELECT 1 FROM categories sel
+      WHERE sel.id = $${paramCount++}
+        AND c.lft >= sel.lft AND c.rgt <= sel.rgt
+    )`);
     values.push(categoryId);
   }
 
@@ -264,7 +275,7 @@ async function getListings(params) {
   }
 
   if (condition) {
-    filters.push(`l.condition_id = $${paramCount++}`);
+    filters.push(conditionMatchSql("l", `$${paramCount++}`));
     values.push(condition);
   }
 
@@ -355,15 +366,17 @@ async function getListings(params) {
     whereValues,
   );
   const facets = await listingFacets(whereSql, whereValues);
+  const total = Number(countResult.rows[0]?.total || listings.length);
 
   return {
     status: 200,
     body: {
       listings,
-      total: Number(countResult.rows[0]?.total || listings.length),
+      total,
       facets,
       limit,
-      offset
+      offset,
+      hasMore: offset + listings.length < total,
     }
   };
 }
@@ -383,8 +396,8 @@ async function getListingById(listingId, authHeader) {
     `SELECT 
       l.*,
       c.name as category_name, c.slug as category_slug,
-      b.name as brand_name, b.slug as brand_slug,
-      cond.name as condition_name, cond.description as condition_description,
+      b.name as brand_name, b.slug as brand_slug, b.is_verified as brand_is_verified,
+      cond.name as condition_name, cond.slug as condition_slug, cond.description as condition_guide,
       u.id as seller_id, u.public_id as seller_public_id, u.username as seller_username, u.email as seller_email,
       u.created_at as seller_created_at, u.account_type as seller_account_type,
       up.display_name as seller_full_name, up.avatar_url as seller_avatar, up.country as seller_country,
@@ -403,7 +416,10 @@ async function getListingById(listingId, authHeader) {
        FROM listing_questions q
        JOIN users au ON au.id = q.asker_id
        LEFT JOIN user_profiles ap ON ap.user_id = au.id
-       WHERE q.listing_id = l.id AND q.is_public = true) as questions
+       WHERE q.listing_id = l.id AND (
+         q.is_public = true
+         OR ($2::int IS NOT NULL AND (l.seller_id = $2 OR q.asker_id = $2))
+       )) as questions
     FROM listings l
     JOIN categories c ON l.category_id = c.id
     LEFT JOIN brands b ON l.brand_id = b.id
@@ -446,6 +462,21 @@ async function getListingById(listingId, authHeader) {
   listing.variations = variationRows.rows;
   listing.skus = skuRows.rows;
   listing.dsr = await sellerDsr(listing.seller_id);
+  const reserveAmount = Number(listing.auction_reserve_price || 0);
+  listing.has_reserve = reserveAmount > 0;
+  try {
+    const state = await query(`SELECT reserve_met FROM auction_states WHERE listing_id = $1`, [listingId]);
+    listing.reserve_met = Boolean(state.rows[0]?.reserve_met);
+  } catch {
+    listing.reserve_met = false;
+  }
+  const isOwner = viewerId != null && Number(listing.seller_id) === Number(viewerId);
+  if (!isOwner) delete listing.auction_reserve_price;
+  const hold = await reservationState(listing.id, null, viewerId);
+  listing.available = hold.available;
+  listing.reserved = hold.reserved;
+  listing.temporarily_unavailable = hold.temporarily_unavailable;
+  listing.reserved_until = hold.reserved_until;
   Object.assign(listing, cdnifyListing(listing));
 
   void (async () => {
@@ -490,7 +521,7 @@ async function searchListings(params) {
       (SELECT url FROM listing_photos WHERE listing_id = l.id AND is_primary = true LIMIT 1) as primary_photo,
       u.username as seller_username,
       u.public_id as seller_public_id,
-      ts_rank(to_tsvector('english', l.title || ' ' || l.description), plainto_tsquery('english', $1)) as rank
+      ts_rank(${listingSearchVectorSql("l")}, plainto_tsquery('english', $1)) as rank
     FROM listings l
     JOIN categories c ON l.category_id = c.id
     JOIN users u ON l.seller_id = u.id
@@ -500,14 +531,18 @@ async function searchListings(params) {
         WHERE v.seller_id = l.seller_id AND v.active = TRUE AND v.hide_listings = TRUE
           AND (v.ends_at IS NULL OR v.ends_at > NOW())
       )
-      AND to_tsvector('english', l.title || ' ' || l.description) @@ plainto_tsquery('english', $1)
+      AND ${listingSearchVectorSql("l")} @@ plainto_tsquery('english', $1)
   `;
 
   const values = [q];
   let paramCount = 2;
 
   if (categoryId) {
-    sql += ` AND l.category_id = $${paramCount++}`;
+    sql += ` AND EXISTS (
+      SELECT 1 FROM categories sel
+      WHERE sel.id = $${paramCount++}
+        AND c.lft >= sel.lft AND c.rgt <= sel.rgt
+    )`;
     values.push(categoryId);
   }
 
@@ -568,6 +603,8 @@ async function ensureSeller(userId) {
  * Create listing (seller)
  */
 async function createListing(data, userId) {
+  const blocked = await commerceBlock(userId);
+  if (blocked) return blocked;
   const verified = await enforceVerification(userId);
   if (verified) return verified;
   const sellerGate = await ensureSeller(userId);
@@ -580,16 +617,62 @@ async function createListing(data, userId) {
     shipping_free, shipping_cost, shipping_international, shipping_international_cost,
     item_location, sku, upc, specifics, publish_immediately, compare_at, shipping_additional
   } = data;
+  const saveAsDraft = data.save_as_draft === true || publish_immediately === false;
 
-  if (!category_id || !title || !description || !format) {
+  if (saveAsDraft) {
+    if (!category_id || !String(title || "").trim()) {
+      return { status: 400, body: { error: 'Enter a title and category to save this draft' } };
+    }
+  } else if (!category_id || !title || !description || !format) {
     return { status: 400, body: { error: 'Missing required fields: category_id, title, description, format' } };
   }
 
-  const status = publish_immediately ? 'active' : 'draft';
-  const publishedAt = publish_immediately ? 'NOW()' : 'NULL';
-  const durationHours = Math.max(1, Math.min(720, Number(auction_duration) || 168));
-  const startPrice = auction_start_price || price || 0;
-  const risk = await evaluateUser(userId, { kind: 'listing', title, description });
+  if (!saveAsDraft) {
+    const specError = await validateListingSpecifics(category_id, specifics);
+    if (specError) return specError;
+  }
+
+  const listingFormat = format || 'fixed';
+  const listingDescription = description == null ? '' : String(description);
+  const isAuction = listingFormat === 'auction' || listingFormat === 'both';
+  const allowedDurations = new Set([72, 120, 168, 240]);
+  const durationHours = allowedDurations.has(Number(auction_duration))
+    ? Number(auction_duration)
+    : 168;
+  const startPrice = Number(auction_start_price || (isAuction ? 0 : price) || 0);
+  const reservePrice = auction_reserve_price == null || auction_reserve_price === ''
+    ? null
+    : Number(auction_reserve_price);
+  if (isAuction && !saveAsDraft) {
+    if (!(startPrice > 0)) {
+      return { status: 400, body: { error: 'Enter a starting price for this auction' } };
+    }
+    if (reservePrice != null && Number.isFinite(reservePrice) && reservePrice > 0 && reservePrice < startPrice) {
+      return { status: 400, body: { error: 'Reserve price must be at least the starting price' } };
+    }
+    if (listingFormat === 'both' && !(Number(price) > 0)) {
+      return { status: 400, body: { error: 'Enter a Buy It Now price' } };
+    }
+    if (listingFormat === 'both' && Number(price) <= startPrice) {
+      return { status: 400, body: { error: 'Buy It Now price must be higher than the starting bid' } };
+    }
+  }
+
+  if (allow_best_offer && !saveAsDraft && (listingFormat === 'fixed' || listingFormat === 'both')) {
+    const listedPrice = skuPrice(price);
+    const acceptAt = skuPrice(auto_accept_price);
+    const declineAt = skuPrice(auto_decline_price);
+    if (acceptAt != null && listedPrice != null && acceptAt > listedPrice) {
+      return { status: 400, body: { error: 'Auto-accept must be at or below the listed price' } };
+    }
+    if (declineAt != null && acceptAt != null && declineAt >= acceptAt) {
+      return { status: 400, body: { error: 'Auto-decline must be lower than auto-accept' } };
+    }
+  }
+
+  const status = publish_immediately && !saveAsDraft ? 'active' : 'draft';
+  const publishedAt = status === 'active' ? 'NOW()' : 'NULL';
+  const risk = await evaluateUser(userId, { kind: 'listing', title, description: listingDescription });
   if (risk.blocked) return { status: 403, body: { error: 'This listing was blocked by trust and safety rules' } };
   const moderation = risk.flagged ? 'flagged' : 'approved';
   if (risk.flagged) {
@@ -609,18 +692,18 @@ async function createListing(data, userId) {
       item_location, sku, upc, specifics, status, published_at,
       auction_starts_at, auction_ends_at, auction_current_price, moderation_status, compare_at, shipping_additional
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, ${publishedAt},
-      ${publish_immediately && (format === 'auction' || format === 'both') ? 'NOW()' : 'NULL'},
-      ${publish_immediately && (format === 'auction' || format === 'both') ? `NOW() + INTERVAL '${durationHours} hours'` : 'NULL'},
+      ${status === 'active' && isAuction ? 'NOW()' : 'NULL'},
+      ${status === 'active' && isAuction ? `NOW() + INTERVAL '${durationHours} hours'` : 'NULL'},
       $27, $28, $29, $30)
     RETURNING *`,
     [
-      userId, category_id, brand_id, title, subtitle, description,
-      condition_id, condition_description, format, price, quantity,
-      auction_start_price, auction_reserve_price, auction_duration,
-      allow_best_offer, auto_accept_price, auto_decline_price,
-      shipping_free, shipping_cost, shipping_international, shipping_international_cost,
-      item_location, sku, upc, JSON.stringify(specifics || {}), status, startPrice, moderation,
-      compare_at || null, shipping_additional || null
+      userId, category_id || null, brand_id || null, title, subtitle || "", listingDescription,
+      condition_id || null, condition_description || "", listingFormat, skuPrice(price) ?? (isAuction ? startPrice || null : null), quantity || 1,
+      startPrice || null, reservePrice, durationHours,
+      Boolean(allow_best_offer), skuPrice(auto_accept_price), skuPrice(auto_decline_price),
+      Boolean(shipping_free), skuPrice(shipping_cost), Boolean(shipping_international), skuPrice(shipping_international_cost),
+      item_location || "", sku || "", upc || "", JSON.stringify(specifics || {}), status, startPrice || null, moderation,
+      skuPrice(compare_at), skuPrice(shipping_additional)
     ]
   );
   if (risk.flagged && result.rows[0]) {
@@ -631,11 +714,15 @@ async function createListing(data, userId) {
   }
 
   const listing = result.rows[0];
-  if (Array.isArray(data.variations) && listing) {
-    await saveVariations(listing.id, data.variations, data.skus, { price: data.price, quantity: data.quantity });
+  const variationAxes = Array.isArray(data.variations)
+    ? data.variations.filter((item) => item?.name && Array.isArray(item.options) && item.options.length)
+    : [];
+  if (variationAxes.length && listing) {
+    await saveVariations(listing.id, variationAxes, data.skus, { price: data.price, quantity: data.quantity });
     await syncListingStockFromSkus(listing.id);
   }
   if (listing?.status === 'active') await indexListing(listing.id).catch(() => {});
+  if (listing) await snapshotListingDraft(listing.id, userId, data);
 
   return { status: 201, body: { listing } };
 }
@@ -670,6 +757,9 @@ async function updateListing(listingId, data, userId) {
   }
 
   if (data.specifics) {
+    const categoryRow = await query("SELECT category_id FROM listings WHERE id = $1", [listingId]);
+    const specError = await validateListingSpecifics(data.category_id || categoryRow.rows[0]?.category_id, data.specifics);
+    if (specError) return specError;
     fields.push(`specifics = $${paramCount++}`);
     values.push(JSON.stringify(data.specifics));
   }
@@ -705,9 +795,12 @@ async function updateListing(listingId, data, userId) {
 
   if (Array.isArray(data.skus) || Array.isArray(data.variations)) {
     const fresh = await query('SELECT * FROM listings WHERE id = $1', [listingId]);
-    return { status: 200, body: { listing: fresh.rows[0] || result.rows[0] } };
+    const listing = fresh.rows[0] || result.rows[0];
+    if (listing) await snapshotListingDraft(listingId, userId, data);
+    return { status: 200, body: { listing } };
   }
 
+  if (result.rows[0]) await snapshotListingDraft(listingId, userId, data);
   return { status: 200, body: { listing: result.rows[0] } };
 }
 
@@ -743,63 +836,142 @@ async function publishListing(listingId, userId) {
     return { status: 400, body: { error: 'Only draft listings can be published' } };
   }
 
+  const ready = await query(
+    `SELECT title, description, format, price, auction_start_price FROM listings WHERE id = $1`,
+    [listingId],
+  );
+  const row = ready.rows[0] || {};
+  if (!String(row.description || "").trim()) {
+    return { status: 400, body: { error: 'Add a description before publishing' } };
+  }
+  const isAuction = row.format === 'auction' || row.format === 'both';
+  const isFixed = row.format === 'fixed' || row.format === 'both';
+  if (isFixed && !(Number(row.price) > 0)) {
+    return { status: 400, body: { error: 'Add a Buy It Now price before publishing' } };
+  }
+  if (isAuction && !(Number(row.auction_start_price || row.price) > 0)) {
+    return { status: 400, body: { error: 'Add a starting bid before publishing' } };
+  }
+
   await query(
     `UPDATE listings SET
        status = 'active',
        published_at = NOW(),
+       moderation_status = CASE WHEN moderation_status = 'rejected' THEN moderation_status ELSE 'approved' END,
        auction_starts_at = CASE WHEN format IN ('auction','both') THEN COALESCE(auction_starts_at, NOW()) ELSE auction_starts_at END,
        auction_ends_at = CASE WHEN format IN ('auction','both') THEN COALESCE(auction_ends_at, NOW() + (COALESCE(auction_duration, 168) || ' hours')::interval) ELSE auction_ends_at END,
        auction_current_price = CASE WHEN format IN ('auction','both') THEN COALESCE(auction_current_price, auction_start_price, price) ELSE auction_current_price END
      WHERE id = $1`,
     [listingId]
   );
+  await snapshotListingDraft(listingId, userId, { published: true, from: 'draft' });
   await indexListing(listingId).catch(() => {});
 
-  return { status: 200, body: { success: true } };
+  return { status: 200, body: { success: true, status: 'active' } };
 }
 
 /**
  * End listing
  */
 async function endListing(listingId, userId) {
-  const ownerCheck = await query('SELECT seller_id FROM listings WHERE id = $1', [listingId]);
-  if (!ownerCheck.rows[0] || ownerCheck.rows[0].seller_id !== userId) {
+  const ownerCheck = await query('SELECT seller_id, status FROM listings WHERE id = $1', [listingId]);
+  if (!ownerCheck.rows[0] || Number(ownerCheck.rows[0].seller_id) !== Number(userId)) {
     return { status: 403, body: { error: 'Not authorized' } };
+  }
+  if (ownerCheck.rows[0].status !== 'active') {
+    return { status: 400, body: { error: 'Only active listings can be ended' } };
   }
 
   await query(
     `UPDATE listings SET status = 'ended', ended_at = NOW() WHERE id = $1`,
     [listingId]
   );
+  await indexListing(listingId).catch(() => {});
 
-  return { status: 200, body: { success: true } };
+  return { status: 200, body: { success: true, status: 'ended' } };
 }
 
 /**
- * Relist an ended listing
+ * Relist an ended or sold listing as a new active copy.
  */
 async function relistListing(listingId, userId) {
-  const ownerCheck = await query('SELECT seller_id, status FROM listings WHERE id = $1', [listingId]);
-  if (!ownerCheck.rows[0] || ownerCheck.rows[0].seller_id !== userId) {
+  const ownerCheck = await query('SELECT * FROM listings WHERE id = $1', [listingId]);
+  const source = ownerCheck.rows[0];
+  if (!source || Number(source.seller_id) !== Number(userId)) {
     return { status: 403, body: { error: 'Not authorized' } };
   }
 
-  if (!['ended', 'sold'].includes(ownerCheck.rows[0].status)) {
+  if (!['ended', 'sold'].includes(source.status)) {
     return { status: 400, body: { error: 'Only ended or sold listings can be relisted' } };
   }
 
-  await query(
-    `UPDATE listings 
-     SET status = 'active', published_at = NOW(), ended_at = NULL, 
-         auction_bid_count = 0, auction_winner_id = NULL,
-         auction_starts_at = CASE WHEN format IN ('auction','both') THEN NOW() ELSE auction_starts_at END,
-         auction_ends_at = CASE WHEN format IN ('auction','both') THEN NOW() + (COALESCE(auction_duration, 168) || ' hours')::interval ELSE auction_ends_at END,
-         auction_current_price = CASE WHEN format IN ('auction','both') THEN COALESCE(auction_start_price, price, auction_current_price) ELSE auction_current_price END
-     WHERE id = $1`,
-    [listingId]
-  );
+  const isAuction = source.format === 'auction' || source.format === 'both';
+  const durationHours = [72, 120, 168, 240].includes(Number(source.auction_duration))
+    ? Number(source.auction_duration)
+    : 168;
+  const copiedQty = Math.max(Number(source.quantity) || 0, 1);
 
-  return { status: 200, body: { success: true } };
+  const created = await query(
+    `INSERT INTO listings (
+      seller_id, category_id, brand_id, title, subtitle, description,
+      condition_id, condition_description, format, price, quantity,
+      auction_start_price, auction_reserve_price, auction_buy_now_price, auction_duration,
+      allow_best_offer, auto_accept_price, auto_decline_price,
+      shipping_free, shipping_cost, shipping_additional, shipping_international, shipping_international_cost,
+      handling_time_days, item_location, sku, upc, specifics, compare_at,
+      status, published_at, ended_at, moderation_status, relisted_from_id,
+      auction_starts_at, auction_ends_at, auction_current_price, auction_bid_count, auction_winner_id
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,
+      'active', NOW(), NULL, 'approved', $30,
+      ${isAuction ? 'NOW()' : 'NULL'},
+      ${isAuction ? `NOW() + INTERVAL '${durationHours} hours'` : 'NULL'},
+      $31, 0, NULL
+    ) RETURNING id, status, title, price, quantity`,
+    [
+      source.seller_id, source.category_id, source.brand_id, source.title, source.subtitle, source.description,
+      source.condition_id, source.condition_description, source.format, source.price, copiedQty,
+      source.auction_start_price, source.auction_reserve_price, source.auction_buy_now_price, source.auction_duration,
+      source.allow_best_offer, source.auto_accept_price, source.auto_decline_price,
+      source.shipping_free, source.shipping_cost, source.shipping_additional, source.shipping_international, source.shipping_international_cost,
+      source.handling_time_days, source.item_location, source.sku, source.upc, source.specifics, source.compare_at,
+      source.id,
+      isAuction ? (source.auction_start_price || source.price) : source.auction_current_price,
+    ],
+  );
+  const copy = created.rows[0];
+
+  await query(
+    `INSERT INTO listing_photos (listing_id, url, thumbnail_url, position, width, height, size_bytes, is_primary)
+     SELECT $1, url, thumbnail_url, position, width, height, size_bytes, is_primary
+     FROM listing_photos WHERE listing_id = $2`,
+    [copy.id, source.id],
+  ).catch(() => {});
+
+  const variations = await query(
+    `SELECT id, name, position FROM listing_variations WHERE listing_id = $1 ORDER BY position, id`,
+    [source.id],
+  ).catch(() => ({ rows: [] }));
+  for (const variation of variations.rows) {
+    const inserted = await query(
+      `INSERT INTO listing_variations (listing_id, name, position) VALUES ($1,$2,$3) RETURNING id`,
+      [copy.id, variation.name, variation.position],
+    );
+    await query(
+      `INSERT INTO listing_variation_options (variation_id, value, position, photo_url)
+       SELECT $1, value, position, photo_url FROM listing_variation_options WHERE variation_id = $2`,
+      [inserted.rows[0].id, variation.id],
+    ).catch(() => {});
+  }
+  await query(
+    `INSERT INTO listing_variation_skus (listing_id, sku, combination, price, quantity, is_active)
+     SELECT $1, sku, combination, price, GREATEST(quantity, 0), COALESCE(is_active, TRUE)
+     FROM listing_variation_skus WHERE listing_id = $2`,
+    [copy.id, source.id],
+  ).catch(() => {});
+
+  await indexListing(copy.id).catch(() => {});
+  return { status: 201, body: { success: true, data: copy, relisted_from_id: source.id } };
 }
 
 /**
@@ -883,11 +1055,11 @@ async function addToWatchlist(listingId, userId) {
 async function removeFromWatchlist(listingId, userId) {
   const result = await query(
     'DELETE FROM watchlist WHERE user_id = $1 AND listing_id = $2 RETURNING *',
-    [userId, listingId]
+    [Number(userId), Number(listingId)]
   );
 
   if (result.rowCount > 0) {
-    await query('UPDATE listings SET watch_count = watch_count - 1 WHERE id = $1', [listingId]);
+    await query('UPDATE listings SET watch_count = GREATEST(watch_count - 1, 0) WHERE id = $1', [Number(listingId)]);
   }
 
   return { status: 200, body: { success: true } };
@@ -957,6 +1129,7 @@ async function askQuestion(listingId, data, userId) {
  */
 async function answerQuestion(questionId, data, userId) {
   const { answer } = data;
+  const isPublic = data.public !== false && data.is_public !== false;
 
   if (!answer) {
     return { status: 400, body: { error: 'Answer is required' } };
@@ -977,10 +1150,10 @@ async function answerQuestion(questionId, data, userId) {
 
   const result = await query(
     `UPDATE listing_questions 
-     SET answer = $1, answered_by = $2, answered_at = NOW()
+     SET answer = $1, answered_by = $2, answered_at = NOW(), is_public = $4
      WHERE id = $3
      RETURNING *`,
-    [answer, userId, questionId]
+    [answer, userId, questionId, isPublic]
   );
   if (result.rows[0]) {
     await notify(
@@ -1143,6 +1316,18 @@ async function syncListingStockFromSkus(listingId) {
      WHERE id = $3`,
     [qty, minPrice, listingId],
   );
+}
+
+async function snapshotListingDraft(listingId, sellerId, draftData) {
+  try {
+    await query(
+      `INSERT INTO listing_drafts (listing_id, seller_id, draft_data)
+       VALUES ($1, $2, $3::jsonb)`,
+      [listingId, sellerId, JSON.stringify(draftData && typeof draftData === "object" ? draftData : {})],
+    );
+  } catch {
+    // Draft history is best-effort and must not block create/update/publish.
+  }
 }
 
 function cartesianSkus(variations, defaults = {}) {
