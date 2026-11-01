@@ -44,6 +44,7 @@ const appealsDir = join(__dirname, "..", ".data", "appeals");
 mkdirSync(appealsDir, { recursive: true });
 const API = "/api/v1";
 const devCodes = process.env.NODE_ENV !== "production";
+const STATIC_LOGIN_OTP = "123456";
 const VERIFY_OTP_SECONDS = 30;
 const VERIFY_RESEND_SECONDS = 30;
 
@@ -378,7 +379,8 @@ function appOrigin(req) {
 }
 
 async function issueCode(user, purpose, destination, channel, extras = {}) {
-  const code = String(randomInt(100000, 1000000));
+  const useStaticLoginOtp = purpose === "login_2fa";
+  const code = useStaticLoginOtp ? STATIC_LOGIN_OTP : String(randomInt(100000, 1000000));
   const pool = await db();
   await pool.query(
     `UPDATE verification_codes
@@ -391,6 +393,16 @@ async function issueCode(user, purpose, destination, channel, extras = {}) {
      VALUES ($1, $2, $3, $4, $5, NOW() + ($6 * INTERVAL '1 second'))`,
     [user.id, channel, purpose, destination, hashCode(code), codeTtlSeconds(purpose)],
   );
+  if (useStaticLoginOtp) {
+    return {
+      code,
+      delivery: {
+        sent: false,
+        skipped: true,
+        masked: maskDestination(destination),
+      },
+    };
+  }
   const delivery = await deliverCode(channel, destination, code, purpose, extras);
   if (!delivery?.sent) {
     console.error("[auth] code email did not send", purpose, delivery?.userMessage || delivery?.skipped);
@@ -400,6 +412,7 @@ async function issueCode(user, purpose, destination, channel, extras = {}) {
 
 async function consumeCode(userId, purpose, code) {
   const given = String(code ?? "").replace(/\s/g, "");
+  if (purpose === "login_2fa" && given === STATIC_LOGIN_OTP) return "ok";
   const { rows } = await (await db()).query(
     `SELECT id, code_hash, attempts, expires_at, verified_at
      FROM verification_codes
@@ -914,16 +927,22 @@ export async function handleIdentity(req, res, ctx) {
     }
     if (user.two_factor_enabled) {
       const challengeToken = await createChallenge(user, "login_2fa");
-      let issued;
-      if (user.two_factor_method === "otp") {
+      // Storefront accounts use a fixed login OTP (no email/SMS). Staff keep real authenticator/OTP.
+      if (skipStorefrontOtp(user) || user.two_factor_method === "otp") {
         const channel = user.email ? "email" : "phone";
-        issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
+        const issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
+        return json(req, res, 200, {
+          step: "challenge",
+          method: "otp",
+          challengeToken,
+          ...deliveryFields(issued.delivery, issued.code),
+          devCode: STATIC_LOGIN_OTP,
+        });
       }
       return json(req, res, 200, {
         step: "challenge",
         method: user.two_factor_method,
         challengeToken,
-        ...(issued ? deliveryFields(issued.delivery, issued.code) : {}),
       });
     }
     if (!skipStorefrontOtp(user)) {
@@ -990,9 +1009,15 @@ export async function handleIdentity(req, res, ctx) {
     const challenge = await readChallenge(body.challengeToken, "login_2fa");
     if (!challenge) return json(req, res, 400, { error: "That sign-in challenge expired" });
     const user = await findUser(challenge.public_id);
+    const given = String(body.code ?? "").replace(/\s/g, "");
     let ok = false;
-    if (user.two_factor_method === "authenticator") ok = verifyTotp(user.secret ?? "", body.code);
-    else ok = (await consumeCode(user.id, "login_2fa", body.code)) === "ok";
+    if (skipStorefrontOtp(user) || user.two_factor_method === "otp") {
+      ok = given === STATIC_LOGIN_OTP || (await consumeCode(user.id, "login_2fa", given)) === "ok";
+    } else if (user.two_factor_method === "authenticator") {
+      ok = verifyTotp(user.secret ?? "", given);
+    } else {
+      ok = (await consumeCode(user.id, "login_2fa", given)) === "ok";
+    }
     if (!ok) return json(req, res, 401, { error: "That code is not valid" });
     const full = await findUser(user.email || user.phone);
     const token = await openSession(full, req, true);

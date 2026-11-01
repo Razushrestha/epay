@@ -82,17 +82,15 @@ export function LoginForm() {
       if (body.step === "challenge") {
         setStep("challenge");
         setChallengeToken(body.challengeToken);
-        const filled = digitsCode(body.devCode);
-        if (filled) setCode(filled);
-        setNotice(
-          body.method === "authenticator"
-            ? "Enter the 6-digit code from your authenticator app."
-            : filled
-              ? "Email is not sending from this computer yet. The code is filled in."
-              : body.sent === false
-                ? body.deliveryError ?? "We could not send the sign-in code. Sign in again to resend it."
-                : "Enter the code from your authenticator or the message we sent.",
-        );
+        if (body.method === "otp") {
+          const filled = digitsCode(body.devCode) || "123456";
+          setCode(filled);
+          setNotice("Use the static login code 123456. No email OTP is sent.");
+        } else {
+          const filled = digitsCode(body.devCode);
+          if (filled) setCode(filled);
+          setNotice("Enter the 6-digit code from your authenticator app.");
+        }
         return;
       }
       if (body.step === "enroll") {
