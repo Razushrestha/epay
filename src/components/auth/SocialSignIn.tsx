@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
+import { emailError } from "@/lib/email";
 
 type SocialStep = { step?: string; challengeToken?: string; token?: string };
+type Provider = "google" | "apple" | "facebook";
+type Mode = "live" | "demo" | "off";
 
 function GoogleLogo() {
   return (
@@ -40,11 +43,33 @@ type Props = {
   onSignedIn: (token: string) => void;
 };
 
+function label(provider: Provider) {
+  return provider === "google" ? "Google" : provider === "apple" ? "Apple" : "Facebook";
+}
+
 export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [modes, setModes] = useState<Record<Provider, Mode>>({
+    google: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? "live" : "demo",
+    apple: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID ? "live" : "demo",
+    facebook: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ? "live" : "demo",
+  });
+  const [demoProvider, setDemoProvider] = useState<Provider | null>(null);
+  const [demoEmail, setDemoEmail] = useState("");
+  const [demoError, setDemoError] = useState<string | null>(null);
+
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
   const appleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || "";
   const facebookAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "";
+
+  useEffect(() => {
+    void fetch(`${apiBase}/api/v1/auth/social/config`)
+      .then((res) => res.json())
+      .then((body: { data?: Record<Provider, Mode> }) => {
+        if (body?.data) setModes((prev) => ({ ...prev, ...body.data }));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (googleClientId && !document.getElementById("nexlo-gis")) {
@@ -93,28 +118,84 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
     }
   }
 
-  async function startGoogle() {
-    if (!googleClientId) {
-      onError("Google sign-in is not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID.");
+  async function completeDemo() {
+    if (!demoProvider) return;
+    const mailErr = emailError(demoEmail);
+    if (mailErr) {
+      setDemoError(mailErr);
       return;
     }
-    const g = (window as unknown as { google?: { accounts: { id: { initialize: (o: object) => void; prompt: () => void } } } }).google;
-    if (!g?.accounts?.id) {
+    setDemoError(null);
+    setBusy(label(demoProvider));
+    try {
+      await finish("/api/v1/auth/social/demo", {
+        provider: demoProvider,
+        email: demoEmail.trim().toLowerCase(),
+        name: demoEmail.trim().split("@")[0],
+      });
+      setDemoProvider(null);
+      setDemoEmail("");
+    } catch (err) {
+      setDemoError(err instanceof Error ? err.message : apiUnreachableMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function startGoogle() {
+    if (modes.google === "off") {
+      onError("Google sign-in is turned off.");
+      return;
+    }
+    if (modes.google === "demo" || !googleClientId) {
+      setDemoProvider("google");
+      setDemoError(null);
+      return;
+    }
+    const g = (
+      window as unknown as {
+        google?: {
+          accounts: {
+            id: {
+              initialize: (o: object) => void;
+              prompt: (cb?: (n: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean }) => void) => void;
+            };
+            oauth2: {
+              initTokenClient: (o: object) => { requestAccessToken: () => void };
+            };
+          };
+        };
+      }
+    ).google;
+    if (!g?.accounts?.oauth2) {
       onError("Google is still loading. Try again in a moment.");
       return;
     }
-    g.accounts.id.initialize({
-      client_id: googleClientId,
-      callback: (resp: { credential: string }) => {
-        void run("Google", () => finish("/api/v1/auth/google", { idToken: resp.credential }));
-      },
+
+    await new Promise<void>((resolve, reject) => {
+      const tokenClient = g.accounts.oauth2.initTokenClient({
+        client_id: googleClientId,
+        scope: "openid email profile",
+        callback: (resp: { access_token?: string; error?: string }) => {
+          if (resp.error || !resp.access_token) {
+            reject(new Error(resp.error || "Google sign-in was cancelled."));
+            return;
+          }
+          void finish("/api/v1/auth/google", { accessToken: resp.access_token }).then(resolve).catch(reject);
+        },
+      });
+      tokenClient.requestAccessToken();
     });
-    g.accounts.id.prompt();
   }
 
   async function startApple() {
-    if (!appleClientId) {
-      onError("Apple sign-in is not configured. Add NEXT_PUBLIC_APPLE_CLIENT_ID.");
+    if (modes.apple === "off") {
+      onError("Apple sign-in is turned off.");
+      return;
+    }
+    if (modes.apple === "demo" || !appleClientId) {
+      setDemoProvider("apple");
+      setDemoError(null);
       return;
     }
     const apple = (
@@ -122,7 +203,10 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
         AppleID?: {
           auth: {
             init: (o: object) => void;
-            signIn: () => Promise<{ authorization?: { id_token?: string }; user?: { name?: { firstName?: string; lastName?: string } } }>;
+            signIn: () => Promise<{
+              authorization?: { id_token?: string };
+              user?: { name?: { firstName?: string; lastName?: string } };
+            }>;
           };
         };
       }
@@ -145,8 +229,13 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
   }
 
   async function startFacebook() {
-    if (!facebookAppId) {
-      onError("Facebook sign-in is not configured. Add NEXT_PUBLIC_FACEBOOK_APP_ID.");
+    if (modes.facebook === "off") {
+      onError("Facebook sign-in is turned off.");
+      return;
+    }
+    if (modes.facebook === "demo" || !facebookAppId) {
+      setDemoProvider("facebook");
+      setDemoError(null);
       return;
     }
     const fb = (
@@ -185,44 +274,104 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
   }
 
   const buttons = [
-    { name: "Google", logo: <GoogleLogo />, onClick: () => void run("Google", startGoogle) },
-    { name: "Apple", logo: <AppleLogo />, onClick: () => void run("Apple", startApple) },
-    { name: "Facebook", logo: <FacebookLogo />, onClick: () => void run("Facebook", startFacebook) },
+    { name: "Google", provider: "google" as const, logo: <GoogleLogo />, onClick: () => void run("Google", startGoogle) },
+    { name: "Apple", provider: "apple" as const, logo: <AppleLogo />, onClick: () => void run("Apple", startApple) },
+    { name: "Facebook", provider: "facebook" as const, logo: <FacebookLogo />, onClick: () => void run("Facebook", startFacebook) },
   ];
 
-  if (layout === "row") {
-    return (
-      <div className="grid grid-cols-3 gap-2">
-        {buttons.map((s) => (
-          <button
-            key={s.name}
-            type="button"
-            disabled={Boolean(busy)}
-            onClick={s.onClick}
-            className="flex h-10 items-center justify-center gap-1.5 rounded-full border border-[#e3e8f0] text-[13px] font-medium text-[#1a2338] hover:bg-[#f8fafd] disabled:opacity-60"
-          >
-            {s.logo}
-            {busy === s.name ? "…" : s.name}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-2.5">
-      {buttons.map((s) => (
-        <button
-          key={s.name}
-          type="button"
-          disabled={Boolean(busy)}
-          onClick={s.onClick}
-          className="relative flex h-11 w-full items-center justify-center rounded-full border border-[#dfe5ee] bg-white text-[14.5px] font-medium text-[#1a2338] transition hover:border-[#c3cddd] hover:bg-[#f8fafd] disabled:opacity-60"
-        >
-          <span className="absolute left-4 flex items-center">{s.logo}</span>
-          {busy === s.name ? "Connecting…" : `Continue with ${s.name}`}
-        </button>
-      ))}
-    </div>
+    <>
+      {layout === "row" ? (
+        <div className="grid grid-cols-3 gap-2">
+          {buttons.map((s) => (
+            <button
+              key={s.name}
+              type="button"
+              disabled={Boolean(busy) || modes[s.provider] === "off"}
+              onClick={s.onClick}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-full border border-[#e3e8f0] text-[13px] font-medium text-[#1a2338] hover:bg-[#f8fafd] disabled:opacity-60"
+            >
+              {s.logo}
+              {busy === s.name ? "…" : s.name}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {buttons.map((s) => (
+            <button
+              key={s.name}
+              type="button"
+              disabled={Boolean(busy) || modes[s.provider] === "off"}
+              onClick={s.onClick}
+              className="relative flex h-11 w-full items-center justify-center rounded-full border border-[#dfe5ee] bg-white text-[14.5px] font-medium text-[#1a2338] transition hover:border-[#c3cddd] hover:bg-[#f8fafd] disabled:opacity-60"
+            >
+              <span className="absolute left-4 flex items-center">{s.logo}</span>
+              {busy === s.name ? "Connecting…" : `Continue with ${s.name}`}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {demoProvider ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" role="dialog" aria-modal="true" aria-labelledby="social-demo-title">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h2 id="social-demo-title" className="text-[17px] font-bold text-[#0f1c3f]">
+              Continue with {label(demoProvider)}
+            </h2>
+            <p className="mt-1.5 text-[13px] leading-snug text-[#5b6780]">
+              Live {label(demoProvider)} app credentials are not configured on this environment. Enter the email you want to use for this personal account.
+            </p>
+            <label className="mt-4 block">
+              <span className="sr-only">Email</span>
+              <input
+                type="email"
+                autoFocus
+                autoComplete="email"
+                placeholder="name@example.com"
+                value={demoEmail}
+                onChange={(e) => {
+                  setDemoEmail(e.target.value);
+                  setDemoError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void completeDemo();
+                  }
+                }}
+                className="h-11 w-full rounded-xl border border-[#e3e8f0] px-3.5 text-[14px] text-[#0f1c3f] outline-none focus:border-[#3665f3]"
+              />
+            </label>
+            {demoError ? (
+              <p role="alert" className="mt-2 text-[12.5px] text-red-600">
+                {demoError}
+              </p>
+            ) : null}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDemoProvider(null);
+                  setDemoEmail("");
+                  setDemoError(null);
+                }}
+                className="h-10 flex-1 rounded-full border border-[#dfe5ee] text-[13.5px] font-semibold text-[#3a4458]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => void completeDemo()}
+                className="h-10 flex-1 rounded-full bg-[#3665f3] text-[13.5px] font-semibold text-white disabled:opacity-60"
+              >
+                {busy ? "Signing in…" : "Continue"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

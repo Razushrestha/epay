@@ -191,16 +191,27 @@ export async function beginAuthentication(req, identifier) {
   const { rpID } = webauthnConfig(req);
   let allowCredentials;
   let userId = null;
-  if (identifier) {
+  const key = String(identifier ?? "").trim().toLowerCase();
+  if (key) {
     const { rows } = await query(
       `SELECT u.id FROM users u
        WHERE u.deleted_at IS NULL AND (lower(u.email) = $1 OR u.phone = $1 OR lower(u.username) = $1)
        LIMIT 1`,
-      [String(identifier).trim().toLowerCase()],
+      [key],
     );
-    if (rows[0]) {
-      userId = rows[0].id;
-      allowCredentials = await listCredentialRows(userId);
+    if (!rows[0]) {
+      return {
+        error:
+          "No passkey is registered for this account. Sign in with your password, then add a passkey under Account → Sign-in and security.",
+      };
+    }
+    userId = rows[0].id;
+    allowCredentials = await listCredentialRows(userId);
+    if (!allowCredentials.length) {
+      return {
+        error:
+          "No passkey is registered for this account. Sign in with your password, then add a passkey under Account → Sign-in and security.",
+      };
     }
   }
   const options = await generateAuthenticationOptions({

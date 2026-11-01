@@ -7,6 +7,7 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
+import { emailError } from "./email.mjs";
 import { hashPassword, passwordPolicyError, verifyPassword } from "./passwords.mjs";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -678,31 +679,64 @@ async function findSocialUser(provider, sub, email) {
   return null;
 }
 
+function socialProviderConfigured(provider) {
+  if (provider === "google") {
+    return Boolean(process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+  }
+  if (provider === "apple") {
+    return Boolean(process.env.APPLE_CLIENT_ID || process.env.NEXT_PUBLIC_APPLE_CLIENT_ID);
+  }
+  if (provider === "facebook") {
+    return Boolean(process.env.FACEBOOK_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID);
+  }
+  return false;
+}
+
+/** Demo social login when the provider app is not configured (QA / local). Set ALLOW_DEMO_SOCIAL=0 to disable. */
+function socialDemoAllowed(provider) {
+  if (process.env.ALLOW_DEMO_SOCIAL === "0") return false;
+  if (process.env.ALLOW_DEMO_SOCIAL === "1") return true;
+  return !socialProviderConfigured(provider);
+}
+
+async function verifyGoogleAccessToken(accessToken) {
+  const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error("Google could not confirm that sign-in");
+  return res.json();
+}
+
 async function finishSocial(req, res, json, provider, sub, email, name) {
   if (!sub) return json(req, res, 400, { error: `${provider} sign-in did not include an account id` });
-  let user = await findSocialUser(provider, sub, email);
+  const normalizedEmail = String(email ?? "").trim().toLowerCase();
+  if (normalizedEmail) {
+    const mailErr = emailError(normalizedEmail);
+    if (mailErr) return json(req, res, 400, { error: mailErr });
+  }
+  let user = await findSocialUser(provider, sub, normalizedEmail);
   if (!user) {
-    if (!email || !email.includes("@")) {
+    if (!normalizedEmail) {
       return json(req, res, 400, { error: `${provider} did not share an email. Grant email access or register with email.` });
     }
     const { rows } = await (await db()).query(
       `INSERT INTO users (public_id, email, status, email_verified_at, account_type)
        VALUES ($1, $2, 'active', NOW(), 'individual') RETURNING id, public_id, email`,
-      [randomUUID(), email],
+      [randomUUID(), normalizedEmail],
     );
     await (await db()).query(`INSERT INTO user_profiles (user_id, display_name) VALUES ($1, $2)`, [
       rows[0].id,
-      name || email.split("@")[0],
+      name || normalizedEmail.split("@")[0],
     ]);
     await (await db()).query(`INSERT INTO feedback_scores (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [rows[0].id]);
     await recordConsents(rows[0].id, ["privacy", "terms"], req).catch(() => {});
-    user = await findUser(email);
+    user = await findUser(normalizedEmail);
   }
   await (await db()).query(
     `INSERT INTO social_accounts (user_id, provider, provider_user_id, email)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (provider, provider_user_id) DO NOTHING`,
-    [user.id, provider, sub, email || user.email],
+    [user.id, provider, sub, normalizedEmail || user.email],
   );
   if (!skipStorefrontOtp(user) && (user.is_seller || user.is_staff) && !user.two_factor_enabled) {
     const challengeToken = await createChallenge(user, "enroll_2fa", 20);
@@ -752,8 +786,17 @@ export async function handleIdentity(req, res, ctx) {
     const lastName = String(body.lastName ?? "").trim() || null;
     const displayName = String(body.displayName ?? "").trim() || [firstName, lastName].filter(Boolean).join(" ") || null;
     const country = String(body.country ?? "").trim() || null;
+    if (accountType === "individual") {
+      if (!firstName) return json(req, res, 400, { error: "First name cannot be only spaces." });
+      if (!lastName) return json(req, res, 400, { error: "Last name cannot be only spaces." });
+    } else if (!displayName) {
+      return json(req, res, 400, { error: "Business name cannot be only spaces." });
+    }
     if (!email && !phone) return json(req, res, 400, { error: "Email or phone is required" });
-    if (email && !email.includes("@")) return json(req, res, 400, { error: "Enter a valid email" });
+    if (email) {
+      const mailErr = emailError(email);
+      if (mailErr) return json(req, res, 400, { error: mailErr });
+    }
     const passwordError = passwordPolicyError(password);
     if (passwordError) return json(req, res, 400, { error: passwordError });
     if (email) {
@@ -967,7 +1010,9 @@ export async function handleIdentity(req, res, ctx) {
       return json(req, res, rateLimitResult.status, rateLimitResult.body);
     }
     const body = await readJson(req);
-    return json(req, res, 200, await beginAuthentication(req, body.identifier));
+    const started = await beginAuthentication(req, body.identifier);
+    if (started.error) return json(req, res, 400, { error: started.error });
+    return json(req, res, 200, started);
   }
 
   if (pathname === `${API}/auth/passkeys` && method === "POST") {
@@ -1068,51 +1113,66 @@ export async function handleIdentity(req, res, ctx) {
     return json(req, res, 200, { token, user: await loadPublic(full), data: { enabled: confirmed.method } });
   }
 
+  if (pathname === `${API}/auth/social/config` && method === "GET") {
+    return json(req, res, 200, {
+      data: {
+        google: socialProviderConfigured("google") ? "live" : socialDemoAllowed("google") ? "demo" : "off",
+        apple: socialProviderConfigured("apple") ? "live" : socialDemoAllowed("apple") ? "demo" : "off",
+        facebook: socialProviderConfigured("facebook") ? "live" : socialDemoAllowed("facebook") ? "demo" : "off",
+      },
+    });
+  }
+
+  if (pathname === `${API}/auth/social/demo` && method === "POST") {
+    const body = await readJson(req);
+    const provider = String(body.provider ?? "").trim().toLowerCase();
+    if (!["google", "apple", "facebook"].includes(provider)) {
+      return json(req, res, 400, { error: "Choose Google, Apple, or Facebook." });
+    }
+    if (!socialDemoAllowed(provider)) {
+      return json(req, res, 403, {
+        error: `${provider} demo sign-in is disabled. Configure the live ${provider} app credentials.`,
+      });
+    }
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const mailErr = emailError(email);
+    if (mailErr) return json(req, res, 400, { error: mailErr });
+    const name = String(body.name ?? "").trim() || email.split("@")[0];
+    const sub = `demo:${provider}:${email}`;
+    return await finishSocial(req, res, json, provider, sub, email, name);
+  }
+
   if (pathname === `${API}/auth/google` && method === "POST") {
     const body = await readJson(req);
-    let email = String(body.email ?? "").trim().toLowerCase();
-    let name = String(body.name ?? "").trim();
-    let sub = String(body.sub ?? "").trim();
-    if (!body.idToken) {
-      return json(req, res, 400, { error: "Google sign-in requires a Google ID token" });
+    try {
+      if (body.idToken) {
+        const info = await fetch(
+          `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(body.idToken)}`,
+        );
+        if (!info.ok) return json(req, res, 401, { error: "Google could not confirm that sign-in" });
+        const profile = await info.json();
+        const audience = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+        if (audience && profile.aud !== audience) {
+          return json(req, res, 401, { error: "Google token audience did not match" });
+        }
+        const email = String(profile.email ?? "").toLowerCase();
+        const name = profile.name || email;
+        const sub = profile.sub;
+        if (!email || !sub) return json(req, res, 400, { error: "A Google email is required" });
+        return await finishSocial(req, res, json, "google", String(sub), email, name);
+      }
+      if (body.accessToken) {
+        const profile = await verifyGoogleAccessToken(body.accessToken);
+        const email = String(profile.email ?? "").toLowerCase();
+        const name = profile.name || email;
+        const sub = profile.sub;
+        if (!email || !sub) return json(req, res, 400, { error: "A Google email is required" });
+        return await finishSocial(req, res, json, "google", String(sub), email, name);
+      }
+      return json(req, res, 400, { error: "Google sign-in requires a Google ID token or access token" });
+    } catch (err) {
+      return json(req, res, 401, { error: err instanceof Error ? err.message : "Google could not confirm that sign-in" });
     }
-    const info = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(body.idToken)}`);
-    if (!info.ok) return json(req, res, 401, { error: "Google could not confirm that sign-in" });
-    const profile = await info.json();
-    const audience = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (audience && profile.aud !== audience) {
-      return json(req, res, 401, { error: "Google token audience did not match" });
-    }
-    email = String(profile.email ?? "").toLowerCase();
-    name = profile.name || email;
-    sub = profile.sub;
-    if (!email || !email.includes("@") || !sub) return json(req, res, 400, { error: "A Google email is required" });
-    let user = await findUser(email);
-    if (!user) {
-      const { rows } = await (await db()).query(
-        `INSERT INTO users (public_id, email, status, email_verified_at, account_type)
-         VALUES ($1, $2, 'active', NOW(), 'individual') RETURNING id, public_id, email`,
-        [randomUUID(), email],
-      );
-      await (await db()).query(
-        `INSERT INTO user_profiles (user_id, display_name) VALUES ($1, $2)`,
-        [rows[0].id, name || email.split("@")[0]],
-      );
-      await (await db()).query(`INSERT INTO feedback_scores (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [rows[0].id]);
-      user = await findUser(email);
-    }
-    await (await db()).query(
-      `INSERT INTO social_accounts (user_id, provider, provider_user_id, email)
-       VALUES ($1, 'google', $2, $3)
-       ON CONFLICT (provider, provider_user_id) DO NOTHING`,
-      [user.id, sub, email],
-    );
-    if (!skipStorefrontOtp(user) && (user.is_seller || user.is_staff) && !user.two_factor_enabled) {
-      const challengeToken = await createChallenge(user, "enroll_2fa", 20);
-      return json(req, res, 200, { step: "enroll", challengeToken });
-    }
-    const token = await openSession(user, req, true);
-    return json(req, res, 200, { token, user: await loadPublic(user) });
   }
 
   if (pathname === `${API}/auth/apple` && method === "POST") {

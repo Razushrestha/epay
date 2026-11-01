@@ -1,11 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
-import { nepalPhoneError } from "@/lib/nepal-phone";
+import { emailError } from "@/lib/email";
+import { nameError } from "@/lib/name";
+import { nepalPhoneError, sanitizeNepalPhoneInput } from "@/lib/nepal-phone";
 import { passwordPolicyError } from "@/lib/password";
 import { SocialSignIn } from "@/components/auth/SocialSignIn";
+
+const legalLinkClass = "font-semibold text-[#3665f3] underline-offset-2 hover:underline";
+
+function stopLabelToggle(e: MouseEvent) {
+  e.stopPropagation();
+}
 
 function Icon({ children }: { children: React.ReactNode }) {
   return (
@@ -21,11 +30,15 @@ export function RegisterForm() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [nameFieldError, setNameFieldError] = useState<string | null>(null);
   const [country, setCountry] = useState("");
   const [buyerOnly, setBuyerOnly] = useState(false);
   const [email, setEmail] = useState("");
+  const [emailFieldError, setEmailFieldError] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
+  const [phoneFieldError, setPhoneFieldError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
+  const [passwordFieldError, setPasswordFieldError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +47,33 @@ export function RegisterForm() {
 
   const field =
     "flex h-10 items-center gap-2.5 rounded-xl border border-[#e3e8f0] bg-white px-3.5 text-[#8a94a6] focus-within:border-[#3665f3] focus-within:text-[#3665f3]";
+  const nameField = nameFieldError
+    ? "flex h-10 items-center gap-2.5 rounded-xl border border-red-400 bg-white px-3.5 text-red-500 focus-within:border-red-500 focus-within:text-red-500"
+    : field;
+  const emailField = emailFieldError
+    ? "flex h-10 items-center gap-2.5 rounded-xl border border-red-400 bg-white px-3.5 text-red-500 focus-within:border-red-500 focus-within:text-red-500"
+    : field;
+  const phoneField = phoneFieldError
+    ? "flex h-10 items-center gap-2.5 rounded-xl border border-red-400 bg-white px-3.5 text-red-500 focus-within:border-red-500 focus-within:text-red-500"
+    : field;
+  const passwordField = passwordFieldError
+    ? "flex h-10 items-center gap-2.5 rounded-xl border border-red-400 bg-white px-3.5 text-red-500 focus-within:border-red-500 focus-within:text-red-500"
+    : field;
+
+  function onPhoneChange(value: string) {
+    const next = sanitizeNepalPhoneInput(value);
+    setPhone(next);
+    setPhoneFieldError(next ? nepalPhoneError(next) || null : null);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setNotice(null);
+    setNameFieldError(null);
+    setEmailFieldError(null);
+    setPhoneFieldError(null);
+    setPasswordFieldError(null);
     if (accountType === "individual" && !agreed) {
       setError("Please agree to the Terms of Service and Privacy Policy.");
       return;
@@ -47,19 +82,46 @@ export function RegisterForm() {
       setError("Select where your business is registered.");
       return;
     }
+    if (accountType === "individual") {
+      const firstErr = nameError(firstName, "First name");
+      const lastErr = nameError(lastName, "Last name");
+      if (firstErr || lastErr) {
+        const msg = firstErr || lastErr;
+        setNameFieldError(msg);
+        setError(msg);
+        return;
+      }
+    } else {
+      const businessErr = nameError(businessName, "Business name");
+      if (businessErr) {
+        setNameFieldError(businessErr);
+        setError(businessErr);
+        return;
+      }
+    }
     if (!email.trim() && !phone.trim()) {
       setError("Enter an email or a phone number.");
       return;
     }
+    if (email.trim()) {
+      const mailErr = emailError(email);
+      if (mailErr) {
+        setEmailFieldError(mailErr);
+        setError(mailErr);
+        return;
+      }
+    }
     if (phone.trim()) {
       const phoneError = nepalPhoneError(phone);
       if (phoneError) {
+        setPhoneFieldError(phoneError);
         setError(phoneError);
         return;
       }
     }
     const passwordError = passwordPolicyError(password);
     if (passwordError) {
+      setPasswordFieldError(passwordError);
       setError(passwordError);
       return;
     }
@@ -196,107 +258,189 @@ export function RegisterForm() {
 
       <form onSubmit={onSubmit} className="mt-3.5 space-y-2.5">
         {accountType === "individual" && (
-        <div className="grid grid-cols-2 gap-2.5">
-          <label className={field}>
-            <Icon>
-              <circle cx="12" cy="8" r="3" />
-              <path d="M6 19c.5-2.6 2.8-4 6-4s5.5 1.4 6 4" />
-            </Icon>
-            <input
-              required
-              autoComplete="given-name"
-              placeholder="First name"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
-            />
-          </label>
-          <label className={field}>
-            <Icon>
-              <circle cx="12" cy="8" r="3" />
-              <path d="M6 19c.5-2.6 2.8-4 6-4s5.5 1.4 6 4" />
-            </Icon>
-            <input
-              required
-              autoComplete="family-name"
-              placeholder="Last name"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-            className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
-          />
-          </label>
-        </div>
+          <div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <label className={nameField}>
+                <Icon>
+                  <circle cx="12" cy="8" r="3" />
+                  <path d="M6 19c.5-2.6 2.8-4 6-4s5.5 1.4 6 4" />
+                </Icon>
+                <input
+                  required
+                  autoComplete="given-name"
+                  placeholder="First name"
+                  aria-invalid={Boolean(nameFieldError)}
+                  value={firstName}
+                  onChange={(e) => {
+                    setFirstName(e.target.value);
+                    setNameFieldError(null);
+                  }}
+                  className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
+                />
+              </label>
+              <label className={nameField}>
+                <Icon>
+                  <circle cx="12" cy="8" r="3" />
+                  <path d="M6 19c.5-2.6 2.8-4 6-4s5.5 1.4 6 4" />
+                </Icon>
+                <input
+                  required
+                  autoComplete="family-name"
+                  placeholder="Last name"
+                  aria-invalid={Boolean(nameFieldError)}
+                  value={lastName}
+                  onChange={(e) => {
+                    setLastName(e.target.value);
+                    setNameFieldError(null);
+                  }}
+                  className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
+                />
+              </label>
+            </div>
+            {nameFieldError ? (
+              <p role="alert" className="mt-1.5 px-1 text-[12.5px] text-red-600">
+                {nameFieldError}
+              </p>
+            ) : null}
+          </div>
         )}
 
         {accountType === "business" && (
-          <input
-            required
-            autoComplete="organization"
-            placeholder="Business name"
-            value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            className="h-10 w-full rounded-xl border border-[#e3e8f0] bg-[#f7f8fa] px-3.5 text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6] focus:border-[#3665f3] focus:bg-white"
-          />
+          <div>
+            <input
+              required
+              autoComplete="organization"
+              placeholder="Business name"
+              aria-invalid={Boolean(nameFieldError)}
+              value={businessName}
+              onChange={(e) => {
+                setBusinessName(e.target.value);
+                setNameFieldError(null);
+              }}
+              className={`h-10 w-full rounded-xl border bg-[#f7f8fa] px-3.5 text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6] focus:bg-white ${
+                nameFieldError
+                  ? "border-red-400 focus:border-red-500"
+                  : "border-[#e3e8f0] focus:border-[#3665f3]"
+              }`}
+            />
+            {nameFieldError ? (
+              <p role="alert" className="mt-1.5 px-1 text-[12.5px] text-red-600">
+                {nameFieldError}
+              </p>
+            ) : null}
+          </div>
         )}
 
-        <label className={field}>
-          <Icon>
-            <rect x="3" y="5" width="18" height="14" rx="2.5" />
-            <path d="m3.5 7 8.5 6 8.5-6" />
-          </Icon>
-          <input
-            type="email"
-            autoComplete="email"
-            placeholder={accountType === "business" ? "Business email" : "Email or leave blank and use phone"}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
-          />
-        </label>
-
-        <label className={field}>
-          <Icon>
-            <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
-            <path d="M11 18h2" />
-          </Icon>
-          <input
-            type="tel"
-            autoComplete="tel"
-            placeholder="Phone number"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
-          />
-        </label>
-
-        <label className={field}>
-          <Icon>
-            <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
-            <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
-          </Icon>
-          <input
-            type={showPassword ? "text" : "password"}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            className="shrink-0 text-[#8a94a6]"
-          >
+        <div>
+          <label className={emailField}>
             <Icon>
-              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
-              <circle cx="12" cy="12" r="3" />
-              {showPassword && <path d="M4 4l16 16" />}
+              <rect x="3" y="5" width="18" height="14" rx="2.5" />
+              <path d="m3.5 7 8.5 6 8.5-6" />
             </Icon>
-          </button>
-        </label>
+            <input
+              type="email"
+              autoComplete="email"
+              placeholder={accountType === "business" ? "Business email" : "Email or leave blank and use phone"}
+              aria-invalid={Boolean(emailFieldError)}
+              aria-describedby={emailFieldError ? "register-email-error" : undefined}
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setEmailFieldError(null);
+              }}
+              onBlur={() => {
+                if (email.trim()) setEmailFieldError(emailError(email) || null);
+              }}
+              className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
+            />
+          </label>
+          {emailFieldError ? (
+            <p id="register-email-error" role="alert" className="mt-1.5 px-1 text-[12.5px] text-red-600">
+              {emailFieldError}
+            </p>
+          ) : null}
+        </div>
+
+        <div>
+          <label className={phoneField}>
+            <Icon>
+              <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+              <path d="M11 18h2" />
+            </Icon>
+            <input
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              placeholder="98XXXXXXXX (Nepal mobile)"
+              aria-invalid={Boolean(phoneFieldError)}
+              aria-describedby={phoneFieldError ? "register-phone-error" : undefined}
+              value={phone}
+              onChange={(e) => onPhoneChange(e.target.value)}
+              onBlur={() => {
+                if (phone.trim()) setPhoneFieldError(nepalPhoneError(phone) || null);
+              }}
+              className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
+            />
+          </label>
+          {phoneFieldError ? (
+            <p id="register-phone-error" role="alert" className="mt-1.5 px-1 text-[12.5px] text-red-600">
+              {phoneFieldError}
+            </p>
+          ) : (
+            <p className="mt-1.5 px-1 text-[12px] text-[#8a94a6]">
+              Nepal mobiles only: 10 digits starting with 97 or 98.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className={passwordField}>
+            <Icon>
+              <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+              <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+            </Icon>
+            <input
+              type={showPassword ? "text" : "password"}
+              required
+              minLength={8}
+              autoComplete="new-password"
+              placeholder="Password"
+              aria-invalid={Boolean(passwordFieldError)}
+              aria-describedby={passwordFieldError ? "register-password-error" : "register-password-hint"}
+              value={password}
+              onChange={(e) => {
+                const next = e.target.value;
+                setPassword(next);
+                setPasswordFieldError(next ? passwordPolicyError(next) || null : null);
+              }}
+              onBlur={() => {
+                if (password) setPasswordFieldError(passwordPolicyError(password) || null);
+              }}
+              className="h-full min-w-0 flex-1 bg-transparent text-[13.5px] text-[#0f1c3f] outline-none placeholder:text-[#8a94a6]"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="shrink-0 text-[#8a94a6]"
+            >
+              <Icon>
+                <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+                {showPassword && <path d="M4 4l16 16" />}
+              </Icon>
+            </button>
+          </label>
+          {passwordFieldError ? (
+            <p id="register-password-error" role="alert" className="mt-1.5 px-1 text-[12.5px] text-red-600">
+              {passwordFieldError}
+            </p>
+          ) : (
+            <p id="register-password-hint" className="mt-1.5 px-1 text-[12px] text-[#8a94a6]">
+              At least 8 characters, including one number and one special character.
+            </p>
+          )}
+        </div>
 
         {accountType === "business" && (
           <>
@@ -336,8 +480,14 @@ export function RegisterForm() {
             </label>
             <p className="text-[12.5px] leading-snug text-[#3a4458]">
               By selecting <span className="font-semibold">Create business account</span>, you agree to our{" "}
-              <span className="font-semibold text-[#3665f3]">User Agreement</span> and acknowledge reading our{" "}
-              <span className="font-semibold text-[#3665f3]">User Privacy Notice</span>.
+              <Link href="/terms" target="_blank" rel="noopener noreferrer" className={legalLinkClass}>
+                Terms of Service
+              </Link>{" "}
+              and acknowledge reading our{" "}
+              <Link href="/privacy" target="_blank" rel="noopener noreferrer" className={legalLinkClass}>
+                Privacy Policy
+              </Link>
+              .
             </p>
           </>
         )}
@@ -359,8 +509,15 @@ export function RegisterForm() {
             </svg>
           </span>
           <span>
-            I agree to Nexlo&apos;s <span className="font-semibold text-[#3665f3]">Terms of Service</span> and{" "}
-            <span className="font-semibold text-[#3665f3]">Privacy Policy</span>.
+            I agree to Nexlo&apos;s{" "}
+            <Link href="/terms" target="_blank" rel="noopener noreferrer" className={legalLinkClass} onClick={stopLabelToggle}>
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" target="_blank" rel="noopener noreferrer" className={legalLinkClass} onClick={stopLabelToggle}>
+              Privacy Policy
+            </Link>
+            .
           </span>
         </label>
         )}

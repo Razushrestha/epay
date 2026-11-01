@@ -535,6 +535,7 @@ function AccountScreen() {
       accountApi<{ data: Address[] }>("/api/v1/account/addresses").then((b) => setAddresses(b.data)).catch(() => undefined);
     }
     if (tab === "security") {
+      setSecPanel("passkeys");
       accountApi<{ data: Session[] }>("/api/v1/account/sessions").then((b) => setSessions(b.data)).catch(() => undefined);
     }
   }, [tab]);
@@ -622,7 +623,7 @@ function AccountScreen() {
 
       {tab === "account" && (
         <>
-          <section className="hero-bg relative overflow-hidden rounded-[16px] px-5 py-6 sm:px-7">
+          <section className="relative overflow-hidden rounded-[16px] bg-[#eaf1ff] px-5 py-6 sm:px-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
               {avatarPreview || (user.avatarUrl && !clearAvatar) ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -1173,11 +1174,15 @@ function AccountScreen() {
       {tab === "security" && (
         <section className="nexlo-card px-6 py-6 sm:px-8">
           <h1 className="text-[26px] font-bold tracking-tight text-[#0f1c3f]">Sign in and security</h1>
+          <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-[#5b6780]">
+            Register a passkey here after you sign in with your password. Once saved, you can use{" "}
+            <span className="font-semibold text-[#0f1c3f]">Sign in with a passkey</span> on the login page.
+          </p>
           <div className="mt-4">
             <SecurityField
               title="Passkeys"
-              description="Sign in across devices with your face, fingerprint, or PIN using a passkey stored in your password manager."
-              action="Edit"
+              description="Create or manage passkeys for face, fingerprint, PIN, or security-key sign-in."
+              action={secPanel === "passkeys" ? "Hide" : "Add / manage"}
               open={secPanel === "passkeys"}
               onToggle={() => setSecPanel(secPanel === "passkeys" ? null : "passkeys")}
             >

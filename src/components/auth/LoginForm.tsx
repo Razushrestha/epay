@@ -373,28 +373,46 @@ export function LoginForm() {
           )}
         </button>
         {passkeyOk ? (
-          <button
-            type="button"
-            disabled={loading}
-            onClick={async () => {
-              setLoading(true);
-              setError(null);
-              setNotice(null);
-              try {
-                const body = await authenticatePasskey(identifier.trim() || undefined);
-                finish(body.token);
-              } catch (err) {
-                const message = err instanceof Error ? err.message : "Passkey sign-in failed";
-                if (/not allowed|abort/i.test(message)) setError("Passkey prompt was cancelled.");
-                else setError(message);
-              } finally {
-                setLoading(false);
-              }
-            }}
-            className="h-11 w-full rounded-full border border-[#dfe5ee] text-[14.5px] font-semibold text-[#0f1c3f] hover:bg-[#f7fafc] disabled:opacity-60"
-          >
-            Sign in with a passkey
-          </button>
+          <div className="space-y-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={async () => {
+                setLoading(true);
+                setError(null);
+                setNotice(null);
+                try {
+                  if (!identifier.trim()) {
+                    setError("Enter your email or phone first, then try passkey sign-in.");
+                    return;
+                  }
+                  const body = await authenticatePasskey(identifier.trim());
+                  finish(body.token);
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : "Passkey sign-in failed";
+                  if (/not allowed|abort/i.test(message)) {
+                    setError("Passkey prompt was cancelled. You can still sign in with your password.");
+                  } else if (/no passkey|not registered|no passkeys available/i.test(message)) {
+                    setError(
+                      "No passkey is registered for this account yet. Sign in with your password, then add a passkey under Account → Sign-in and security.",
+                    );
+                    setNotice("Password sign-in still works. After you sign in, open Sign-in and security to register a passkey.");
+                  } else {
+                    setError(message);
+                  }
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="h-11 w-full rounded-full border border-[#dfe5ee] text-[14.5px] font-semibold text-[#0f1c3f] hover:bg-[#f7fafc] disabled:opacity-60"
+            >
+              Sign in with a passkey
+            </button>
+            <p className="px-1 text-center text-[12px] leading-snug text-[#8a94a6]">
+              No passkey yet? Sign in with your password, then register one in{" "}
+              <span className="font-medium text-[#5b6780]">Account → Sign-in and security</span>.
+            </p>
+          </div>
         ) : null}
       </form>
 
