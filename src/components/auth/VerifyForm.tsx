@@ -9,6 +9,7 @@ import {
   localOtpNotice,
   localSmsOtpNotice,
   setToken,
+  STATIC_VERIFY_OTP,
   VERIFY_RESEND_COOLDOWN_SECONDS,
 } from "@/lib/account-api";
 
@@ -64,27 +65,17 @@ export function VerifyForm() {
 
   useEffect(() => {
     setIdentifier(sessionStorage.getItem("nexlo_verify_id") ?? "");
-    const dest = sessionStorage.getItem("nexlo_verify_dest");
-    const sendError = sessionStorage.getItem("nexlo_code_error");
     const channel = sessionStorage.getItem("nexlo_verify_channel") === "phone" ? "phone" : "email";
-    const filled = digitsCode(sessionStorage.getItem("nexlo_dev_code"));
+    const filled = digitsCode(sessionStorage.getItem("nexlo_dev_code")) || STATIC_VERIFY_OTP;
+    sessionStorage.setItem("nexlo_dev_code", filled);
+    sessionStorage.removeItem("nexlo_code_error");
     const storedSent = Number(sessionStorage.getItem("nexlo_otp_sent_at") || 0);
     if (storedSent) setCooldown(cooldownLeft(storedSent));
-    else if (filled || dest) markOtpSent();
-    if (filled) {
-      setCode(filled);
-      setShowCode(true);
-      setNotice(channel === "phone" ? localSmsOtpNotice : localOtpNotice);
-      return;
-    }
-    if (sendError) setError(sendError);
-    else if (dest) {
-      setNotice(
-        channel === "phone"
-          ? `We sent a code by SMS to ${dest}. Codes expire in 30 seconds.`
-          : `We sent a code to ${dest}. Codes expire in 30 seconds.`,
-      );
-    }
+    else markOtpSent();
+    setCode(filled);
+    setShowCode(true);
+    setError(null);
+    setNotice(channel === "phone" ? localSmsOtpNotice : localOtpNotice);
   }, []);
 
   useEffect(() => {
@@ -158,26 +149,15 @@ export function VerifyForm() {
         return;
       }
       markOtpSent();
-      const filled = digitsCode(body.data?.devCode);
-      if (filled) {
-        sessionStorage.setItem("nexlo_dev_code", filled);
-        setCode(filled);
-        setShowCode(true);
-      }
+      const filled = digitsCode(body.data?.devCode) || STATIC_VERIFY_OTP;
+      sessionStorage.setItem("nexlo_dev_code", filled);
+      sessionStorage.removeItem("nexlo_code_error");
       if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", body.data.destinationMasked);
-      if (filled) {
-        setError(null);
-        setNotice(localOtpNotice);
-        setResent(false);
-        return;
-      }
-      if (body.data?.sent === false) {
-        setError(body.data.deliveryError ?? "We could not send the code. Tap Resend OTP again.");
-        setResent(false);
-        return;
-      }
-      setNotice(body.data?.destinationMasked ? `A new code was sent to ${body.data.destinationMasked}.` : null);
-      setResent(true);
+      setCode(filled);
+      setShowCode(true);
+      setError(null);
+      setNotice(localOtpNotice);
+      setResent(false);
     } catch (err) {
       setError(apiUnreachableMessage(err));
     } finally {
@@ -197,7 +177,7 @@ export function VerifyForm() {
         </span>
       </h1>
       <p className="mt-1.5 text-[13.5px] text-[#6b7587]">
-        Enter the latest 6-digit code we sent to your email or phone. Codes expire in 30 seconds. Wait for the countdown before Resend OTP.
+        Use the static code <span className="font-semibold text-[#0f1c3f]">123456</span>. Email/SMS OTP is disabled for now.
       </p>
 
       <div className="mt-4" aria-live="polite">

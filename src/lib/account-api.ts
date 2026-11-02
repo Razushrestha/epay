@@ -77,11 +77,13 @@ export function digitsCode(value: unknown) {
 export const VERIFY_OTP_TTL_SECONDS = 30;
 export const VERIFY_RESEND_COOLDOWN_SECONDS = 30;
 
+export const STATIC_VERIFY_OTP = "123456";
+
 export const localOtpNotice =
-  "Email is not sending from this computer yet. The code is filled in. Tap Verify.";
+  "Use the static code 123456. No email OTP is sent. Tap Verify.";
 
 export const localSmsOtpNotice =
-  "SMS is not sending from this computer yet. The code is filled in. Tap Verify.";
+  "Use the static code 123456. No SMS OTP is sent. Tap Verify.";
 
 export async function accountApi<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);

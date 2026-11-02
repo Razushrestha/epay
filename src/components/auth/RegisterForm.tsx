@@ -192,15 +192,10 @@ export function RegisterForm() {
       sessionStorage.setItem("nexlo_verify_id", identifier);
       if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", String(body.data.destinationMasked));
       else sessionStorage.removeItem("nexlo_verify_dest");
-      if (body.data?.devCode) sessionStorage.setItem("nexlo_dev_code", String(body.data.devCode));
-      else sessionStorage.removeItem("nexlo_dev_code");
+      sessionStorage.setItem("nexlo_dev_code", String(body.data?.devCode || "123456"));
       sessionStorage.setItem("nexlo_verify_channel", body.data?.channel === "phone" ? "phone" : "email");
       sessionStorage.setItem("nexlo_otp_sent_at", String(Date.now()));
-      if (body.data?.sent === false) {
-        sessionStorage.setItem("nexlo_code_error", body.data.deliveryError ?? "We could not send the code. Tap Resend on the next screen.");
-      } else {
-        sessionStorage.removeItem("nexlo_code_error");
-      }
+      sessionStorage.removeItem("nexlo_code_error");
       router.push("/verify");
     } catch (err) {
       setError(apiUnreachableMessage(err));
@@ -386,11 +381,7 @@ export function RegisterForm() {
             <p id="register-phone-error" role="alert" className="mt-1.5 px-1 text-[12.5px] text-red-600">
               {phoneFieldError}
             </p>
-          ) : (
-            <p className="mt-1.5 px-1 text-[12px] text-[#8a94a6]">
-              Nepal mobiles only: 10 digits starting with 97 or 98.
-            </p>
-          )}
+          ) : null}
         </div>
 
         <div>
@@ -406,7 +397,7 @@ export function RegisterForm() {
               autoComplete="new-password"
               placeholder="Password"
               aria-invalid={Boolean(passwordFieldError)}
-              aria-describedby={passwordFieldError ? "register-password-error" : "register-password-hint"}
+              aria-describedby={passwordFieldError ? "register-password-error" : undefined}
               value={password}
               onChange={(e) => {
                 const next = e.target.value;
@@ -435,11 +426,7 @@ export function RegisterForm() {
             <p id="register-password-error" role="alert" className="mt-1.5 px-1 text-[12.5px] text-red-600">
               {passwordFieldError}
             </p>
-          ) : (
-            <p id="register-password-hint" className="mt-1.5 px-1 text-[12px] text-[#8a94a6]">
-              At least 8 characters, including one number and one special character.
-            </p>
-          )}
+          ) : null}
         </div>
 
         {accountType === "business" && (

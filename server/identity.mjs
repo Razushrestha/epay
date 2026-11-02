@@ -45,9 +45,16 @@ const appealsDir = join(__dirname, "..", ".data", "appeals");
 mkdirSync(appealsDir, { recursive: true });
 const API = "/api/v1";
 const devCodes = process.env.NODE_ENV !== "production";
-const STATIC_LOGIN_OTP = "123456";
+/** Static OTP while email/SMS delivery is disabled for QA. */
+const STATIC_OTP = "123456";
+const STATIC_LOGIN_OTP = STATIC_OTP;
+const STATIC_OTP_PURPOSES = new Set(["login_2fa", "verify", "enroll_2fa", "reset", "change_phone"]);
 const VERIFY_OTP_SECONDS = 30;
 const VERIFY_RESEND_SECONDS = 30;
+
+function usesStaticOtp(purpose) {
+  return STATIC_OTP_PURPOSES.has(purpose);
+}
 
 /** Personal and business storefront accounts skip OTP/2FA so QA can sign in with a password. Staff still use 2FA. */
 function skipStorefrontOtp(user) {
@@ -358,12 +365,13 @@ async function loadPublic(user) {
 }
 
 function deliveryFields(delivery, code) {
+  const exposeCode = devCodes || code === STATIC_OTP;
   return {
     sent: Boolean(delivery?.sent),
     skipped: Boolean(delivery?.skipped),
     destinationMasked: delivery?.masked,
     deliveryError: delivery?.sent ? undefined : delivery?.userMessage,
-    devCode: devCodes ? code : undefined,
+    devCode: exposeCode ? code : undefined,
   };
 }
 
@@ -380,8 +388,8 @@ function appOrigin(req) {
 }
 
 async function issueCode(user, purpose, destination, channel, extras = {}) {
-  const useStaticLoginOtp = purpose === "login_2fa";
-  const code = useStaticLoginOtp ? STATIC_LOGIN_OTP : String(randomInt(100000, 1000000));
+  const staticOtp = usesStaticOtp(purpose);
+  const code = staticOtp ? STATIC_OTP : String(randomInt(100000, 1000000));
   const pool = await db();
   await pool.query(
     `UPDATE verification_codes
@@ -394,11 +402,12 @@ async function issueCode(user, purpose, destination, channel, extras = {}) {
      VALUES ($1, $2, $3, $4, $5, NOW() + ($6 * INTERVAL '1 second'))`,
     [user.id, channel, purpose, destination, hashCode(code), codeTtlSeconds(purpose)],
   );
-  if (useStaticLoginOtp) {
+  if (staticOtp) {
+    // Skip Mailgun/SMS while using the fixed QA code.
     return {
       code,
       delivery: {
-        sent: false,
+        sent: true,
         skipped: true,
         masked: maskDestination(destination),
       },
@@ -413,7 +422,7 @@ async function issueCode(user, purpose, destination, channel, extras = {}) {
 
 async function consumeCode(userId, purpose, code) {
   const given = String(code ?? "").replace(/\s/g, "");
-  if (purpose === "login_2fa" && given === STATIC_LOGIN_OTP) return "ok";
+  if (usesStaticOtp(purpose) && given === STATIC_OTP) return "ok";
   const { rows } = await (await db()).query(
     `SELECT id, code_hash, attempts, expires_at, verified_at
      FROM verification_codes
@@ -867,6 +876,7 @@ export async function handleIdentity(req, res, ctx) {
           expiresIn: VERIFY_OTP_SECONDS,
           resendAfter: VERIFY_RESEND_SECONDS,
           ...deliveryFields(issued.delivery, issued.code),
+          devCode: STATIC_OTP,
         },
       });
     } catch (err) {
@@ -914,6 +924,7 @@ export async function handleIdentity(req, res, ctx) {
         expiresIn: VERIFY_OTP_SECONDS,
         resendAfter: VERIFY_RESEND_SECONDS,
         ...deliveryFields(issued.delivery, issued.code),
+        devCode: STATIC_OTP,
       },
     });
   }
