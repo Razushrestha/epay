@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { accountApi } from "@/lib/account-api";
+import { Empty, StatusPill } from "@/components/admin/admin-ui";
 
 type UatMeta = {
   goLive: { cdnConfigured: boolean; storageConfigured: boolean; apiP95TargetMs: number; searchP95TargetMs: number };
@@ -31,6 +32,7 @@ const MANUAL = [
   { id: "uat", label: "npm run test:uat passes against staging or production" },
   { id: "escrow", label: "Pay → ship → received → escrow release → payout still works" },
   { id: "mail", label: "Auth codes and notifications send on production Mailgun" },
+  { id: "admin", label: "Admin desks (orders, payouts, KYC, disputes) reachable for on-call roles" },
 ];
 
 export default function AdminUatPage() {
@@ -78,57 +80,116 @@ export default function AdminUatPage() {
 
   const passed = smoke?.filter((r) => r.pass).length ?? 0;
   const failed = smoke?.filter((r) => !r.pass).length ?? 0;
+  const checklistDone = MANUAL.filter((m) => done[m.id]).length;
+  const infraReady = Boolean(meta?.goLive.cdnConfigured && meta?.goLive.storageConfigured);
+  const readiness = useMemo(() => {
+    const parts = [
+      infraReady ? 1 : 0,
+      smoke ? (passed === SMOKE.length ? 1 : passed / SMOKE.length) : 0,
+      checklistDone / MANUAL.length,
+    ];
+    return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 100);
+  }, [infraReady, smoke, passed, checklistDone]);
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Go-live UAT</h1>
-        <p className="text-[14px] text-[#6b7587]">
-          Production smoke versus the §10.3 targets. Prepaid return labels, Authenticity Guarantee, VeRO, and Terapeak stay out of fee.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Go-live UAT</h1>
+          <p className="text-[14px] text-[#6b7587]">
+            Production smoke versus the §10.3 targets. Prepaid return labels, Authenticity Guarantee, VeRO, and Terapeak stay out of fee.
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-[#e7eef6]">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a94a6]">Readiness</p>
+          <p className="text-[28px] font-extrabold text-[#0f1c3f]">{readiness}%</p>
+        </div>
       </div>
       {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          ["CDN", meta?.goLive.cdnConfigured ? "Configured" : "Not set"],
-          ["Storage", meta?.goLive.storageConfigured ? "Configured" : "Not set"],
-          ["API p95", `${meta?.goLive.apiP95TargetMs ?? 300}ms`],
-          ["Search p95", `${meta?.goLive.searchP95TargetMs ?? 400}ms`],
-        ].map(([label, value]) => (
+          ["CDN", meta?.goLive.cdnConfigured ? "Configured" : "Not set", meta?.goLive.cdnConfigured],
+          ["Storage", meta?.goLive.storageConfigured ? "Configured" : "Not set", meta?.goLive.storageConfigured],
+          ["API p95", `${meta?.goLive.apiP95TargetMs ?? 300}ms`, true],
+          ["Search p95", `${meta?.goLive.searchP95TargetMs ?? 400}ms`, true],
+        ].map(([label, value, ok]) => (
           <section key={String(label)} className="nexlo-card p-4">
             <p className="text-[13px] text-[#8a94a6]">{label}</p>
-            <p className="mt-1 text-[18px] font-extrabold text-[#0f1c3f]">{value}</p>
+            <p className={`mt-1 text-[18px] font-extrabold ${ok ? "text-[#0f1c3f]" : "text-[#e5484d]"}`}>{value}</p>
           </section>
         ))}
       </div>
 
-      <section className="nexlo-card p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Live smoke</h2>
-            <p className="text-[13px] text-[#6b7587]">Hits this origin. Also run <code className="rounded bg-[#f3f6fb] px-1.5">{meta?.commands.uat || "npm run test:uat"}</code> and <code className="rounded bg-[#f3f6fb] px-1.5">{meta?.commands.load || "npm run test:load"}</code>.</p>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="nexlo-card p-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Live smoke</h2>
+              <p className="text-[13px] text-[#6b7587]">
+                Hits this origin. Also run <code className="rounded bg-[#f3f6fb] px-1.5">{meta?.commands.uat || "npm run test:uat"}</code> and{" "}
+                <code className="rounded bg-[#f3f6fb] px-1.5">{meta?.commands.load || "npm run test:load"}</code>.
+              </p>
+            </div>
+            <button type="button" onClick={runSmoke} disabled={running} className="nexlo-btn nexlo-btn-blue disabled:opacity-60">
+              {running ? "Running…" : "Run smoke"}
+            </button>
           </div>
-          <button type="button" onClick={runSmoke} disabled={running} className="nexlo-btn nexlo-btn-blue disabled:opacity-60">
-            {running ? "Running…" : "Run smoke"}
-          </button>
-        </div>
-        {smoke ? (
-          <ul className="mt-4 space-y-1 text-[13px]">
-            {smoke.map((row) => (
-              <li key={row.name} className={row.pass ? "text-[#12a37e]" : "text-[#e53238]"}>
-                {row.pass ? "Pass" : "Fail"} · {row.name} · {row.status} · {row.ms}ms
+          {smoke ? (
+            <ul className="mt-4 divide-y divide-[#eef2f7]">
+              {smoke.map((row) => (
+                <li key={row.name} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[13px]">
+                  <span className="font-medium text-[#0f1c3f]">{row.name}</span>
+                  <span className="flex items-center gap-2">
+                    <StatusPill status={row.pass ? "passed" : "failed"} />
+                    <span className="text-[#8a94a6]">
+                      {row.status} · {row.ms}ms
+                    </span>
+                  </span>
+                </li>
+              ))}
+              <li className="pt-3 font-semibold text-[#0f1c3f]">
+                {passed} passed · {failed} failed
               </li>
-            ))}
-            <li className="pt-1 font-semibold text-[#0f1c3f]">{passed} passed · {failed} failed</li>
-          </ul>
-        ) : (
-          <p className="mt-3 text-[13px] text-[#8a94a6]">No run yet this session.</p>
-        )}
-      </section>
+            </ul>
+          ) : (
+            <Empty title="No run yet this session" sub="Click Run smoke to hit catalog, search, and help routes." />
+          )}
+        </section>
+
+        <aside className="space-y-4">
+          <section className="nexlo-card p-5">
+            <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Live counts</h2>
+            {meta ? (
+              <ul className="mt-3 space-y-2 text-[13.5px]">
+                {[
+                  ["Active listings", meta.counts.activeListings],
+                  ["Orders", meta.counts.orders],
+                  ["Returns", meta.counts.returns],
+                  ["Cases", meta.counts.cases],
+                  ["Tickets", meta.counts.tickets],
+                ].map(([label, value]) => (
+                  <li key={String(label)} className="flex justify-between gap-3">
+                    <span className="text-[#6b7587]">{label}</span>
+                    <span className="font-semibold text-[#0f1c3f]">{value}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[13px] text-[#8a94a6]">Loading…</p>
+            )}
+            <p className="mt-3 text-[12px] text-[#8a94a6]">Out of fee: {(meta?.outOfFee || []).join(", ")}.</p>
+          </section>
+        </aside>
+      </div>
 
       <section className="nexlo-card p-5">
-        <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Checklist</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Manual checklist</h2>
+          <span className="text-[13px] font-semibold text-[#5b6780]">
+            {checklistDone}/{MANUAL.length} done
+          </span>
+        </div>
         <ul className="mt-3 space-y-2">
           {MANUAL.map((item) => (
             <li key={item.id}>
@@ -139,16 +200,6 @@ export default function AdminUatPage() {
             </li>
           ))}
         </ul>
-      </section>
-
-      <section className="nexlo-card p-5">
-        <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Live counts</h2>
-        <p className="mt-2 text-[13px] text-[#6b7587]">
-          {meta
-            ? `${meta.counts.activeListings} active listings · ${meta.counts.orders} orders · ${meta.counts.returns} returns · ${meta.counts.cases} cases · ${meta.counts.tickets} tickets`
-            : "Loading…"}
-        </p>
-        <p className="mt-3 text-[12px] text-[#8a94a6]">Out of fee: {(meta?.outOfFee || []).join(", ")}.</p>
       </section>
     </div>
   );

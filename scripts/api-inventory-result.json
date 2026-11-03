@@ -1,0 +1,1929 @@
+{
+  "summary": {
+    "total": 224,
+    "probedOk": 20,
+    "authProtected": 61,
+    "broken": 0,
+    "unprobed": 143,
+    "byPrefix": {
+      "account": 31,
+      "admin": 37,
+      "auctions": 10,
+      "auth": 16,
+      "cart": 10,
+      "cases": 7,
+      "catalog": 21,
+      "categories": 3,
+      "conversations": 5,
+      "feedback": 2,
+      "help": 2,
+      "kyc": 1,
+      "listings": 31,
+      "messages": 1,
+      "notifications": 4,
+      "offers": 3,
+      "orders": 10,
+      "payments": 6,
+      "reports": 1,
+      "returns": 6,
+      "seller": 10,
+      "site": 1,
+      "tickets": 2,
+      "wallet": 3,
+      "health": 1
+    },
+    "brokenList": [],
+    "sampleOk": [
+      "POST /api/v1/auth/passkeys/options (400)",
+      "POST /api/v1/auth/register (400)",
+      "GET /api/v1/auth/social/config (200)",
+      "GET /api/v1/cart (200)",
+      "POST /api/v1/cart/checkout/calculate (200)",
+      "POST /api/v1/cart/validate (200)",
+      "GET /api/v1/catalog/brands (200)",
+      "GET /api/v1/catalog/categories (200)",
+      "GET /api/v1/catalog/categories/tree (200)",
+      "GET /api/v1/catalog/conditions (200)",
+      "GET /api/v1/categories (200)",
+      "GET /api/v1/categories/tree (200)",
+      "GET /api/v1/help (200)",
+      "GET /api/v1/listings (200)",
+      "GET /api/v1/listings/deals (200)"
+    ]
+  },
+  "results": [
+    {
+      "method": "GET",
+      "path": "/api/v1/account",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/2fa/confirm",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/2fa/start",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/addresses",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/addresses",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/appeals",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/appeals",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/collections",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/collections",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/consents",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/consents",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/donations",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/account/donations",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/feedback",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/feedback",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/account/follow",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/follow",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/follows",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/kyc",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/kyc",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/passkeys",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/passkeys",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/passkeys/options",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/password",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/phone/confirm",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/phone/start",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/account/profile",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/account/profile/avatar",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/profile/avatar",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/account/seller",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/sessions",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/actions",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/appeals",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/audit",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/claim",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/cms",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/cms/banners",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/cms/pages",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/cms/settings",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/disputes",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/finance",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/kyc",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/ledger",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/listings",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/messages",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/moderation",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/moderation/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/orders",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/overview",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/payouts",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/payouts/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/refunds",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/reviews",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/roles",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/roles",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/settings",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/settings",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/status",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/strikes",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/tickets",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/tickets",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/tickets/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/tickets/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/trust",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"Staff only\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/trust/blacklist",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/uat",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users",
+      "file": "server\\staff.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auctions",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auctions/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auctions/:id/bid",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auctions/:id/retract",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auctions/:id/stream",
+      "file": "server/router.mjs",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auctions/blocked",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auctions/blocked",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/auctions/blocked/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auctions/second-chance",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auctions/second-chance",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/2fa",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/2fa/enroll/confirm",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/2fa/enroll/start",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/apple",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/facebook",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/forgot",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/google",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Invalid email or password\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/passkeys",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/passkeys/options",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 400,
+      "status": "ok",
+      "body": "{\"error\":\"No passkey is registered for this account. Sign in with your password, then add a passkey under Account → Sign-in and security.\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 400,
+      "status": "ok",
+      "body": "{\"error\":\"First name cannot be only spaces.\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/resend",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/reset",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/social/config",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"data\":{\"google\":\"demo\",\"apple\":\"demo\",\"facebook\":\"demo\"}}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/social/demo",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/verify",
+      "file": "server\\identity.mjs",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cart",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"session_id\":\"05546c6d3242e94a2878a6c51c48163a\",\"items\":[],\"sellers\":[],\"summary\":{\"total_items\":0,\"subtotal\":\"0.00\",\"shipping\":\"0.00\",\"tax\":0,\"total\":\"0.00\"}}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cart",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/cart/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/cart/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cart/checkout/apply-coupon",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cart/checkout/calculate",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"subtotal\":\"0.00\",\"discount\":\"0.00\",\"shipping\":\"0.00\",\"tax\":\"0.00\",\"donation\":\"0.00\",\"donation_charity\":null,\"total\":\"0.00\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cart/checkout/create-order",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cart/checkout/reserve",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/cart/clear",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cart/validate",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"valid\":true,\"issues\":[]}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cases",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cases",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cases/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cases/:id/appeal",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cases/:id/decide",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cases/:id/evidence",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cases/:id/messages",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/admin/brands",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/catalog/admin/brands/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/catalog/admin/brands/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/admin/categories",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/catalog/admin/categories/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/catalog/admin/categories/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/catalog/admin/categories/:id/fees",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/admin/categories/reorder",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/admin/fees",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Unauthorized\"}"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/catalog/admin/fees/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/admin/restrictions",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/catalog/admin/restrictions/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/admin/specifics",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/catalog/admin/specifics/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/catalog/admin/specifics/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/brands",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"brands\":[{\"id\":1,\"name\":\"Apple\",\"slug\":\"apple\",\"logo_url\":null,\"description\":\"Official Apple products\",\"website\":null,\"is_verified\":true,\"listing_count\":0},{\"id\":2,\"name\":\"Dell\",\"slug\":\"dell\",\"logo_"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/categories",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"categories\":[{\"id\":1,\"name\":\"Electronics\",\"slug\":\"electronics\",\"parent_id\":null,\"level\":1,\"icon\":\"⚡\",\"image_url\":null,\"description\":null,\"item_count\":0,\"is_restricted\":false,\"requires_approval\":fals"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/categories/:id/specifics",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/categories/:slug",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/categories/tree",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"tree\":[{\"id\":1,\"name\":\"Electronics\",\"slug\":\"electronics\",\"parent_id\":null,\"level\":1,\"icon\":\"⚡\",\"image_url\":null,\"item_count\":0,\"is_active\":true,\"sort_order\":1,\"children\":[{\"id\":11,\"name\":\"Computers\""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/conditions",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"conditions\":[{\"id\":1,\"name\":\"New\",\"slug\":\"new\",\"description\":\"Brand new, unused item in original packaging\",\"sort_order\":1},{\"id\":2,\"name\":\"Like New\",\"slug\":\"like-new\",\"description\":\"Barely used wit"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/categories",
+      "file": "server\\router.mjs",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"categories\":[{\"id\":1,\"name\":\"Electronics\",\"slug\":\"electronics\",\"parent_id\":null,\"level\":1,\"icon\":\"⚡\",\"image_url\":null,\"description\":null,\"item_count\":0,\"is_restricted\":false,\"requires_approval\":fals"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/categories/:slug",
+      "file": "server/router.mjs",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/categories/tree",
+      "file": "server/router.mjs",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"tree\":[{\"id\":1,\"name\":\"Electronics\",\"slug\":\"electronics\",\"parent_id\":null,\"level\":1,\"icon\":\"⚡\",\"image_url\":null,\"item_count\":0,\"is_active\":true,\"sort_order\":1,\"children\":[{\"id\":11,\"name\":\"Computers\""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/:id/messages",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:id/messages",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:id/report",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/feedback",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/feedback/:id/reply",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/help",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"data\":[{\"slug\":\"buyer-protection\",\"title\":\"Buyer protection\"},{\"slug\":\"faq\",\"title\":\"Frequently asked questions\"},{\"slug\":\"returns\",\"title\":\"Returns policy\"},{\"slug\":\"selling-guide\",\"title\":\"Selling"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/help/:slug",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/kyc/file",
+      "file": "server\\m1-identity.mjs",
+      "kind": "exact",
+      "http": 403,
+      "status": "auth",
+      "body": "{\"error\":\"That document link expired. Open it again from admin.\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"listings\":[{\"id\":63,\"title\":\"CHK-004 Min Spend Item\",\"subtitle\":null,\"format\":\"fixed\",\"price\":\"1500.00\",\"quantity\":1,\"auction_current_price\":null,\"auction_bid_count\":0,\"auction_ends_at\":null,\"shippi"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/listings/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/listings/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/:id/end",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/:id/photos",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/listings/:id/photos/reorder",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/:id/photos/upload",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/:id/publish",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/:id/question",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/:id/relist",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/:id/shipping",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/:id/similar",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/listings/:id/watch",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/:id/watch",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/bulk",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/deals",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"listings\":[{\"id\":1,\"title\":\"UAT Buy It Now 1791540648917\",\"price\":\"1500.00\",\"compare_at\":null,\"format\":\"fixed\",\"shipping_free\":false,\"auction_current_price\":\"1500.00\",\"is_featured\":false,\"is_promote"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/featured",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"listings\":[]}"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/listings/photos/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/listings/photos/:id/primary",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/listings/questions/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/recent",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Unauthorized\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/saved-searches",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Unauthorized\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/listings/saved-searches",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/listings/saved-searches/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/search",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"listings\":[{\"id\":24,\"title\":\"SRC-004 Pagination Pack 01\",\"subtitle\":null,\"format\":\"fixed\",\"price\":\"1101.00\",\"quantity\":1,\"auction_current_price\":null,\"auction_bid_count\":0,\"auction_ends_at\":null,\"sh"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/seller/analytics",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Unauthorized\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/seller/listings",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Unauthorized\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/suggest",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"suggestions\":[]}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/listings/watchlist",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Unauthorized\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/messages",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/preferences",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/notifications/preferences",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/read",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/offers",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/offers",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/offers/:id/decide",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/orders/:id/cancel",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/orders/:id/complete",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/orders/:id/deliver",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/:id/invoice",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/orders/:id/ship",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/policy",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/orders/policy",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/orders/selling",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/payments/callback/:gateway",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/payments/esewa/redirect/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/initiate",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/khalti/lookup",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/payments/status/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/payments/webhook/:gateway",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/reports",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/returns",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/returns/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns/:id/decide",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns/:id/receive",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/returns/:id/ship",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/seller/dashboard",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/seller/inventory",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/seller/inventory/bulk",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/seller/label",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/seller/replies",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/seller/replies",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/seller/replies/:id",
+      "file": "server/* (mounted)",
+      "kind": "param",
+      "status": "skipped",
+      "note": "path param — not probed live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/seller/reports",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/seller/vacation",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/seller/vacation",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/site/banners",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"data\":[]}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tickets",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tickets",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/wallet",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "http": 401,
+      "status": "auth",
+      "body": "{\"error\":\"Sign in required\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/wallet/accounts",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/wallet/payouts",
+      "file": "server/* (mounted)",
+      "kind": "exact",
+      "status": "unprobed",
+      "note": "mutating/auth-gated — not auto-called"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "file": "server/router.mjs",
+      "kind": "exact",
+      "http": 200,
+      "status": "ok",
+      "body": "{\"status\":\"ok\",\"service\":\"nexlo\",\"runtime\":\"node\",\"database\":\"connected\",\"cdn\":false}"
+    }
+  ]
+}

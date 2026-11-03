@@ -230,7 +230,11 @@ export async function handleLedger(method, pathParts, auth, body) {
 
   if (pathParts[0] === "admin" && pathParts[1] === "payouts") {
     if (!auth?.is_staff) return { status: 403, body: { error: "Staff only" } };
+    const { denyUnless, audit } = await import("./rbac.mjs");
+    const denied = await denyUnless(auth, "payouts", method === "GET" ? "read" : "write");
+    if (denied) return denied;
     if (method === "GET") {
+      const { listEnvelope } = await import("./admin-list.mjs");
       const { rows } = await query(
         `SELECT p.*, u.email, COALESCE(pr.display_name, u.email) AS name
          FROM payouts p JOIN users u ON u.id = p.user_id
@@ -239,17 +243,21 @@ export async function handleLedger(method, pathParts, auth, body) {
       );
       const integrity = await ledgerIntegrity();
       const recon = await reconcileGateways().catch(() => null);
-      return { status: 200, body: { data: rows, integrity, recon } };
+      return { status: 200, body: { ...listEnvelope(rows, { page: 1, pageSize: rows.length, total: rows.length }), integrity, recon } };
     }
     if (method === "PATCH" && pathParts[2]) {
       const status = ["approved", "paid", "rejected"].includes(body.status) ? body.status : null;
       if (!status) return { status: 400, body: { error: "Invalid status" } };
+      const note = String(body.note || "").trim();
+      if (status === "rejected" && note.length < 3) {
+        return { status: 400, body: { error: "Rejection note is required (min 3 characters)" } };
+      }
       const current = await query(`SELECT * FROM payouts WHERE public_id = $1`, [pathParts[2]]);
       if (!current.rows[0]) return { status: 404, body: { error: "Payout not found" } };
       await query(`UPDATE payouts SET status = $2, admin_note = $3, paid_ref = $4, decided_at = NOW() WHERE public_id = $1`, [
         pathParts[2],
         status,
-        body.note || null,
+        note || null,
         body.paidRef || null,
       ]);
       if (status === "rejected" && ["pending", "approved"].includes(current.rows[0].status)) {
@@ -263,18 +271,54 @@ export async function handleLedger(method, pathParts, auth, body) {
       if (status === "paid") {
         await notify(current.rows[0].user_id, "payout_paid", "Payout sent", `NPR ${current.rows[0].amount} was paid out.`, "/account?tab=selling");
       }
+      await audit(auth, "payout.decide", "payout", pathParts[2], { status, note: body.note || null });
       return { status: 200, body: { data: { status } } };
     }
   }
 
   if (pathParts[0] === "admin" && pathParts[1] === "refunds" && method === "POST") {
     if (!auth?.is_staff) return { status: 403, body: { error: "Staff only" } };
-    return refundOrder(body.orderId, body.amount, body.reason || "Staff refund", auth.user_id);
+    const { denyUnless, audit } = await import("./rbac.mjs");
+    const denied = await denyUnless(auth, "refunds", "write");
+    if (denied) return denied;
+    const reason = String(body.reason || "").trim();
+    if (reason.length < 3) return { status: 400, body: { error: "Refund reason is required (min 3 characters)" } };
+    const order = await query(`SELECT id, total_amount FROM orders WHERE id = $1`, [body.orderId]);
+    if (!order.rows[0]) return { status: 404, body: { error: "Order not found" } };
+    const refundAmount = Number(body.amount ?? order.rows[0].total_amount);
+    const LARGE_REFUND = 5000;
+    if (refundAmount >= LARGE_REFUND) {
+      const phrase = String(body.confirmPhrase || "").trim().toUpperCase();
+      if (phrase !== "REFUND") {
+        return {
+          status: 400,
+          body: {
+            error: `Refunds of NPR ${LARGE_REFUND}+ require typing REFUND to confirm`,
+            dualControl: true,
+            threshold: LARGE_REFUND,
+          },
+        };
+      }
+    }
+    const result = await refundOrder(body.orderId, body.amount, reason, auth.user_id);
+    if (result.status < 400) {
+      await audit(auth, "refund.create", "order", body.orderId, {
+        amount: refundAmount,
+        reason,
+        dualControl: refundAmount >= LARGE_REFUND,
+      });
+    }
+    return result;
   }
 
   if (pathParts[0] === "admin" && pathParts[1] === "ledger" && method === "GET") {
     if (!auth?.is_staff) return { status: 403, body: { error: "Staff only" } };
-    return { status: 200, body: { data: await ledgerIntegrity() } };
+    const { denyUnless } = await import("./rbac.mjs");
+    const denied = await denyUnless(auth, "ledger", "read");
+    if (denied) return denied;
+    const integrity = await ledgerIntegrity();
+    const recon = await reconcileGateways().catch(() => null);
+    return { status: 200, body: { data: integrity, recon } };
   }
 
   return null;

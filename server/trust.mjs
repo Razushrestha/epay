@@ -1,6 +1,6 @@
 import { query } from "./db.mjs";
 import { notify } from "./notify.mjs";
-import { audit } from "./rbac.mjs";
+import { audit, denyUnless } from "./rbac.mjs";
 
 const BANNED = /\b(weapon|firearm|ammunition|drug|narcotic|counterfeit|fake\s+id|stolen|explosive|child\s*porn)\b/i;
 
@@ -162,6 +162,8 @@ export async function handleTrust(method, pathParts, auth, body) {
 
   if (pathParts[0] !== "admin") return null;
   if (pathParts[1] === "trust" && method === "GET") {
+    const denied = await denyUnless(auth, "trust", "read");
+    if (denied) return denied;
     const events = await query(
       `SELECT r.*, u.email, u.public_id FROM risk_events r
        LEFT JOIN users u ON u.id = r.user_id ORDER BY r.created_at DESC LIMIT 80`,
@@ -174,20 +176,28 @@ export async function handleTrust(method, pathParts, auth, body) {
     return { status: 200, body: { events: events.rows, blacklists: lists.rows, strikes: strikeRows.rows, reports: reports.rows } };
   }
   if (pathParts[1] === "trust" && pathParts[2] === "blacklist" && method === "POST") {
+    const denied = await denyUnless(auth, "trust", "write");
+    if (denied) return denied;
     if (!["email", "phone", "ip", "device"].includes(body.kind) || !body.value) {
       return { status: 400, body: { error: "Kind and value required" } };
     }
+    const reason = String(body.reason || "").trim();
+    if (reason.length < 3) return { status: 400, body: { error: "Reason is required (min 3 characters)" } };
     await query(
       `INSERT INTO blacklists (kind, value, reason) VALUES ($1,$2,$3) ON CONFLICT (kind, value) DO UPDATE SET reason = EXCLUDED.reason`,
-      [body.kind, String(body.value).toLowerCase(), body.reason || "Staff block"],
+      [body.kind, String(body.value).toLowerCase(), reason],
     );
     await audit(auth, "blacklist.add", "blacklist", body.value, body);
     return { status: 201, body: { data: { saved: true } } };
   }
   if (pathParts[1] === "strikes" && method === "POST") {
+    const denied = await denyUnless(auth, "trust", "write");
+    if (denied) return denied;
+    const reason = String(body.reason || "").trim();
+    if (reason.length < 3) return { status: 400, body: { error: "Reason is required (min 3 characters)" } };
     const user = await query(`SELECT id FROM users WHERE public_id::text = $1 OR id::text = $1`, [String(body.userId)]);
     if (!user.rows[0]) return { status: 404, body: { error: "User not found" } };
-    const result = await applyStrike(user.rows[0].id, body.kind || "policy", body.reason || "Staff strike", auth);
+    const result = await applyStrike(user.rows[0].id, body.kind || "policy", reason, auth);
     return { status: 201, body: { data: result } };
   }
   return null;

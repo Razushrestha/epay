@@ -20,6 +20,8 @@ export default function AdminAppealsPage() {
   const [rows, setRows] = useState<Appeal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"pending" | "all">("pending");
+  const [note, setNote] = useState("");
 
   async function load() {
     const body = await accountApi<{ data: Appeal[] }>("/api/v1/admin/appeals");
@@ -32,27 +34,63 @@ export default function AdminAppealsPage() {
 
   async function decide(item: Appeal, decision: "upheld" | "lift") {
     setError(null);
+    const resolution =
+      note.trim() ||
+      (decision === "lift" ? "Restriction lifted after appeal" : "Original action stands");
     await accountApi(`/api/v1/admin/appeals/${item.public_id}`, {
       method: "POST",
       body: JSON.stringify({
         decision: decision === "lift" ? "lift" : "upheld",
-        resolution: decision === "lift" ? "Restriction lifted after appeal" : "Original action stands",
+        resolution,
       }),
     });
     setNotice(decision === "lift" ? `Lifted restriction for ${item.display_name || item.email}.` : `Upheld restriction for ${item.display_name || item.email}.`);
+    setNote("");
     await load();
   }
 
+  const pending = rows.filter((row) => row.status === "pending");
+  const visible = filter === "pending" ? pending : rows;
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Appeals</h1>
-        <p className="text-[14px] text-[#6b7587]">Review standing appeals. Uphold the restriction or lift it.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Appeals</h1>
+          <p className="text-[14px] text-[#6b7587]">Review standing appeals. Uphold the restriction or lift it.</p>
+        </div>
+        {pending.length > 0 ? (
+          <span className="rounded-full bg-[#fff6e5] px-3 py-1.5 text-[13px] font-semibold text-[#b45309]">
+            {pending.length} pending
+          </span>
+        ) : null}
       </div>
       {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       {notice ? <p className="nexlo-alert nexlo-alert-info">{notice}</p> : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setFilter("pending")}
+          className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${filter === "pending" ? "bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#5b6780]"}`}
+        >
+          Pending {pending.length}
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter("all")}
+          className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${filter === "all" ? "bg-[#3665f3] text-white" : "bg-[#f4f8fd] text-[#5b6780]"}`}
+        >
+          All {rows.length}
+        </button>
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Decision note (optional)"
+          className="nexlo-field min-w-[220px] flex-1"
+        />
+      </div>
       <ul className="space-y-3">
-        {rows.map((item) => (
+        {visible.map((item) => (
           <li key={item.public_id} className="nexlo-card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -77,7 +115,12 @@ export default function AdminAppealsPage() {
           </li>
         ))}
       </ul>
-      {!rows.length ? <Empty title="No pending appeals" sub="Member appeals from Account standing will land here." /> : null}
+      {!visible.length ? (
+        <Empty
+          title={filter === "pending" ? "No pending appeals" : "No appeals"}
+          sub="Member appeals from Account standing will land here."
+        />
+      ) : null}
     </div>
   );
 }

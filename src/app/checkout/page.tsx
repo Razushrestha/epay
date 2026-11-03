@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { accountApi, apiBase } from "@/lib/account-api";
 import { commerceHeaders, reserveCheckout, validateCart } from "@/lib/commerce";
 import { useRouter } from "next/navigation";
@@ -37,6 +37,8 @@ export default function CheckoutPage() {
     total: "0",
   });
   const [error, setError] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const couponSectionRef = useRef<HTMLElement | null>(null);
   const [cancelled, setCancelled] = useState(false);
   const [buyerNotes, setBuyerNotes] = useState("");
   const [selectedGateway, setSelectedGateway] = useState<"esewa" | "khalti">("esewa");
@@ -88,7 +90,7 @@ export default function CheckoutPage() {
     }
   }
 
-  async function calculateTotals(coupon?: string | null) {
+  async function calculateTotals(coupon?: string | null, opts?: { forCoupon?: boolean }) {
     try {
       const token = accountApi.getToken();
       if (!token) return false;
@@ -108,27 +110,36 @@ export default function CheckoutPage() {
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error);
+        throw new Error(err.error || "Could not update totals");
       }
 
       const data = await res.json();
       setTotals(data);
+      if (opts?.forCoupon) setCouponError(null);
       return true;
     } catch (err: any) {
-      setError(err.message);
+      const message = err?.message || "Could not update totals";
+      if (opts?.forCoupon) {
+        setCouponError(message);
+        requestAnimationFrame(() => {
+          couponSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      } else {
+        setError(message);
+      }
       return false;
     }
   }
 
   async function applyCoupon() {
     if (!couponCode.trim()) return;
-    setError(null);
-    const ok = await calculateTotals(couponCode.trim());
+    setCouponError(null);
+    const ok = await calculateTotals(couponCode.trim(), { forCoupon: true });
     setCouponApplied(ok);
   }
 
   async function removeCoupon() {
-    setError(null);
+    setCouponError(null);
     setCouponApplied(false);
     setCouponCode("");
     await calculateTotals(null);
@@ -276,16 +287,21 @@ export default function CheckoutPage() {
               )}
             </section>
 
-            <section className="nexlo-card p-5 sm:p-6">
+            <section ref={couponSectionRef} className="nexlo-card p-5 sm:p-6">
               <h2 className="text-[17px] font-bold text-[#0f1c3f]">Coupon</h2>
               <div className="mt-3 flex gap-2">
                 <input
                   type="text"
                   value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    setCouponCode(e.target.value.toUpperCase());
+                    if (couponError) setCouponError(null);
+                  }}
                   placeholder="Enter coupon code"
-                  className="nexlo-field flex-1"
+                  className={`nexlo-field flex-1 ${couponError ? "border-[#f5c2c7]" : ""}`}
                   disabled={couponApplied}
+                  aria-invalid={Boolean(couponError)}
+                  aria-describedby={couponError ? "coupon-error" : undefined}
                 />
                 {couponApplied ? (
                   <button onClick={removeCoupon} className="nexlo-btn nexlo-btn-blue">
@@ -297,6 +313,15 @@ export default function CheckoutPage() {
                   </button>
                 )}
               </div>
+              {couponError ? (
+                <div
+                  id="coupon-error"
+                  role="alert"
+                  className="mt-3 rounded-xl border border-[#f5c2c7] bg-[#fff5f5] px-3 py-2 text-[13px] font-semibold text-[#e53238]"
+                >
+                  {couponError}
+                </div>
+              ) : null}
               {couponApplied ? (
                 <div role="alert" className="mt-3 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-3 py-2 text-[13px] font-semibold text-[#047857]">
                   {couponCode} applied.{" "}

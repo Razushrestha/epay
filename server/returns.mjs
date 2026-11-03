@@ -262,6 +262,8 @@ export async function handleReturns(method, pathParts, auth, body) {
 
   if (pathParts[0] === "cases" && pathParts[2] === "decide" && method === "POST") {
     if (!auth.is_staff) return { status: 403, body: { error: "Staff only" } };
+    const decisionReason = String(body.reason || "").trim();
+    if (decisionReason.length < 3) return { status: 400, body: { error: "Decision reason is required" } };
     const row = await loadCase(pathParts[1], auth);
     if (isHttp(row)) return row;
     const outcome = ["refund_buyer", "partial_refund", "side_with_seller", "return_item"].includes(body.outcome) ? body.outcome : null;
@@ -269,11 +271,11 @@ export async function handleReturns(method, pathParts, auth, body) {
     const amount = Number(body.refundAmount ?? (outcome === "side_with_seller" ? 0 : row.amount_claimed || 0));
     await query(
       `INSERT INTO case_decisions (case_id, decided_by, outcome, refund_amount, seller_penalty, reason) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [row.id, auth.user_id, outcome, amount, body.sellerPenalty || null, body.reason || null],
+      [row.id, auth.user_id, outcome, amount, body.sellerPenalty || null, decisionReason],
     );
     if (outcome === "refund_buyer" || outcome === "partial_refund") {
       await unfreezeEscrow(row.order_id);
-      await refundOrder(row.order_id, amount || null, body.reason || `Case ${row.public_id}`, auth.user_id);
+      await refundOrder(row.order_id, amount || null, decisionReason || `Case ${row.public_id}`, auth.user_id);
       await query(`UPDATE returns SET status = 'refunded' WHERE id = $1`, [row.return_id]);
     } else {
       await unfreezeEscrow(row.order_id);

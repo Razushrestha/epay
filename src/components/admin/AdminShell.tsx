@@ -2,8 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { accountApi, getToken, setToken } from "@/lib/account-api";
+import { accountApi, apiBase, getToken, setToken } from "@/lib/account-api";
 import { AdminChrome } from "@/components/admin/AdminChrome";
+import { normalizeStaffRole, type AdminQueues } from "@/lib/staff-nav";
 
 type User = {
   displayName: string | null;
@@ -22,6 +23,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [staff, setStaff] = useState<boolean | null>(null);
   const [unread, setUnread] = useState(0);
+  const [queues, setQueues] = useState<AdminQueues>({});
+  const [queuesLive, setQueuesLive] = useState(false);
 
   useEffect(() => {
     if (isLogin) return;
@@ -31,12 +34,19 @@ export function AdminShell({ children }: { children: ReactNode }) {
     }
     Promise.all([
       accountApi<{ user: User }>("/api/v1/account"),
-      accountApi<{ youAreStaff: boolean; unreadMessages?: number }>("/api/v1/admin/status"),
+      accountApi<{
+        youAreStaff: boolean;
+        staffRole?: string;
+        unreadMessages?: number;
+        queues?: AdminQueues;
+      }>("/api/v1/admin/status"),
     ])
       .then(([account, status]) => {
-        setUser(account.user);
+        const role = normalizeStaffRole(account.user.staffRole || status.staffRole, status.youAreStaff);
+        setUser({ ...account.user, staffRole: role });
         setStaff(status.youAreStaff);
         setUnread(status.unreadMessages ?? 0);
+        setQueues(status.queues || {});
         if (!status.youAreStaff) router.replace("/admin/login");
       })
       .catch(() => {
@@ -44,6 +54,31 @@ export function AdminShell({ children }: { children: ReactNode }) {
         router.replace("/admin/login");
       });
   }, [router, isLogin]);
+
+  useEffect(() => {
+    if (isLogin || staff !== true) return;
+    const token = getToken();
+    if (!token) return;
+    const url = `${apiBase}/api/v1/admin/queues/stream?access_token=${encodeURIComponent(token)}`;
+    const es = new EventSource(url);
+    es.addEventListener("queues", (ev) => {
+      try {
+        const payload = JSON.parse((ev as MessageEvent).data) as { queues?: AdminQueues };
+        if (payload.queues) {
+          setQueues(payload.queues);
+          setUnread(Number(payload.queues.messages || 0));
+          setQueuesLive(true);
+        }
+      } catch {
+        /* ignore */
+      }
+    });
+    es.onerror = () => setQueuesLive(false);
+    return () => {
+      es.close();
+      setQueuesLive(false);
+    };
+  }, [isLogin, staff]);
 
   if (isLogin) return <>{children}</>;
 
@@ -57,6 +92,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <AdminChrome
       user={user}
       unreadMessages={unread}
+      queues={queues}
+      queuesLive={queuesLive}
       onSignOut={() => {
         setToken(null);
         router.push("/admin/login");

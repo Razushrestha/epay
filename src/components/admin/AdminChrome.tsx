@@ -2,9 +2,18 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { accountApi } from "@/lib/account-api";
+import { canAccessNav, NAV_QUEUE_KEY, type AdminQueues } from "@/lib/staff-nav";
+import { money } from "@/components/admin/admin-ui";
+
+type SearchHit = {
+  users: { public_id: string; email: string | null; phone: string | null; status: string; name: string }[];
+  orders: { id: number; order_number: string; status: string; total_amount: number; customer: string }[];
+  listings: { id: number; title: string; status: string; moderation_status: string; price: number | null; seller: string }[];
+};
 
 type ChromeUser = {
   displayName: string | null;
@@ -79,18 +88,65 @@ function Rocket() {
 export function AdminChrome({
   user,
   unreadMessages = 0,
+  queues = {},
+  queuesLive = false,
   onSignOut,
   children,
 }: {
   user: ChromeUser;
   unreadMessages?: number;
+  queues?: AdminQueues;
+  queuesLive?: boolean;
   onSignOut: () => void;
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchHits, setSearchHits] = useState<SearchHit | null>(null);
+  const [searchBusy, setSearchBusy] = useState(false);
   const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.displayName || "Admin";
+  const role = user.staffRole || "support";
+  const navItems = useMemo(
+    () => NAV.filter((item) => canAccessNav(role, item.id, true)),
+    [role],
+  );
+  const mergedQueues: AdminQueues = {
+    ...queues,
+    messages: queues.messages ?? unreadMessages,
+  };
+
+  useEffect(() => {
+    const q = searchQ.trim();
+    if (q.length < 2) {
+      setSearchHits(null);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      setSearchBusy(true);
+      accountApi<{ data: SearchHit }>(`/api/v1/admin/search?q=${encodeURIComponent(q)}`)
+        .then((body) => {
+          setSearchHits(body.data);
+          setSearchOpen(true);
+        })
+        .catch(() => setSearchHits(null))
+        .finally(() => setSearchBusy(false));
+    }, 280);
+    return () => window.clearTimeout(t);
+  }, [searchQ]);
+
+  function goSearch(href: string) {
+    setSearchOpen(false);
+    setSearchQ("");
+    setSearchHits(null);
+    router.push(href);
+  }
+
+  const hitCount =
+    (searchHits?.users.length || 0) + (searchHits?.orders.length || 0) + (searchHits?.listings.length || 0);
 
   return (
     <div className="relative min-h-dvh overflow-x-clip bg-[#f4f8fd]">
@@ -113,17 +169,94 @@ export function AdminChrome({
           <Link href="/admin" className="shrink-0" aria-label="Nexlo admin">
             <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" priority />
           </Link>
-          <form action="/admin" method="get" className="mx-auto hidden min-w-0 max-w-[560px] flex-1 md:block">
+          <div className="relative mx-auto hidden min-w-0 max-w-[560px] flex-1 md:block">
             <label className="flex h-11 items-center gap-2 rounded-full border border-[#e6eef6] bg-[#f7fafd] px-4">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a94a6" strokeWidth="2" aria-hidden>
                 <circle cx="11" cy="11" r="7" />
                 <path d="m21 21-4.3-4.3" />
               </svg>
-              <input name="q" type="search" placeholder="Search for anything..." className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#9aa3b2]" />
+              <input
+                name="q"
+                type="search"
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                onFocus={() => searchHits && setSearchOpen(true)}
+                placeholder="Search users, orders, listings…"
+                className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#9aa3b2]"
+                autoComplete="off"
+              />
+              {searchBusy ? <span className="text-[11px] text-[#8a94a6]">…</span> : null}
             </label>
-          </form>
+            {searchOpen && searchQ.trim().length >= 2 ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-40 overflow-hidden rounded-2xl border border-[#e7eef6] bg-white shadow-[0_16px_40px_-20px_rgba(15,28,63,0.45)]">
+                {!hitCount ? (
+                  <p className="px-4 py-3 text-[13px] text-[#6b7587]">No matches for “{searchQ.trim()}”.</p>
+                ) : (
+                  <div className="max-h-[420px] overflow-y-auto p-2">
+                    {searchHits?.users.length ? (
+                      <div className="mb-2">
+                        <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#8a94a6]">Users</p>
+                        {searchHits.users.map((u) => (
+                          <button
+                            key={u.public_id}
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-[#f4f8fd]"
+                            onClick={() => goSearch(`/admin/users?q=${encodeURIComponent(u.email || u.public_id)}`)}
+                          >
+                            <span>
+                              <span className="block text-[13.5px] font-semibold text-[#0f1c3f]">{u.name}</span>
+                              <span className="block text-[12px] text-[#8a94a6]">{u.email || u.phone}</span>
+                            </span>
+                            <span className="text-[11px] capitalize text-[#6b7587]">{u.status}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {searchHits?.orders.length ? (
+                      <div className="mb-2">
+                        <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#8a94a6]">Orders</p>
+                        {searchHits.orders.map((o) => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-[#f4f8fd]"
+                            onClick={() => goSearch(`/admin/orders?q=${encodeURIComponent(o.order_number)}`)}
+                          >
+                            <span>
+                              <span className="block text-[13.5px] font-semibold text-[#0f1c3f]">#{o.order_number}</span>
+                              <span className="block text-[12px] text-[#8a94a6]">{o.customer}</span>
+                            </span>
+                            <span className="text-[12px] font-semibold text-[#0f1c3f]">{money(o.total_amount)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {searchHits?.listings.length ? (
+                      <div>
+                        <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#8a94a6]">Listings</p>
+                        {searchHits.listings.map((l) => (
+                          <button
+                            key={l.id}
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-[#f4f8fd]"
+                            onClick={() => goSearch(`/admin/products?q=${encodeURIComponent(l.title)}`)}
+                          >
+                            <span>
+                              <span className="block text-[13.5px] font-semibold text-[#0f1c3f]">{l.title}</span>
+                              <span className="block text-[12px] text-[#8a94a6]">{l.seller}</span>
+                            </span>
+                            <span className="text-[11px] capitalize text-[#6b7587]">{l.status}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <NotificationBell />
+            <NotificationBell variant="staff" queues={mergedQueues} live={queuesLive} />
             <button type="button" className="hidden items-center gap-1.5 rounded-full px-2 py-1 text-[13px] text-[#3a4a66] hover:bg-[#f3f7fc] sm:flex">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
                 <circle cx="12" cy="12" r="9" />
@@ -142,7 +275,7 @@ export function AdminChrome({
                 )}
                 <span className="hidden text-left sm:block">
                   <span className="block text-[13.5px] font-semibold leading-tight text-[#0f1c3f]">{name}</span>
-                  <span className="block text-[11px] capitalize text-[#8a94a6]">{(user.staffRole || "super_admin").replace(/_/g, " ")}</span>
+                  <span className="block text-[11px] capitalize text-[#8a94a6]">{role.replace(/_/g, " ")}</span>
                 </span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7587" strokeWidth="2.2" className="hidden sm:block"><path d="m6 9 6 6 6-6" /></svg>
               </button>
@@ -178,11 +311,13 @@ export function AdminChrome({
           }}
         >
           <nav className="space-y-1">
-            {NAV.map((item) => {
+            {navItems.map((item) => {
               const active =
                 item.href === "/admin"
                   ? pathname === "/admin"
                   : pathname.startsWith(item.href) || (item.id === "products" && pathname.startsWith("/admin/catalog"));
+              const queueKey = NAV_QUEUE_KEY[item.id];
+              const badge = queueKey ? Number(mergedQueues[queueKey] || 0) : 0;
               return (
                 <Link
                   key={item.id}
@@ -193,8 +328,10 @@ export function AdminChrome({
                 >
                   <Icon d={item.icon} />
                   <span className="flex-1">{item.label}</span>
-                  {item.id === "messages" && unreadMessages > 0 ? (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#3665f3] px-1.5 text-[11px] font-bold text-white">{unreadMessages}</span>
+                  {badge > 0 ? (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#3665f3] px-1.5 text-[11px] font-bold text-white">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
                   ) : null}
                 </Link>
               );

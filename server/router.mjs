@@ -7,6 +7,7 @@ import { handlePayments } from "./payments.mjs";
 import { handlePhase3, isPhase3Path } from "./phase3.mjs";
 import { handlePhase4, isPhase4Path } from "./phase4.mjs";
 import { attachAuctionStream } from "./auctions.mjs";
+import { attachAdminQueuesStream } from "./staff.mjs";
 
 async function db() {
   if (!pool) await initDb();
@@ -160,6 +161,12 @@ export async function handleRequest(req, res) {
   if (method === "GET" && streamMatch) {
     setCors(req, res);
     attachAuctionStream(req, res, streamMatch[1]);
+    return;
+  }
+
+  if (method === "GET" && pathname === `${API_PREFIX}/admin/queues/stream`) {
+    setCors(req, res);
+    await attachAdminQueuesStream(req, res, searchParams);
     return;
   }
 

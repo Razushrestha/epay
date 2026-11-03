@@ -6,14 +6,10 @@ export function nepalMobileDigits(value) {
   return "";
 }
 
+/** Nepal mobiles only → +977XXXXXXXXXX. Invalid or empty → "". */
 export function normalizePhone(value) {
   const local = nepalMobileDigits(value);
-  if (local) return `+977${local}`;
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length < 8) return "";
-  return `+${digits}`;
+  return local ? `+977${local}` : "";
 }
 
 export function phoneLookupKeys(identifier) {

@@ -5,6 +5,7 @@ import { Caveat } from "next/font/google";
 import { useEffect, useState } from "react";
 import { accountApi } from "@/lib/account-api";
 import { clock, Donut, greeting, lastDays, LineChart, longDate, money, Sparkline, StatusPill, when } from "@/components/admin/admin-ui";
+import { canAccessNav, normalizeStaffRole } from "@/lib/staff-nav";
 
 const script = Caveat({ subsets: ["latin"], weight: ["600", "700"] });
 
@@ -28,6 +29,15 @@ type Overview = {
     thumbnail_url?: string | null;
   }[];
   activity: { kind: string; title: string; detail: string; at: string }[];
+  queues?: {
+    kyc?: number;
+    appeals?: number;
+    payouts?: number;
+    disputes?: number;
+    tickets?: number;
+    moderation?: number;
+    messages?: number;
+  };
 };
 
 function Change({ value }: { value: number }) {
@@ -76,10 +86,16 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("Admin");
+  const [role, setRole] = useState("support");
 
   useEffect(() => {
-    accountApi<{ user: { firstName: string | null; displayName: string | null } }>("/api/v1/account")
-      .then((b) => setName(b.user.firstName || b.user.displayName || "Admin"))
+    accountApi<{ user: { firstName: string | null; displayName: string | null; staffRole?: string | null; isStaff?: boolean } }>(
+      "/api/v1/account",
+    )
+      .then((b) => {
+        setName(b.user.firstName || b.user.displayName || "Admin");
+        setRole(normalizeStaffRole(b.user.staffRole, Boolean(b.user.isStaff)));
+      })
       .catch(() => undefined);
     accountApi<Overview>("/api/v1/admin/overview")
       .then(setData)
@@ -101,12 +117,22 @@ export default function AdminDashboardPage() {
     { label: "Total Revenue", value: data?.stats.revenue.total ?? 0, change: data?.stats.revenue.change ?? 0, color: "#3665f3", bg: "bg-[#eef6ff]", iconBg: "bg-[#d9e6ff] text-[#3665f3]", spark: series.map((s) => s.revenue), money: true, icon: "M12 3v18M8 8h5.2a2.8 2.8 0 0 1 0 5.6H9.2A2.8 2.8 0 0 0 9.2 19H16" },
   ];
   const os = data?.orderStatus ?? { completed: 0, processing: 0, pending: 0, cancelled: 0, total: 0 };
+  const q = data?.queues ?? {};
+  const queues = [
+    { id: "kyc", href: "/admin/kyc", label: "KYC pending", count: q.kyc ?? 0, tone: "bg-[#fff6e5] text-[#b45309]", icon: "M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" },
+    { id: "disputes", href: "/admin/disputes", label: "Open disputes", count: q.disputes ?? 0, tone: "bg-[#fdecec] text-[#e5484d]", icon: "M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" },
+    { id: "payouts", href: "/admin/payouts", label: "Payouts waiting", count: q.payouts ?? 0, tone: "bg-[#eafaf3] text-[#0f9f76]", icon: "M4 7h16v10H4V7Zm0 4h16M8 15h4" },
+    { id: "moderation", href: "/admin/moderation", label: "Moderation", count: q.moderation ?? 0, tone: "bg-[#f4f0ff] text-[#7c5cfc]", icon: "M4 5h16v4H4V5Zm0 7h10v7H4v-7Zm12 0h4v7h-4v-7Z" },
+    { id: "tickets", href: "/admin/tickets", label: "Open tickets", count: q.tickets ?? 0, tone: "bg-[#eef4ff] text-[#3665f3]", icon: "M4 7h16v3l-1.5 1.5L20 13v4H4v-4l1.5-1.5L4 10V7Z" },
+    { id: "appeals", href: "/admin/appeals", label: "Appeals", count: q.appeals ?? 0, tone: "bg-[#eef4ff] text-[#3665f3]", icon: "M5 6h14v9H9l-4 3V6Zm4 4h6" },
+  ].filter((item) => canAccessNav(role, item.id));
+  const openQueueCount = queues.reduce((sum, item) => sum + item.count, 0);
   const actions = [
-    { href: "/admin/users?new=1", label: "Add New User", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6" },
-    { href: "/admin/products", label: "Add Product", d: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
-    { href: "/admin/orders", label: "View Orders", d: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" },
-    { href: "/admin/messages", label: "Send Message", d: "M4 6h16v10H8l-4 4V6Z" },
-  ];
+    { id: "users", href: "/admin/users?new=1", label: "Add New User", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6" },
+    { id: "products", href: "/admin/products", label: "Add Product", d: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
+    { id: "orders", href: "/admin/orders", label: "View Orders", d: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" },
+    { id: "messages", href: "/admin/messages", label: "Send Message", d: "M4 6h16v10H8l-4 4V6Z" },
+  ].filter((item) => canAccessNav(role, item.id));
 
   return (
     <div className="grid gap-5 pb-8 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -118,7 +144,11 @@ export default function AdminDashboardPage() {
           <h1 className="mt-0.5 text-[34px] font-extrabold tracking-tight text-[#0f1c3f]">
             {name}! <span aria-hidden>👋</span>
           </h1>
-          <p className="mt-1 text-[14.5px] text-[#6b7587]">Here&apos;s what&apos;s happening with your platform today.</p>
+          <p className="mt-1 text-[14.5px] text-[#6b7587]">
+            {openQueueCount > 0
+              ? `${openQueueCount.toLocaleString()} items need attention across KYC, disputes, payouts, and support.`
+              : "Here's what's happening with your platform today. Queues are clear."}
+          </p>
           <p className="mt-2.5 flex items-center gap-1.5 text-[13px] text-[#8a94a6]">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
               <rect x="4" y="5" width="16" height="15" rx="2" />
@@ -127,6 +157,42 @@ export default function AdminDashboardPage() {
             {longDate()}
           </p>
         </div>
+
+        <section className="rounded-[22px] bg-white p-4 shadow-[0_8px_30px_rgba(15,28,63,0.04)] sm:p-5">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-[16px] font-extrabold text-[#0f1c3f]">Action queues</h2>
+              <p className="text-[13px] text-[#8a94a6]">Jump straight into work that is waiting on staff.</p>
+            </div>
+            {openQueueCount > 0 ? (
+              <span className="rounded-full bg-[#fff5f5] px-3 py-1 text-[12px] font-semibold text-[#e53238]">
+                {openQueueCount} open
+              </span>
+            ) : (
+              <span className="rounded-full bg-[#ecfdf5] px-3 py-1 text-[12px] font-semibold text-[#047857]">All clear</span>
+            )}
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {queues.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 transition hover:brightness-[0.98] ${item.tone}`}
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/70">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                    <path d={item.icon} />
+                  </svg>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-semibold">{item.label}</span>
+                  <span className="block text-[12px] opacity-80">{item.count ? "Needs review" : "Nothing waiting"}</span>
+                </span>
+                <span className="text-[22px] font-extrabold tabular-nums">{item.count}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((card) => (

@@ -14,4 +14,7 @@ test("Nepal mobiles starting 97 or 98 normalize to +977", () => {
   assert.equal(nepalMobileDigits("98@#$%^&*("), "");
   assert.equal(nepalMobileDigits("980366170"), "");
   assert.equal(nepalMobileDigits("98036617021"), "");
+  assert.equal(normalizePhone("12345"), "");
+  assert.equal(normalizePhone("98036617021"), "");
+  assert.equal(normalizePhone("9612345678"), "");
 });

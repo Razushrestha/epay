@@ -298,6 +298,41 @@ export default function CatalogAdminPage() {
     }
   }
 
+  function siblingsOf(cat: Category) {
+    return categories.filter((c) => c.parent_id === cat.parent_id);
+  }
+
+  async function moveCategory(cat: Category, direction: -1 | 1) {
+    setError(null);
+    const siblings = siblingsOf(cat);
+    const index = siblings.findIndex((c) => c.id === cat.id);
+    const swapWith = siblings[index + direction];
+    if (!swapWith) return;
+    const ids = siblings.map((c) => c.id);
+    const next = [...ids];
+    const j = index + direction;
+    [next[index], next[j]] = [next[j], next[index]];
+    try {
+      const token = accountApi.getToken();
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/categories/reorder`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ids: next }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to reorder");
+      }
+      await loadData();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
   async function handleDeleteBrand(brandId: number) {
     if (!confirm("Are you sure you want to delete this brand?")) return;
 
@@ -335,7 +370,7 @@ export default function CatalogAdminPage() {
       </div>
 
       {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
-      {feeSaved ? <p className="nexlo-alert nexlo-alert-ok">{feeSaved}</p> : null}
+      {feeSaved ? <p className="nexlo-alert nexlo-alert-info">{feeSaved}</p> : null}
 
       <div className="flex flex-wrap gap-2">
         {(["categories", "brands", "fees", "conditions"] as const).map((id) => (
@@ -508,13 +543,33 @@ export default function CatalogAdminPage() {
                           </button>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCategory(cat.id)}
-                            className="text-[12.5px] font-semibold text-[#e5484d]"
-                          >
-                            Delete
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              disabled={siblingsOf(cat)[0]?.id === cat.id}
+                              onClick={() => moveCategory(cat, -1)}
+                              className="text-[12.5px] font-semibold text-[#3665f3] disabled:opacity-30"
+                              title="Move up among siblings"
+                            >
+                              Up
+                            </button>
+                            <button
+                              type="button"
+                              disabled={siblingsOf(cat)[siblingsOf(cat).length - 1]?.id === cat.id}
+                              onClick={() => moveCategory(cat, 1)}
+                              className="text-[12.5px] font-semibold text-[#3665f3] disabled:opacity-30"
+                              title="Move down among siblings"
+                            >
+                              Down
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(cat.id)}
+                              className="text-[12.5px] font-semibold text-[#e5484d]"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

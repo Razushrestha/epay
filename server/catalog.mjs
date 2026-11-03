@@ -44,6 +44,15 @@ export async function handleCatalog(req, method, urlPath, headers, body, ipAddre
 
     // Category management (admin)
     if (pathParts[0] === 'admin') {
+      const { denyUnless } = await import('./rbac.mjs');
+      const action = method === 'GET' ? 'read' : 'write';
+      const denied = await denyUnless(
+        { is_staff: true, staff_role: auth.staff_role, user_id: auth.userId },
+        'catalog',
+        action,
+      );
+      if (denied) return denied;
+
       if (pathParts[1] === 'fees') {
         if (method === 'GET' && !pathParts[2]) {
           return await listCategoryFees();
@@ -118,7 +127,7 @@ export async function handleCatalog(req, method, urlPath, headers, body, ipAddre
 async function validateStaffToken(token) {
   const hash = await hashToken(token);
   const result = await query(
-    `SELECT u.id as user_id, u.is_staff
+    `SELECT u.id as user_id, u.is_staff, u.staff_role
      FROM auth_sessions s
      JOIN users u ON s.user_id = u.id
      WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > NOW() AND u.is_staff = true`,
@@ -126,7 +135,7 @@ async function validateStaffToken(token) {
   );
   const row = result.rows[0];
   if (!row) return null;
-  return { userId: row.user_id, is_staff: row.is_staff };
+  return { userId: row.user_id, is_staff: row.is_staff, staff_role: row.staff_role || 'none' };
 }
 
 async function hashToken(token) {
@@ -174,10 +183,44 @@ async function getCategories(params) {
     sql += ` AND c.is_active = true`;
   }
 
-  sql += ` ORDER BY c.lft, c.sort_order, c.name`;
+  sql += ` ORDER BY c.parent_id NULLS FIRST, c.sort_order, c.lft, c.name`;
 
   const result = await query(sql, values);
   return { status: 200, body: { categories: result.rows } };
+}
+
+/**
+ * ADMIN: Reorder categories among siblings (same parent).
+ * Body: { ids: number[] } — full sibling set in desired order.
+ */
+async function reorderCategories(body, userId) {
+  const ids = Array.isArray(body?.ids) ? body.ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0) : [];
+  if (ids.length < 2) {
+    return { status: 400, body: { error: "Provide at least two category ids in order" } };
+  }
+  const { rows } = await query(
+    `SELECT id, parent_id FROM categories WHERE id = ANY($1::int[])`,
+    [ids],
+  );
+  if (rows.length !== ids.length) {
+    return { status: 400, body: { error: "One or more categories were not found" } };
+  }
+  const parentKey = (p) => (p == null ? "root" : String(p));
+  const firstParent = parentKey(rows[0].parent_id);
+  if (rows.some((row) => parentKey(row.parent_id) !== firstParent)) {
+    return { status: 400, body: { error: "Reorder only works among siblings (same parent)" } };
+  }
+  for (let i = 0; i < ids.length; i += 1) {
+    await query(`UPDATE categories SET sort_order = $2, updated_at = NOW() WHERE id = $1`, [ids[i], i + 1]);
+  }
+  if (userId) {
+    await query(
+      `INSERT INTO category_audit_log (category_id, action, changed_by, changes)
+       VALUES ($1, 'reordered', $2, $3)`,
+      [ids[0], userId, JSON.stringify({ ids })],
+    ).catch(() => {});
+  }
+  return { status: 200, body: { data: { reordered: ids.length, ids } } };
 }
 
 /**

@@ -3,8 +3,11 @@ import { writeAudit } from "./security/audit.mjs";
 
 export async function can(auth, module, action = "read") {
   if (!auth?.is_staff) return false;
-  const role = auth.staff_role || "super_admin";
-  if (role === "super_admin" || role === "none") return Boolean(auth.is_staff);
+  const role = String(auth.staff_role || "none").trim() || "none";
+  // Only explicit super_admin bypasses the permission table.
+  // "none" is not a grant — assign a role via /admin/roles.
+  if (role === "super_admin") return true;
+  if (role === "none") return false;
   const { rows } = await query(
     `SELECT 1 FROM staff_permissions WHERE role_id = $1 AND module = $2 AND action = $3`,
     [role, module, action],

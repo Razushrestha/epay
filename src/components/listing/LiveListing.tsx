@@ -88,15 +88,20 @@ function prettyTitle(value: string) {
     .replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1));
 }
 
-function countdown(iso?: string | null) {
+/** Live auction remaining time. Always includes seconds so the UI visibly ticks. */
+function countdown(iso?: string | null, _tick = 0) {
   if (!iso) return "-";
   const ms = new Date(iso).getTime() - Date.now();
   if (ms <= 0) return "Ended";
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  if (h > 48) return `${Math.floor(h / 24)}d ${h % 24}h`;
-  return `${h}h ${m}m ${s}s`;
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (d > 0) return `${d}d ${h}h ${pad(m)}m ${pad(s)}s`;
+  if (h > 0) return `${h}h ${pad(m)}m ${pad(s)}s`;
+  return `${m}m ${pad(s)}s`;
 }
 
 function postedAgo(iso?: string | null) {
@@ -663,7 +668,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                   </div>
                   {isAuction ? (
                     <p className="mt-2 text-[13px] font-semibold text-[#e53238]" data-tick={tick}>
-                      {bidCount} bids · {countdown(endsAt)} left
+                      {bidCount} bids · {countdown(endsAt, tick)} left
                     </p>
                   ) : null}
                   {isAuction && listing.has_reserve ? (
@@ -866,7 +871,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                     </p>
                   ) : null}
                   <p>Returns are accepted within 7 days if the item is not as described. Nexlo Buyer Protection covers eligible orders.</p>
-                  {isAuction ? <p>This auction ends in {countdown(endsAt)}.</p> : null}
+                  {isAuction ? <p>This auction ends in {countdown(endsAt, tick)}.</p> : null}
                 </div>
               ) : null}
 
@@ -952,7 +957,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                 </div>
                 {isAuction ? (
                   <p className="mt-2 text-[13.5px] font-semibold text-[#e53238]" data-tick={tick}>
-                    Time left: {countdown(endsAt)}
+                    Time left: {countdown(endsAt, tick)}
                   </p>
                 ) : null}
                 {isAuction && listing.has_reserve ? (

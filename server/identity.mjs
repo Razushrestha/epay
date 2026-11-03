@@ -17,6 +17,7 @@ import { rateLimit, RateLimitConfig, clearRateLimit } from "./security/rate-limi
 import { deliverCode, maskDestination } from "./mail.mjs";
 import { nepalMobileDigits, normalizePhone, phoneLookupKeys } from "./phones.mjs";
 import { handleStaffExtras } from "./staff.mjs";
+import { audit, denyUnless } from "./rbac.mjs";
 import { cdnify } from "./cdn.mjs";
 import { evaluateUser, recordDevice } from "./trust.mjs";
 import { clearAvatar, uploadAvatar } from "./upload.mjs";
@@ -310,7 +311,7 @@ function publicUser(user, score, kyc, action) {
     sellerLevel: user.seller_level,
     isSeller: Boolean(user.is_seller) || user.account_type === "business",
     isStaff: user.is_staff,
-    staffRole: user.staff_role || (user.is_staff ? "super_admin" : "none"),
+    staffRole: user.staff_role && user.staff_role !== "none" ? user.staff_role : user.is_staff ? "support" : "none",
     displayName: blankToNull(user.display_name) || user.username || blankToNull(user.legal_name) || null,
     firstName: blankToNull(user.first_name),
     lastName: blankToNull(user.last_name),
@@ -667,7 +668,12 @@ async function promoteAdmin() {
   const email = String(process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
   if (!email) return;
   await (await db()).query(
-    `UPDATE users SET is_staff = TRUE, status = 'active', updated_at = NOW() WHERE lower(email) = $1`,
+    `UPDATE users
+     SET is_staff = TRUE,
+         staff_role = CASE WHEN staff_role IS NULL OR staff_role = 'none' OR staff_role = '' THEN 'super_admin' ELSE staff_role END,
+         status = 'active',
+         updated_at = NOW()
+     WHERE lower(email) = $1`,
     [email],
   );
 }
@@ -1348,7 +1354,11 @@ export async function handleIdentity(req, res, ctx) {
     );
     if (body.phone != null && String(body.phone).trim()) {
       const phone = normalizePhone(body.phone);
-      if (!phone) return json(req, res, 400, { error: "Enter a valid phone number." });
+      if (!phone) {
+        return json(req, res, 400, {
+          error: "Enter a valid 10-digit Nepal mobile number starting with 97 or 98.",
+        });
+      }
       if (phone !== normalizePhone(actor.phone)) {
         const taken = await (await db()).query(`SELECT id FROM users WHERE phone = $1 AND id <> $2 LIMIT 1`, [phone, actor.id]);
         if (taken.rows[0]) return json(req, res, 409, { error: "That phone number is already in use." });
@@ -1402,21 +1412,25 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/account/phone/start` && method === "POST") {
     const body = await readJson(req);
-    if (!actor.email || !actor.email_verified_at) {
-      return json(req, res, 403, { error: "Verify your email before changing your phone number." });
-    }
     const phone = normalizePhone(body.phone);
-    if (!phone) return json(req, res, 400, { error: "Enter a valid phone number." });
+    if (!phone) {
+      return json(req, res, 400, {
+        error: "Enter a valid 10-digit Nepal mobile number starting with 97 or 98.",
+      });
+    }
     if (phone === normalizePhone(actor.phone)) {
       return json(req, res, 400, { error: "That is already your phone number." });
     }
     const taken = await (await db()).query(`SELECT id FROM users WHERE phone = $1 AND id <> $2 LIMIT 1`, [phone, actor.id]);
     if (taken.rows[0]) return json(req, res, 409, { error: "That phone number is already in use." });
-    const issued = await issueCode(actor, "change_phone", actor.email, "email");
+    // Static OTP 123456 — no email verification or Mailgun required for QA.
+    const destination = actor.email || actor.phone || phone;
+    const channel = actor.email ? "email" : "sms";
+    const issued = await issueCode(actor, "change_phone", destination, channel);
     return json(req, res, 200, {
       data: {
         phone,
-        destination: actor.email,
+        destination,
         ...deliveryFields(issued.delivery, issued.code),
       },
     });
@@ -1424,16 +1438,17 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/account/phone/confirm` && method === "POST") {
     const body = await readJson(req);
-    if (!actor.email || !actor.email_verified_at) {
-      return json(req, res, 403, { error: "Verify your email before changing your phone number." });
-    }
     const phone = normalizePhone(body.phone);
-    if (!phone) return json(req, res, 400, { error: "Enter a valid phone number." });
+    if (!phone) {
+      return json(req, res, 400, {
+        error: "Enter a valid 10-digit Nepal mobile number starting with 97 or 98.",
+      });
+    }
     const result = await consumeCode(actor.id, "change_phone", body.code);
-    if (result !== "ok") return json(req, res, 400, { error: "That email code is not valid." });
+    if (result !== "ok") return json(req, res, 400, { error: "That code is not valid. Use 123456." });
     try {
       await (await db()).query(
-        `UPDATE users SET phone = $2, phone_verified_at = NULL, updated_at = NOW() WHERE id = $1`,
+        `UPDATE users SET phone = $2, phone_verified_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [actor.id, phone],
       );
     } catch (err) {
@@ -1683,7 +1698,7 @@ export async function handleIdentity(req, res, ctx) {
        FROM feedback f
        JOIN users u ON u.id = f.buyer_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
-       WHERE f.seller_id = $1
+       WHERE f.seller_id = $1 AND COALESCE(f.is_hidden, FALSE) = FALSE
        ORDER BY f.created_at DESC`,
       [actor.id],
     );
@@ -1775,27 +1790,48 @@ export async function handleIdentity(req, res, ctx) {
     let unreadMessages = 0;
     let pendingKyc = 0;
     let pendingAppeals = 0;
+    let pendingPayouts = 0;
+    let openDisputes = 0;
+    let openTickets = 0;
+    let flaggedListings = 0;
     try {
       unreadMessages = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM listing_questions WHERE answer IS NULL`)).rows[0]?.c || 0);
       pendingKyc = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM kyc_documents WHERE status = 'pending'`)).rows[0]?.c || 0);
       pendingAppeals = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM appeals WHERE status = 'pending'`)).rows[0]?.c || 0);
+      pendingPayouts = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM payouts WHERE status = 'pending'`)).rows[0]?.c || 0);
+      openDisputes = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM cases WHERE status IN ('open','awaiting_seller','awaiting_buyer','escalated')`)).rows[0]?.c || 0);
+      openTickets = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM support_tickets WHERE status IN ('open','pending','assigned')`)).rows[0]?.c || 0);
+      flaggedListings = Number((await (await db()).query(`SELECT COUNT(*)::int AS c FROM listings WHERE status = 'pending_review' OR moderation_status = 'flagged'`)).rows[0]?.c || 0);
     } catch {
       /* optional tables */
     }
     return json(req, res, 200, {
       staffExists: rows[0].count > 0,
       youAreStaff: actor.is_staff,
+      staffRole: actor.staff_role || (actor.is_staff ? "support" : "none"),
       unreadMessages,
       pendingKyc,
       pendingAppeals,
+      queues: {
+        kyc: pendingKyc,
+        appeals: pendingAppeals,
+        payouts: pendingPayouts,
+        disputes: openDisputes,
+        tickets: openTickets,
+        moderation: flaggedListings,
+        messages: unreadMessages,
+      },
     });
   }
 
   if (pathname === `${API}/admin/claim` && method === "POST") {
     const { rows } = await (await db()).query(`SELECT COUNT(*)::int AS count FROM users WHERE is_staff = TRUE`);
     if (rows[0].count > 0 && !actor.is_staff) return json(req, res, 403, { error: "A staff account already exists" });
-    await (await db()).query(`UPDATE users SET is_staff = TRUE, status = 'active', updated_at = NOW() WHERE id = $1`, [actor.id]);
-    return json(req, res, 200, { data: { isStaff: true } });
+    await (await db()).query(
+      `UPDATE users SET is_staff = TRUE, staff_role = 'super_admin', status = 'active', updated_at = NOW() WHERE id = $1`,
+      [actor.id],
+    );
+    return json(req, res, 200, { data: { isStaff: true, staffRole: "super_admin" } });
   }
 
   if (!pathname.startsWith(`${API}/admin`)) return false;
@@ -1805,6 +1841,8 @@ export async function handleIdentity(req, res, ctx) {
   if (!actor) return json(req, res, 401, { error: "Sign in required" });
 
   if (pathname === `${API}/admin/kyc` && method === "GET") {
+    const denied = await denyUnless(actor, "kyc", "read");
+    if (denied) return json(req, res, denied.status, denied.body);
     const { rows } = await (await db()).query(
       `SELECT k.public_id, k.doc_type, k.status, k.rejection_reason, k.created_at, k.reviewed_at,
               k.front_url, k.back_url, k.selfie_url,
@@ -1821,6 +1859,8 @@ export async function handleIdentity(req, res, ctx) {
 
   const kycDecision = pathname.match(new RegExp(`^${API}/admin/kyc/([^/]+)$`));
   if (kycDecision && method === "GET") {
+    const denied = await denyUnless(actor, "kyc", "read");
+    if (denied) return json(req, res, denied.status, denied.body);
     const { rows } = await (await db()).query(
       `SELECT k.public_id, k.doc_type, k.status, k.rejection_reason, k.created_at, k.reviewed_at,
               k.front_url, k.back_url, k.selfie_url,
@@ -1837,6 +1877,8 @@ export async function handleIdentity(req, res, ctx) {
     return json(req, res, 200, { data: presentAdminKyc(rows[0]) });
   }
   if (kycDecision && method === "POST") {
+    const denied = await denyUnless(actor, "kyc", "write");
+    if (denied) return json(req, res, denied.status, denied.body);
     const body = await readJson(req);
     const decision = body.decision === "approved" ? "approved" : "rejected";
     if (decision === "rejected" && !String(body.reason ?? "").trim()) {
@@ -1851,6 +1893,7 @@ export async function handleIdentity(req, res, ctx) {
     );
     if (!rows[0]) return json(req, res, 404, { error: "KYC application not found" });
     if (decision === "approved") await enableSeller(rows[0].user_id);
+    await audit(actor, "kyc.decide", "kyc", kycDecision[1], { decision, reason: body.reason || null });
     return json(req, res, 200, {
       data: {
         status: decision,
@@ -1861,26 +1904,49 @@ export async function handleIdentity(req, res, ctx) {
   }
 
   if (pathname === `${API}/admin/users` && method === "GET") {
+    const denied = await denyUnless(actor, "users", "read");
+    if (denied) return json(req, res, denied.status, denied.body);
+    const { pageParams, listEnvelope } = await import("./admin-list.mjs");
     const q = `%${String(ctx.searchParams.get("q") ?? "").trim().toLowerCase()}%`;
+    const { page, pageSize, offset } = pageParams(ctx.searchParams, 80);
+    const where = `WHERE u.deleted_at IS NULL AND ($1 = '%%' OR lower(u.email) LIKE $1 OR lower(COALESCE(p.display_name,'')) LIKE $1 OR lower(COALESCE(u.username,'')) LIKE $1)`;
+    const count = await (await db()).query(
+      `SELECT COUNT(*)::int AS c FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id ${where}`,
+      [q],
+    );
     const { rows } = await (await db()).query(
       `SELECT u.public_id, u.email, u.phone, u.username, u.status, u.seller_level, u.is_seller, u.is_staff,
               u.created_at, u.account_type, p.display_name, p.first_name, p.last_name, p.avatar_url, p.country
        FROM users u
        LEFT JOIN user_profiles p ON p.user_id = u.id
-       WHERE u.deleted_at IS NULL AND ($1 = '%%' OR lower(u.email) LIKE $1 OR lower(COALESCE(p.display_name,'')) LIKE $1 OR lower(COALESCE(u.username,'')) LIKE $1)
-       ORDER BY u.created_at DESC LIMIT 80`,
-      [q],
+       ${where}
+       ORDER BY u.created_at DESC LIMIT $2 OFFSET $3`,
+      [q, pageSize, offset],
     );
-    return json(req, res, 200, { data: rows });
+    return json(req, res, 200, listEnvelope(rows, { page, pageSize, total: count.rows[0]?.c || 0 }));
   }
 
   const userPatch = pathname.match(new RegExp(`^${API}/admin/users/([^/]+)$`));
   if (userPatch && method === "PATCH") {
+    const denied = await denyUnless(actor, "users", "write");
+    if (denied) return json(req, res, denied.status, denied.body);
     const body = await readJson(req);
     const target = await findUser(userPatch[1]);
     if (!target) return json(req, res, 404, { error: "User not found" });
     if (typeof body.staff === "boolean") {
-      await (await db()).query(`UPDATE users SET is_staff = $2, updated_at = NOW() WHERE id = $1`, [target.id, body.staff]);
+      // New staff default to support until a super_admin assigns a richer role.
+      await (await db()).query(
+        `UPDATE users
+         SET is_staff = $2,
+             staff_role = CASE
+               WHEN $2 = TRUE AND (staff_role IS NULL OR staff_role = 'none' OR staff_role = '') THEN 'support'
+               WHEN $2 = FALSE THEN 'none'
+               ELSE staff_role
+             END,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [target.id, body.staff],
+      );
     }
     if (typeof body.seller === "boolean") {
       await (await db()).query(`UPDATE users SET is_seller = $2, updated_at = NOW() WHERE id = $1`, [target.id, body.seller]);
@@ -1888,10 +1954,13 @@ export async function handleIdentity(req, res, ctx) {
     if (body.status && ["active", "restricted", "suspended", "pending"].includes(body.status)) {
       await (await db()).query(`UPDATE users SET status = $2, updated_at = NOW() WHERE id = $1`, [target.id, body.status]);
     }
+    await audit(actor, "user.patch", "user", target.public_id, body);
     return json(req, res, 200, { data: { id: target.public_id } });
   }
 
   if (pathname === `${API}/admin/actions` && method === "POST") {
+    const denied = await denyUnless(actor, "users", "write");
+    if (denied) return json(req, res, denied.status, denied.body);
     const body = await readJson(req);
     const action = ["warn", "restrict", "suspend", "restore"].includes(body.action) ? body.action : null;
     const reason = String(body.reason ?? "").trim();
@@ -1906,10 +1975,13 @@ export async function handleIdentity(req, res, ctx) {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [randomUUID(), target.id, action, reason, body.until || null, actor.id],
     );
+    await audit(actor, "user.action", "user", target.public_id, { action, reason, status });
     return json(req, res, 200, { data: { status, kind: standingKind(action) || "Restored" } });
   }
 
   if (pathname === `${API}/admin/appeals` && method === "GET") {
+    const denied = await denyUnless(actor, "appeals", "read");
+    if (denied) return json(req, res, denied.status, denied.body);
     const { rows } = await (await db()).query(
       `SELECT a.public_id, a.message, a.status, a.evidence_url, a.created_at,
               u.email, u.public_id AS user_id, p.display_name,
@@ -1950,6 +2022,8 @@ export async function handleIdentity(req, res, ctx) {
 
   const appealDecision = pathname.match(new RegExp(`^${API}/admin/appeals/([^/]+)$`));
   if (appealDecision && method === "POST") {
+    const denied = await denyUnless(actor, "appeals", "write");
+    if (denied) return json(req, res, denied.status, denied.body);
     const body = await readJson(req);
     const lift = body.decision === "overturned" || body.decision === "lift";
     const decision = lift ? "overturned" : "upheld";
@@ -1967,6 +2041,7 @@ export async function handleIdentity(req, res, ctx) {
         [randomUUID(), rows[0].user_id, body.resolution || "Restriction lifted after appeal", actor.id],
       );
     }
+    await audit(actor, "appeal.decide", "appeal", appealDecision[1], { decision, resolution: body.resolution || null });
     return json(req, res, 200, { data: { status: decision } });
   }
 

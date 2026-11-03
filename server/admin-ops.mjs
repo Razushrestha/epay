@@ -1,5 +1,6 @@
 import { query } from "./db.mjs";
 import { audit, denyUnless } from "./rbac.mjs";
+import { listEnvelope } from "./admin-list.mjs";
 
 export async function handleAdminOps(method, pathParts, auth, body) {
   if (pathParts[0] === "site" && pathParts[1] === "banners" && method === "GET") {
@@ -63,7 +64,7 @@ export async function handleAdminOps(method, pathParts, auth, body) {
        LEFT JOIN user_profiles sp ON sp.user_id = su.id
        ORDER BY (c.status IN ('escalated','appealed')) DESC, c.opened_at DESC LIMIT 120`,
     );
-    return { status: 200, body: { data: rows } };
+    return { status: 200, body: listEnvelope(rows, { page: 1, pageSize: rows.length, total: rows.length }) };
   }
 
   if (pathParts[1] === "moderation" && method === "GET") {
@@ -72,7 +73,7 @@ export async function handleAdminOps(method, pathParts, auth, body) {
     const { rows } = await query(
       `SELECT * FROM moderation_queue ORDER BY (decision IS NULL) DESC, created_at DESC LIMIT 120`,
     );
-    return { status: 200, body: { data: rows } };
+    return { status: 200, body: listEnvelope(rows, { page: 1, pageSize: rows.length, total: rows.length }) };
   }
 
   if (pathParts[1] === "moderation" && pathParts[2] && method === "POST") {
@@ -80,6 +81,9 @@ export async function handleAdminOps(method, pathParts, auth, body) {
     if (denied) return denied;
     const decision = ["approved", "rejected", "flagged"].includes(body.decision) ? body.decision : null;
     if (!decision) return { status: 400, body: { error: "Choose approved, rejected, or flagged" } };
+    if (["rejected", "flagged"].includes(decision) && String(body.reason || "").trim().length < 3) {
+      return { status: 400, body: { error: "A reason is required when rejecting or flagging" } };
+    }
     const item = await query(`SELECT * FROM moderation_queue WHERE id::text = $1 OR public_id::text = $1`, [pathParts[2]]);
     if (!item.rows[0]) return { status: 404, body: { error: "Queue item not found" } };
     await query(
@@ -100,6 +104,8 @@ export async function handleAdminOps(method, pathParts, auth, body) {
   }
 
   if (pathParts[1] === "cms" && method === "GET") {
+    const denied = await denyUnless(auth, "cms", "read");
+    if (denied) return denied;
     const pages = await query(`SELECT * FROM cms_pages ORDER BY slug`);
     const banners = await query(`SELECT * FROM cms_banners ORDER BY sort_order, id`);
     const settings = await query(`SELECT key, value, updated_at FROM site_settings ORDER BY key`);
@@ -107,6 +113,8 @@ export async function handleAdminOps(method, pathParts, auth, body) {
   }
 
   if (pathParts[1] === "cms" && pathParts[2] === "pages" && method === "POST") {
+    const denied = await denyUnless(auth, "cms", "write");
+    if (denied) return denied;
     const slug = String(body.slug || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
     if (!slug || !body.title || !body.body) return { status: 400, body: { error: "Slug, title, and body required" } };
     await query(
@@ -119,6 +127,8 @@ export async function handleAdminOps(method, pathParts, auth, body) {
   }
 
   if (pathParts[1] === "cms" && pathParts[2] === "banners" && method === "POST") {
+    const denied = await denyUnless(auth, "cms", "write");
+    if (denied) return denied;
     await query(
       `INSERT INTO cms_banners (title, image_url, link, position, starts_at, ends_at, active, sort_order)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -128,7 +138,28 @@ export async function handleAdminOps(method, pathParts, auth, body) {
     return { status: 201, body: { data: { saved: true } } };
   }
 
+  if (pathParts[1] === "cms" && pathParts[2] === "banners" && pathParts[3] && method === "DELETE") {
+    const denied = await denyUnless(auth, "cms", "write");
+    if (denied) return denied;
+    const deleted = await query(`DELETE FROM cms_banners WHERE id::text = $1 RETURNING id, title`, [pathParts[3]]);
+    if (!deleted.rows[0]) return { status: 404, body: { error: "Banner not found" } };
+    await audit(auth, "cms.banner_delete", "cms_banner", deleted.rows[0].id, { title: deleted.rows[0].title });
+    return { status: 200, body: { data: { deleted: true } } };
+  }
+
+  if (pathParts[1] === "cms" && pathParts[2] === "pages" && pathParts[3] && method === "DELETE") {
+    const denied = await denyUnless(auth, "cms", "write");
+    if (denied) return denied;
+    const slug = String(pathParts[3]).trim().toLowerCase();
+    const deleted = await query(`DELETE FROM cms_pages WHERE slug = $1 RETURNING slug, title`, [slug]);
+    if (!deleted.rows[0]) return { status: 404, body: { error: "Page not found" } };
+    await audit(auth, "cms.page_delete", "cms_page", slug, { title: deleted.rows[0].title });
+    return { status: 200, body: { data: { deleted: true, slug } } };
+  }
+
   if (pathParts[1] === "cms" && pathParts[2] === "settings" && method === "PATCH") {
+    const denied = await denyUnless(auth, "cms", "write");
+    if (denied) return denied;
     const key = String(body.key || "").trim();
     if (!key) return { status: 400, body: { error: "Setting key required" } };
     await query(
@@ -141,13 +172,15 @@ export async function handleAdminOps(method, pathParts, auth, body) {
   }
 
   if (pathParts[1] === "tickets" && method === "GET") {
+    const denied = await denyUnless(auth, "tickets", "read");
+    if (denied) return denied;
     const { rows } = await query(
       `SELECT t.*, u.email, COALESCE(p.display_name, u.email) AS name
        FROM support_tickets t JOIN users u ON u.id = t.user_id
        LEFT JOIN user_profiles p ON p.user_id = u.id
        ORDER BY (t.status IN ('open','assigned','pending')) DESC, t.created_at DESC LIMIT 120`,
     );
-    return { status: 200, body: { data: rows } };
+    return { status: 200, body: listEnvelope(rows, { page: 1, pageSize: rows.length, total: rows.length }) };
   }
 
   if (pathParts[1] === "tickets" && method === "POST" && !pathParts[2]) {
@@ -198,9 +231,11 @@ export async function handleAdminOps(method, pathParts, auth, body) {
   }
 
   if (pathParts[1] === "audit" && method === "GET") {
+    const denied = await denyUnless(auth, "audit", "read");
+    if (denied) return denied;
     const { rows } = await query(
       `SELECT a.*, u.email FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id
-       ORDER BY a.created_at DESC LIMIT 150`,
+       ORDER BY a.created_at DESC LIMIT 200`,
     );
     return { status: 200, body: { data: rows } };
   }
@@ -239,8 +274,8 @@ export async function handleAdminOps(method, pathParts, auth, body) {
   }
 
   if (pathParts[1] === "roles" && method === "PATCH") {
-    if ((auth.staff_role || "super_admin") !== "super_admin") return { status: 403, body: { error: "Super admin only" } };
-    const role = ["super_admin", "moderator", "finance", "support"].includes(body.role) ? body.role : null;
+    if ((auth.staff_role || "none") !== "super_admin") return { status: 403, body: { error: "Super admin only" } };
+    const role = ["super_admin", "moderator", "finance", "support", "catalog"].includes(body.role) ? body.role : null;
     if (!role || !body.userId) return { status: 400, body: { error: "User and role required" } };
     await query(`UPDATE users SET staff_role = $2, is_staff = TRUE WHERE public_id::text = $1 OR id::text = $1`, [String(body.userId), role]);
     await audit(auth, "role.assign", "user", body.userId, { role });

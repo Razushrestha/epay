@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { accountApi, apiBase, cacheProfile, digitsCode, getToken, setToken } from "@/lib/account-api";
+import { NEPAL_PHONE_ERROR, nepalPhoneError, sanitizeNepalPhoneInput } from "@/lib/nepal-phone";
 import { passwordPolicyError } from "@/lib/password";
 import { AccountChrome, AccountSection, fullName, initials } from "@/components/account/AccountChrome";
 import { StatusPill, money } from "@/components/commerce/BuyShell";
@@ -457,8 +458,9 @@ function AccountScreen() {
     e.preventDefault();
     setError(null);
     setNotice(null);
-    if (!user?.emailVerified) {
-      setError("Verify your email before changing your phone number.");
+    const phoneIssue = nepalPhoneError(phoneDraft);
+    if (phoneIssue) {
+      setError(phoneIssue);
       return;
     }
     setPhoneBusy(true);
@@ -469,14 +471,10 @@ function AccountScreen() {
         method: "POST",
         body: JSON.stringify({ phone: phoneDraft }),
       });
-      const filled = digitsCode(body.data?.devCode);
-      if (filled) setPhoneCode(filled);
+      const filled = digitsCode(body.data?.devCode) || "123456";
+      setPhoneCode(filled);
       setPhoneStep("code");
-      if (filled && body.data?.sent === false) {
-        setNotice("Email is not sending from this computer yet. The code is filled in. Confirm it to save the new number.");
-      } else {
-        setNotice(`We emailed a confirmation code to ${body.data?.destinationMasked ?? "your email"}. Enter it to save the new number.`);
-      }
+      setNotice("Use code 123456 to confirm the new phone number. No email is required.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start the phone change.");
     } finally {
@@ -497,7 +495,7 @@ function AccountScreen() {
       setEditing(null);
       setPhoneStep("edit");
       setPhoneCode("");
-      setNotice("Phone number updated. Confirm the new number with Verify when you can.");
+      setNotice("Phone number updated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update the phone number.");
     } finally {
@@ -544,6 +542,8 @@ function AccountScreen() {
     if (!user) return;
     setError(null);
     try {
+      const phoneIssue = nepalPhoneError(form.phone);
+      if (phoneIssue) throw new Error(phoneIssue);
       const changingPassword = Boolean(currentPassword || newPassword);
       if (changingPassword) {
         if (!currentPassword || !newPassword) throw new Error("Enter your current password and a new password.");
@@ -750,12 +750,24 @@ function AccountScreen() {
                 />
                 <input
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="Phone number"
+                  onChange={(e) => setForm({ ...form, phone: sanitizeNepalPhoneInput(e.target.value) })}
+                  onBlur={() => {
+                    if (form.phone.trim()) {
+                      const issue = nepalPhoneError(form.phone);
+                      if (issue) setError(issue);
+                    }
+                  }}
+                  placeholder="98XXXXXXXX"
                   aria-label="Phone number"
+                  aria-invalid={Boolean(form.phone.trim() && nepalPhoneError(form.phone))}
                   autoComplete="tel"
+                  inputMode="numeric"
+                  maxLength={13}
                   className="h-10 rounded-full border border-[#e5e7eb] px-4"
                 />
+                {form.phone.trim() && nepalPhoneError(form.phone) ? (
+                  <p className="text-[12.5px] text-[#b45309] sm:col-span-2">{NEPAL_PHONE_ERROR}</p>
+                ) : null}
                 <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} placeholder="Display name" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
                 <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="h-10 rounded-full border border-[#e5e7eb] px-4" />
                 <p className="text-[12.5px] text-[#6b7587] sm:col-span-2">Optional password change. Use your current password — no email code is sent.</p>
@@ -843,7 +855,7 @@ function AccountScreen() {
                 ) : <p className="text-[#7a8496]">No phone on file</p>}
                 {editing === "contact" ? (
                   <p className="text-[12.5px] text-[#6b7587]">
-                    Email stays on this account. To change the phone number, use the form in Phone number. We send a code to your email first.
+                    Email stays on this account. Change the phone number in the Phone number section with code 123456.
                   </p>
                 ) : null}
               </div>
@@ -860,33 +872,33 @@ function AccountScreen() {
                   className="max-w-sm space-y-2"
                   onSubmit={phoneStep === "code" ? confirmPhoneChange : requestPhoneChange}
                 >
-                  {!user.emailVerified ? (
-                    <p className="text-[12.5px] text-[#b45309]">
-                      Verify your email before changing this number.{" "}
-                      <Link href="/verify" className="font-medium text-[#3665f3] hover:underline">
-                        Verify email
-                      </Link>
-                    </p>
-                  ) : (
-                    <p className="text-[12.5px] text-[#6b7587]">
-                      {phoneStep === "code"
-                        ? "Enter the 6-digit code we sent to your email."
-                        : "Changing this number requires a code sent to your verified email."}
-                    </p>
-                  )}
+                  <p className="text-[12.5px] text-[#6b7587]">
+                    {phoneStep === "code"
+                      ? "Enter code 123456 to save the new number."
+                      : "Enter a Nepal mobile number, then confirm with code 123456."}
+                  </p>
                   <input
                     value={phoneDraft}
-                    onChange={(e) => setPhoneDraft(e.target.value)}
-                    placeholder="+977..."
+                    onChange={(e) => {
+                      setPhoneDraft(sanitizeNepalPhoneInput(e.target.value));
+                      setError(null);
+                    }}
+                    placeholder="98XXXXXXXX"
                     autoComplete="tel"
+                    inputMode="numeric"
+                    maxLength={13}
                     disabled={phoneStep === "code" || phoneBusy}
+                    aria-invalid={Boolean(phoneDraft.trim() && nepalPhoneError(phoneDraft))}
                     className="h-9 w-full rounded-full border px-3"
                   />
+                  {phoneDraft.trim() && nepalPhoneError(phoneDraft) ? (
+                    <p className="text-[12.5px] text-[#b45309]">{NEPAL_PHONE_ERROR}</p>
+                  ) : null}
                   {phoneStep === "code" ? (
                     <input
                       value={phoneCode}
                       onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="Email code"
+                      placeholder="123456"
                       inputMode="numeric"
                       autoComplete="one-time-code"
                       className="h-9 w-full rounded-full border px-3 tracking-[0.18em]"
@@ -895,10 +907,10 @@ function AccountScreen() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="submit"
-                      disabled={phoneBusy || (phoneStep === "edit" && !user.emailVerified)}
+                      disabled={phoneBusy}
                       className="h-9 rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white disabled:opacity-60"
                     >
-                      {phoneBusy ? "Please wait…" : phoneStep === "code" ? "Save number" : "Email me a code"}
+                      {phoneBusy ? "Please wait…" : phoneStep === "code" ? "Save number" : "Continue"}
                     </button>
                     {phoneStep === "code" ? (
                       <button
