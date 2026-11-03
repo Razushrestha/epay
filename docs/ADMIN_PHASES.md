@@ -74,7 +74,7 @@ Priority order: **0 → 1 → 2 → 4 → 3 → 5 → 6** (money before catalog 
 | Force-end auction + reject reason gate on listings PATCH | Done |
 | Moderation: pending filter + decide drawer + reason on reject/flag | Done |
 | Reviews: filters + hide/restore with reason (`is_hidden`) | Done |
-| Bulk unpublish / category tree drag-reorder UI | Done — bulk unpublish + sibling Up/Down reorder |
+| Bulk unpublish / category tree sibling Up/Down reorder | Done |
 
 | UI | API surface |
 |----|-------------|
@@ -155,7 +155,7 @@ Power features: escrow hooks on paid/completed/refunded, payout approve/reject, 
 
 | Check | Result |
 |-------|--------|
-| Static code claims (`scripts/verify-admin-phases.mjs`) | **75/75 PASS** across phases 0–6 |
+| Static code claims (`scripts/verify-admin-phases.mjs`) | **77/77 PASS** across phases 0–6 |
 | Unauthenticated live probes (`:4000`) | All admin routes **401/403** (blocked) |
 | Residual RBAC holes found & fixed | `messages` / `settings` `denyUnless`; appeals decide write+audit |
 
@@ -163,5 +163,6 @@ Power features: escrow hooks on paid/completed/refunded, payout approve/reject, 
 
 - Gateway recon can report `balanced: false` when payment totals ≠ `PLATFORM_CASH` (data/accounting, not missing UI).
 - Platform settings **write** is effectively super_admin-only (`settings` write not seeded to other roles).
-- Appeals decision note remains optional in UI (reason gates are hard-required on money/trust/refund paths).
 - Mobile on-call usability is layout-responsive but not separately UAT’d.
+- Audit CSV is client-side export of the loaded audit page (≤200 rows), not a dedicated server CSV route.
+- Tickets thread UI is a sticky aside panel (not a slide-over drawer component).

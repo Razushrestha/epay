@@ -304,6 +304,10 @@ export async function handleStaffExtras(req, res, ctx, actor) {
     const body = await readJson(req);
     const listingId = listingMatch[1];
     if (body.forceEndAuction) {
+      const forceReason = String(body.reason || "").trim();
+      if (forceReason.length < 3) {
+        return json(req, res, 400, { error: "A reason (min 3 characters) is required to force-end an auction" });
+      }
       await (await db()).query(
         `UPDATE listings SET auction_ends_at = NOW(), updated_at = NOW()
          WHERE id = $1 AND format IN ('auction','both') AND status = 'active'`,
@@ -315,7 +319,7 @@ export async function handleStaffExtras(req, res, ctx, actor) {
       } catch (err) {
         console.warn("[staff] force-end auction", err.message);
       }
-      await audit(actor, "listing.force_end", "listing", listingId, { reason: body.reason || null });
+      await audit(actor, "listing.force_end", "listing", listingId, { reason: forceReason });
       return json(req, res, 200, { data: { id: listingId, forceEnded: true } });
     }
     const fields = [];

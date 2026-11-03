@@ -2027,21 +2027,25 @@ export async function handleIdentity(req, res, ctx) {
     const body = await readJson(req);
     const lift = body.decision === "overturned" || body.decision === "lift";
     const decision = lift ? "overturned" : "upheld";
+    const resolution = String(body.resolution || "").trim();
+    if (resolution.length < 3) {
+      return json(req, res, 400, { error: "A decision note (min 3 characters) is required" });
+    }
     const { rows } = await (await db()).query(`SELECT user_id FROM appeals WHERE public_id = $1`, [appealDecision[1]]);
     if (!rows[0]) return json(req, res, 404, { error: "Appeal not found" });
     await (await db()).query(
       `UPDATE appeals SET status = $2, resolution = $3, reviewed_by = $4, reviewed_at = NOW() WHERE public_id = $1`,
-      [appealDecision[1], decision, body.resolution ?? null, actor.id],
+      [appealDecision[1], decision, resolution, actor.id],
     );
     if (decision === "overturned") {
       await (await db()).query(`UPDATE users SET status = 'active', updated_at = NOW() WHERE id = $1`, [rows[0].user_id]);
       await (await db()).query(
         `INSERT INTO account_actions (public_id, user_id, action, reason, created_by)
          VALUES ($1, $2, 'restore', $3, $4)`,
-        [randomUUID(), rows[0].user_id, body.resolution || "Restriction lifted after appeal", actor.id],
+        [randomUUID(), rows[0].user_id, resolution, actor.id],
       );
     }
-    await audit(actor, "appeal.decide", "appeal", appealDecision[1], { decision, resolution: body.resolution || null });
+    await audit(actor, "appeal.decide", "appeal", appealDecision[1], { decision, resolution });
     return json(req, res, 200, { data: { status: decision } });
   }
 

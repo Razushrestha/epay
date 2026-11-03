@@ -56,7 +56,8 @@ for (const p of ["users", "kyc", "appeals", "trust", "roles"]) {
 }
 ok(2, "users side panel", read("src/app/admin/users/page.tsx").includes("selected") || read("src/app/admin/users/page.tsx").includes("Selected"));
 ok(2, "KYC pending filter", read("src/app/admin/kyc/page.tsx").includes("pending"));
-ok(2, "appeals decision note", read("src/app/admin/appeals/page.tsx").includes("reason") || read("src/app/admin/appeals/page.tsx").includes("note"));
+ok(2, "appeals decision note UI", read("src/app/admin/appeals/page.tsx").includes("decision note"));
+ok(2, "appeals decision note API", identity.includes("A decision note (min 3 characters) is required"));
 ok(2, "trust reason UI", trustUi.includes("reason") && trustUi.includes("length"));
 ok(2, "trust reason API", /length\s*<\s*3/.test(trustSrv) || trustSrv.includes("required"));
 ok(2, "roles matrix", read("src/app/admin/roles/page.tsx").includes("Permission matrix") || read("src/app/admin/roles/page.tsx").includes("matrix"));
@@ -67,6 +68,7 @@ for (const p of ["catalog", "products", "moderation", "reviews"]) {
   ok(3, `page /admin/${p}`, exists(`src/app/admin/${p}/page.tsx`));
 }
 ok(3, "forceEndAuction API", staff.includes("forceEndAuction"));
+ok(3, "forceEndAuction reason gate", staff.includes("required to force-end an auction"));
 ok(3, "listing reject reason gate", staff.includes("A reason is required when rejecting"));
 ok(3, "moderation reason gate", adminOps.includes("A reason is required when rejecting or flagging"));
 ok(3, "reviews hide", staff.includes("is_hidden") && staff.includes("review.hide"));

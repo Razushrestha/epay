@@ -34,19 +34,25 @@ export default function AdminAppealsPage() {
 
   async function decide(item: Appeal, decision: "upheld" | "lift") {
     setError(null);
-    const resolution =
-      note.trim() ||
-      (decision === "lift" ? "Restriction lifted after appeal" : "Original action stands");
-    await accountApi(`/api/v1/admin/appeals/${item.public_id}`, {
-      method: "POST",
-      body: JSON.stringify({
-        decision: decision === "lift" ? "lift" : "upheld",
-        resolution,
-      }),
-    });
-    setNotice(decision === "lift" ? `Lifted restriction for ${item.display_name || item.email}.` : `Upheld restriction for ${item.display_name || item.email}.`);
-    setNote("");
-    await load();
+    const resolution = note.trim();
+    if (resolution.length < 3) {
+      setError("Add a decision note (min 3 characters) before upholding or lifting.");
+      return;
+    }
+    try {
+      await accountApi(`/api/v1/admin/appeals/${item.public_id}`, {
+        method: "POST",
+        body: JSON.stringify({
+          decision: decision === "lift" ? "lift" : "upheld",
+          resolution,
+        }),
+      });
+      setNotice(decision === "lift" ? `Lifted restriction for ${item.display_name || item.email}.` : `Upheld restriction for ${item.display_name || item.email}.`);
+      setNote("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not decide appeal");
+    }
   }
 
   const pending = rows.filter((row) => row.status === "pending");
@@ -85,7 +91,7 @@ export default function AdminAppealsPage() {
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Decision note (optional)"
+          placeholder="Decision note (required)"
           className="nexlo-field min-w-[220px] flex-1"
         />
       </div>
