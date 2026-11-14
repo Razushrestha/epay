@@ -216,7 +216,7 @@ async function placeProxy(listingId, bidderId, maxAmount) {
     await notify(placed.outbidUser, "outbid", "You were outbid", `Someone bid higher on ${placed.listing.title}.`, `/listing/${listingId}`);
   }
   if (placed.lostLead) {
-    await notify(bidderId, "outbid", "Bid not high enough", `Another bidder still leads ${placed.listing.title}.`, `/listing/${listingId}`);
+    await notify(bidderId, "outbid", "Bid not high enough", `Another bidder has a higher maximum on ${placed.listing.title}. Raise your maximum bid to take the lead.`, `/listing/${listingId}`);
   }
   if (placed.reserveMet && !placed.wasMet) {
     await notify(placed.listing.seller_id, "reserve_met", "Reserve met", `${placed.listing.title} has met the reserve.`, `/listing/${listingId}`);

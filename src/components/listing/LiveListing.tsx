@@ -377,7 +377,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
       });
       setYouLead(Boolean(body.youLead));
       setCanRetract(true);
-      setNotice(body.youLead ? "You are the high bidder." : "Bid placed, but another bidder still leads.");
+      setNotice(body.youLead ? "You are the high bidder." : "Your bid was placed, but another bidder has a higher maximum and still leads. Raise your maximum bid to take the lead.");
     } finally {
       setBidBusy(false);
     }
