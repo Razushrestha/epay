@@ -40,6 +40,11 @@ services:
         sync: false
       - key: KHALTI_RETURN_URL
         sync: false
+      # Email (Resend). When RESEND_API_KEY is set it is used instead of Mailgun.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
       - key: MAILGUN_API_KEY
         sync: false
       - key: MAILGUN_DOMAIN

@@ -139,10 +139,127 @@ function codeEmailHtml(code, purpose, resetUrl) {
 </div>`;
 }
 
+const RESEND_URL = "https://api.resend.com/emails";
+
+export function resendConfigured() {
+  return Boolean(String(process.env.RESEND_API_KEY || "").trim());
+}
+
+function resendFrom() {
+  const from = String(process.env.EMAIL_FROM || "").trim();
+  if (from) return from;
+  console.warn("[mail] EMAIL_FROM is not set; using Resend's test sender, which only delivers to your own Resend account email");
+  return "MeroAuction <onboarding@resend.dev>";
+}
+
+export function classifyResendError(err) {
+  const message = String(err?.message || err || "");
+  const status = Number(err?.status || 0);
+  const lower = message.toLowerCase();
+  if (err?.name === "AbortError" || lower.includes("abort") || lower.includes("timeout")) {
+    return { retryable: true, userMessage: "The email provider timed out. Tap Resend." };
+  }
+  if (status === 401) {
+    return { retryable: false, userMessage: "Email delivery is not set up correctly. Please contact support." };
+  }
+  if (status === 403 || lower.includes("domain is not verified") || lower.includes("testing emails")) {
+    return {
+      retryable: false,
+      userMessage: "We could not deliver to this email right now. Please try again later or contact support.",
+    };
+  }
+  if (status === 400 || status === 422) {
+    return { retryable: false, userMessage: "That email address could not be used. Check it, then tap Resend." };
+  }
+  if (status === 429 || status >= 500) {
+    return { retryable: true, userMessage: "The email provider is busy. Tap Resend." };
+  }
+  return { retryable: !status || status >= 500, userMessage: "We could not send the code. Tap Resend." };
+}
+
+async function postResend({ from, to, subject, text, html, tag }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+  try {
+    const res = await fetch(RESEND_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${String(process.env.RESEND_API_KEY).trim()}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        text,
+        ...(html ? { html } : {}),
+        ...(tag ? { tags: [{ name: "purpose", value: tag }] } : {}),
+      }),
+      signal: controller.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.message || `Resend ${res.status}`);
+      err.status = res.status;
+      err.payload = data;
+      throw err;
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function sendCodeViaResend({ destination, code, purpose, resetUrl }) {
+  const masked = maskDestination(destination, "email");
+  if (!destination) return { sent: false, skipped: true, masked, userMessage: "No email to send a code to." };
+  const fields = {
+    from: resendFrom(),
+    to: destination,
+    subject: SUBJECTS[purpose] ?? "Your MeroAuction code",
+    text: resetUrl
+      ? `Reset your MeroAuction password: ${resetUrl}\nThis link expires in 30 minutes. You can also use code ${code}.`
+      : `Your MeroAuction code is ${code}. It expires in 10 minutes. If you requested another code, use the latest one.`,
+    html: codeEmailHtml(code, purpose, resetUrl),
+    tag: String(purpose).replace(/[^A-Za-z0-9_-]/g, "_"),
+  };
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const data = await postResend(fields);
+      console.log("[mail] sent", purpose, "to", destination, "via resend", data?.id ?? "");
+      return { sent: true, skipped: false, id: data?.id, masked };
+    } catch (err) {
+      lastError = err;
+      const classified = classifyResendError(err);
+      console.error("[mail] resend failed", purpose, destination, err?.status, err?.message || err);
+      if (!classified.retryable) return { sent: false, skipped: false, masked, ...classified };
+      if (attempt === 0) await wait(600);
+    }
+  }
+  return { sent: false, skipped: false, masked, ...classifyResendError(lastError) };
+}
+
+async function sendTransactionalViaResend({ destination, subject, text }) {
+  if (!destination) {
+    console.warn("[mail] skip transactional, no recipient", subject);
+    return { skipped: true, sent: false };
+  }
+  try {
+    const data = await postResend({ from: resendFrom(), to: destination, subject, text, tag: "transactional" });
+    return { skipped: false, sent: true, id: data?.id };
+  } catch (err) {
+    console.error("[mail] resend transactional failed", err?.message || err);
+    return { skipped: true, sent: false, error: err?.message };
+  }
+}
+
 export async function sendCodeEmail({ to, code, purpose = "verify", resetUrl }) {
   const key = process.env.MAILGUN_API_KEY;
   const domain = process.env.MAILGUN_DOMAIN;
   const destination = String(to || "").trim().toLowerCase();
+  if (resendConfigured()) return sendCodeViaResend({ destination, code, purpose, resetUrl });
   if (!key || !domain || !destination) {
     const missing = [!key && "MAILGUN_API_KEY", !domain && "MAILGUN_DOMAIN"].filter(Boolean);
     console.warn(
@@ -202,6 +319,7 @@ export async function sendTransactional({ to, subject, text }) {
   const key = process.env.MAILGUN_API_KEY;
   const domain = process.env.MAILGUN_DOMAIN;
   const destination = String(to || "").trim();
+  if (resendConfigured()) return sendTransactionalViaResend({ destination, subject, text });
   if (!key || !domain || !destination) {
     console.warn("[mail] skip transactional to", destination || to, subject);
     return { skipped: true, sent: false };
