@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { accountApi, apiBase, cacheProfile, digitsCode, getToken, setToken } from "@/lib/account-api";
+import { accountApi, apiBase, cacheProfile, digitsCode, getToken, setToken, STATIC_VERIFY_OTP } from "@/lib/account-api";
 import { NEPAL_PHONE_ERROR, nepalPhoneError, sanitizeNepalPhoneInput } from "@/lib/nepal-phone";
 import { passwordPolicyError } from "@/lib/password";
 import { AccountChrome, AccountSection, fullName, initials } from "@/components/account/AccountChrome";
@@ -472,7 +472,7 @@ function AccountScreen() {
         method: "POST",
         body: JSON.stringify({ phone: phoneDraft }),
       });
-      const filled = digitsCode(body.data?.devCode) || "123456";
+      const filled = digitsCode(body.data?.devCode) || STATIC_VERIFY_OTP;
       setPhoneCode(filled);
       setPhoneStep("code");
       setNotice("Use code 123456 to confirm the new phone number. No email is required.");

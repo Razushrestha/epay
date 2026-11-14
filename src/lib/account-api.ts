@@ -64,7 +64,12 @@ export function readCachedProfile(): CachedProfile | null {
 
 export function apiUnreachableMessage(err: unknown) {
   if (err instanceof Error && err.name === "AbortError") {
-    return "The request timed out. Make sure the API is running (`npm run dev:api`), then try again.";
+    return process.env.NODE_ENV === "production"
+      ? "The request timed out. Please try again."
+      : "The request timed out. Make sure the API is running (`npm run dev:api`), then try again.";
+  }
+  if (process.env.NODE_ENV === "production") {
+    return "MeroAuction is temporarily unavailable. Please try again in a moment.";
   }
   return "Cannot reach the MeroAuction API. On this computer run `npm run dev` and `npm run dev:api` together.";
 }
@@ -77,13 +82,18 @@ export function digitsCode(value: unknown) {
 export const VERIFY_OTP_TTL_SECONDS = 30;
 export const VERIFY_RESEND_COOLDOWN_SECONDS = 30;
 
-export const STATIC_VERIFY_OTP = "123456";
+// Fixed QA code, only ever shown or pre-filled outside production builds.
+export const STATIC_VERIFY_OTP = process.env.NODE_ENV === "production" ? "" : "123456";
 
 export const localOtpNotice =
-  "Use the static code 123456. No email OTP is sent. Tap Verify.";
+  process.env.NODE_ENV === "production"
+    ? "We sent a 6-digit code to your email. Enter it below."
+    : "Use the static code 123456. No email OTP is sent. Tap Verify.";
 
 export const localSmsOtpNotice =
-  "Use the static code 123456. No SMS OTP is sent. Tap Verify.";
+  process.env.NODE_ENV === "production"
+    ? "We sent a 6-digit code to your phone. Enter it below."
+    : "Use the static code 123456. No SMS OTP is sent. Tap Verify.";
 
 export async function accountApi<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);

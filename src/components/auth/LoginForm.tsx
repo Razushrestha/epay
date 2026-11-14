@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiBase, apiUnreachableMessage, digitsCode, setToken } from "@/lib/account-api";
+import { apiBase, apiUnreachableMessage, digitsCode, setToken, STATIC_VERIFY_OTP } from "@/lib/account-api";
 import { SocialSignIn } from "@/components/auth/SocialSignIn";
 import { authenticatePasskey, passkeysSupported } from "@/lib/webauthn";
 
@@ -83,7 +83,7 @@ export function LoginForm() {
         setStep("challenge");
         setChallengeToken(body.challengeToken);
         if (body.method === "otp") {
-          const filled = digitsCode(body.devCode) || "123456";
+          const filled = digitsCode(body.devCode) || STATIC_VERIFY_OTP;
           setCode(filled);
           setNotice("Use the static login code 123456. No email OTP is sent.");
         } else {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type MouseEvent } from "react";
-import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
+import { apiBase, apiUnreachableMessage, setToken, STATIC_VERIFY_OTP } from "@/lib/account-api";
 import { emailError } from "@/lib/email";
 import { nameError } from "@/lib/name";
 import { nepalPhoneError, sanitizeNepalPhoneInput } from "@/lib/nepal-phone";
@@ -192,7 +192,7 @@ export function RegisterForm() {
       sessionStorage.setItem("nexlo_verify_id", identifier);
       if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", String(body.data.destinationMasked));
       else sessionStorage.removeItem("nexlo_verify_dest");
-      sessionStorage.setItem("nexlo_dev_code", String(body.data?.devCode || "123456"));
+      sessionStorage.setItem("nexlo_dev_code", String(body.data?.devCode || STATIC_VERIFY_OTP));
       sessionStorage.setItem("nexlo_verify_channel", body.data?.channel === "phone" ? "phone" : "email");
       sessionStorage.setItem("nexlo_otp_sent_at", String(Date.now()));
       sessionStorage.removeItem("nexlo_code_error");

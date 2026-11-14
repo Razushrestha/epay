@@ -73,7 +73,7 @@ export function VerifyForm() {
     if (storedSent) setCooldown(cooldownLeft(storedSent));
     else markOtpSent();
     setCode(filled);
-    setShowCode(true);
+    setShowCode(Boolean(filled));
     setError(null);
     setNotice(channel === "phone" ? localSmsOtpNotice : localOtpNotice);
   }, []);
@@ -154,7 +154,7 @@ export function VerifyForm() {
       sessionStorage.removeItem("nexlo_code_error");
       if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", body.data.destinationMasked);
       setCode(filled);
-      setShowCode(true);
+      setShowCode(Boolean(filled));
       setError(null);
       setNotice(localOtpNotice);
       setResent(false);

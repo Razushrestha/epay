@@ -46,7 +46,11 @@ const appealsDir = join(__dirname, "..", ".data", "appeals");
 mkdirSync(appealsDir, { recursive: true });
 const API = "/api/v1";
 const devCodes = process.env.NODE_ENV !== "production";
-/** Static OTP while email/SMS delivery is disabled for QA. */
+/**
+ * Fixed QA code (123456). NEVER available in production unless ALLOW_STATIC_OTP=1 is set on purpose,
+ * because it would let anyone verify, reset passwords and pass 2FA for any account.
+ */
+const staticOtpAllowed = process.env.NODE_ENV !== "production" || process.env.ALLOW_STATIC_OTP === "1";
 const STATIC_OTP = "123456";
 const STATIC_LOGIN_OTP = STATIC_OTP;
 const STATIC_OTP_PURPOSES = new Set(["login_2fa", "verify", "enroll_2fa", "reset", "change_phone"]);
@@ -54,7 +58,7 @@ const VERIFY_OTP_SECONDS = 30;
 const VERIFY_RESEND_SECONDS = 30;
 
 function usesStaticOtp(purpose) {
-  return STATIC_OTP_PURPOSES.has(purpose);
+  return staticOtpAllowed && STATIC_OTP_PURPOSES.has(purpose);
 }
 
 /** Personal and business storefront accounts skip OTP/2FA so QA can sign in with a password. Staff still use 2FA. */
@@ -366,7 +370,7 @@ async function loadPublic(user) {
 }
 
 function deliveryFields(delivery, code) {
-  const exposeCode = devCodes || code === STATIC_OTP;
+  const exposeCode = devCodes || (staticOtpAllowed && code === STATIC_OTP);
   return {
     sent: Boolean(delivery?.sent),
     skipped: Boolean(delivery?.skipped),
@@ -377,7 +381,7 @@ function deliveryFields(delivery, code) {
 }
 
 function codeTtlSeconds(purpose) {
-  return purpose === "verify" ? VERIFY_OTP_SECONDS : 600;
+  return purpose === "verify" && staticOtpAllowed ? VERIFY_OTP_SECONDS : 600;
 }
 
 function appOrigin(req) {
@@ -879,10 +883,10 @@ export async function handleIdentity(req, res, ctx) {
           destination,
           channel,
           review: Boolean(risk?.flagged),
-          expiresIn: VERIFY_OTP_SECONDS,
+          expiresIn: codeTtlSeconds("verify"),
           resendAfter: VERIFY_RESEND_SECONDS,
           ...deliveryFields(issued.delivery, issued.code),
-          devCode: STATIC_OTP,
+          devCode: staticOtpAllowed ? STATIC_OTP : undefined,
         },
       });
     } catch (err) {
@@ -927,10 +931,10 @@ export async function handleIdentity(req, res, ctx) {
       data: {
         destination,
         channel,
-        expiresIn: VERIFY_OTP_SECONDS,
+        expiresIn: codeTtlSeconds("verify"),
         resendAfter: VERIFY_RESEND_SECONDS,
         ...deliveryFields(issued.delivery, issued.code),
-        devCode: STATIC_OTP,
+        devCode: staticOtpAllowed ? STATIC_OTP : undefined,
       },
     });
   }
@@ -996,7 +1000,7 @@ export async function handleIdentity(req, res, ctx) {
           method: "otp",
           challengeToken,
           ...deliveryFields(issued.delivery, issued.code),
-          devCode: STATIC_LOGIN_OTP,
+          devCode: staticOtpAllowed ? STATIC_LOGIN_OTP : undefined,
         });
       }
       return json(req, res, 200, {
@@ -1074,7 +1078,7 @@ export async function handleIdentity(req, res, ctx) {
     const given = String(body.code ?? "").replace(/\s/g, "");
     let ok = false;
     if (skipStorefrontOtp(user) || user.two_factor_method === "otp") {
-      ok = given === STATIC_LOGIN_OTP || (await consumeCode(user.id, "login_2fa", given)) === "ok";
+      ok = (staticOtpAllowed && given === STATIC_LOGIN_OTP) || (await consumeCode(user.id, "login_2fa", given)) === "ok";
     } else if (user.two_factor_method === "authenticator") {
       ok = verifyTotp(user.secret ?? "", given);
     } else {
@@ -1445,7 +1449,7 @@ export async function handleIdentity(req, res, ctx) {
       });
     }
     const result = await consumeCode(actor.id, "change_phone", body.code);
-    if (result !== "ok") return json(req, res, 400, { error: "That code is not valid. Use 123456." });
+    if (result !== "ok") return json(req, res, 400, { error: staticOtpAllowed ? "That code is not valid. Use 123456." : "That code is not valid or has expired." });
     try {
       await (await db()).query(
         `UPDATE users SET phone = $2, phone_verified_at = NOW(), updated_at = NOW() WHERE id = $1`,
