@@ -40,19 +40,11 @@ services:
         sync: false
       - key: KHALTI_RETURN_URL
         sync: false
-      # Email (Resend). When RESEND_API_KEY is set it is used instead of Mailgun.
+      # Email (Resend). Domain must be verified in Resend; EMAIL_FROM must use that domain.
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
         sync: false
-      - key: MAILGUN_API_KEY
-        sync: false
-      - key: MAILGUN_DOMAIN
-        sync: false
-      - key: MAILGUN_FROM
-        sync: false
-      - key: MAILGUN_API_URL
-        value: https://api.mailgun.net
 
   # Next.js website (meroauction.com). Browser calls /api/v1/* on this origin and
   # next.config.ts rewrites them to the backend service above.

@@ -408,7 +408,7 @@ async function issueCode(user, purpose, destination, channel, extras = {}) {
     [user.id, channel, purpose, destination, hashCode(code), codeTtlSeconds(purpose)],
   );
   if (staticOtp) {
-    // Skip Mailgun/SMS while using the fixed QA code.
+    // Skip email/SMS while using the fixed QA code.
     return {
       code,
       delivery: {
@@ -1427,7 +1427,7 @@ export async function handleIdentity(req, res, ctx) {
     }
     const taken = await (await db()).query(`SELECT id FROM users WHERE phone = $1 AND id <> $2 LIMIT 1`, [phone, actor.id]);
     if (taken.rows[0]) return json(req, res, 409, { error: "That phone number is already in use." });
-    // Static OTP 123456 — no email verification or Mailgun required for QA.
+    // Static OTP 123456 (non-production only) — no email verification required for QA.
     const destination = actor.email || actor.phone || phone;
     const channel = actor.email ? "email" : "sms";
     const issued = await issueCode(actor, "change_phone", destination, channel);

@@ -31,7 +31,7 @@ const MANUAL = [
   { id: "load", label: "npm run test:load meets API p95 < 300ms and search p95 < 400ms" },
   { id: "uat", label: "npm run test:uat passes against staging or production" },
   { id: "escrow", label: "Pay → ship → received → escrow release → payout still works" },
-  { id: "mail", label: "Auth codes and notifications send on production Mailgun" },
+  { id: "mail", label: "Auth codes and notifications send through Resend in production" },
   { id: "admin", label: "Admin desks (orders, payouts, KYC, disputes) reachable for on-call roles" },
 ];
 
