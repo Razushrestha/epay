@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
-import { SocialSignIn } from "@/components/auth/SocialSignIn";
+import { SocialSignIn, type SocialChallenge } from "@/components/auth/SocialSignIn";
 import { authenticatePasskey, passkeysSupported } from "@/lib/webauthn";
 
 function MailIcon() {
@@ -45,6 +45,7 @@ export function LoginForm() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"password" | "challenge" | "enroll">("password");
+  const [socialAvailable, setSocialAvailable] = useState(false);
   const [challengeToken, setChallengeToken] = useState("");
   const [code, setCode] = useState("");
   const [secret, setSecret] = useState("");
@@ -414,7 +415,7 @@ export function LoginForm() {
         ) : null}
       </form>
 
-      <div className={`my-4 flex items-center gap-4 text-[13px] text-[#8a94a6] ${step === "password" ? "" : "hidden"}`}>
+      <div className={`my-4 flex items-center gap-4 text-[13px] text-[#8a94a6] ${step === "password" && socialAvailable ? "" : "hidden"}`}>
         <span className="h-px flex-1 bg-[#e5eaf2]" />
         or
         <span className="h-px flex-1 bg-[#e5eaf2]" />
@@ -422,6 +423,20 @@ export function LoginForm() {
 
       <div className={step === "password" ? "" : "hidden"}>
         <SocialSignIn
+          onAvailabilityChange={setSocialAvailable}
+          onChallenge={(challenge: SocialChallenge) => {
+            setError(null);
+            setStep("challenge");
+            setChallengeToken(challenge.challengeToken);
+            setCode("");
+            setNotice(
+              challenge.method === "otp"
+                ? challenge.sent === false
+                  ? challenge.deliveryError ?? "We could not send the code. Try again."
+                  : "We sent a 6-digit code to your email or phone. Enter it below."
+                : "Enter the 6-digit code from your authenticator app.",
+            );
+          }}
           onError={(message) => {
             setNotice(null);
             setError(message);

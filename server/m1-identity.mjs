@@ -475,7 +475,8 @@ export async function verifyAppleIdToken(idToken) {
   if (!verify.verify(key, b64urlToBuf(parts[2]))) throw new Error("Apple could not confirm that sign-in");
   if (payload.iss !== "https://appleid.apple.com") throw new Error("Apple token issuer did not match");
   const audience = process.env.APPLE_CLIENT_ID || process.env.NEXT_PUBLIC_APPLE_CLIENT_ID;
-  if (audience && payload.aud !== audience) throw new Error("Apple token audience did not match");
+  if (!audience) throw new Error("Apple sign-in is not set up yet.");
+  if (payload.aud !== audience) throw new Error("Apple token audience did not match");
   if (Number(payload.exp) * 1000 < Date.now()) throw new Error("Apple sign-in expired. Try again.");
   return payload;
 }
@@ -483,15 +484,15 @@ export async function verifyAppleIdToken(idToken) {
 export async function verifyFacebookToken(accessToken) {
   const appId = process.env.FACEBOOK_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
-  if (appId && appSecret) {
-    const debug = await fetch(
-      `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`,
-    );
-    if (!debug.ok) throw new Error("Facebook could not confirm that sign-in");
-    const info = await debug.json();
-    if (!info?.data?.is_valid || String(info.data.app_id) !== String(appId)) {
-      throw new Error("Facebook token did not match this app");
-    }
+  // Without the secret we cannot prove the token was issued to our app, so refuse instead of guessing.
+  if (!appId || !appSecret) throw new Error("Facebook sign-in is not set up yet.");
+  const debug = await fetch(
+    `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`,
+  );
+  if (!debug.ok) throw new Error("Facebook could not confirm that sign-in");
+  const info = await debug.json();
+  if (!info?.data?.is_valid || String(info.data.app_id) !== String(appId)) {
+    throw new Error("Facebook token did not match this app");
   }
   const me = await fetch(
     `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`,

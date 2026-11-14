@@ -45,6 +45,20 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      # Social sign-in. A button only appears once its provider is configured.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: APPLE_CLIENT_ID
+        sync: false
+      - key: APPLE_REDIRECT_URI
+        sync: false
+      - key: FACEBOOK_APP_ID
+        sync: false
+      - key: FACEBOOK_APP_SECRET
+        sync: false
+      # Demo social sign-in lets anyone sign in as any email. Keep it off in production.
+      - key: ALLOW_DEMO_SOCIAL
+        value: "0"
 
   # Next.js website (meroauction.com). Browser calls /api/v1/* on this origin and
   # next.config.ts rewrites them to the backend service above.

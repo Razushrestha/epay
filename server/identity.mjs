@@ -39,6 +39,14 @@ import {
   verifyAppleIdToken,
   verifyFacebookToken,
 } from "./m1-identity.mjs";
+import {
+  isVerifiedFlag,
+  isSocialProvider,
+  socialClientId,
+  socialDemoAllowed,
+  socialMode,
+  socialProviderConfigured,
+} from "./social-config.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kycDir = join(__dirname, "..", ".data", "kyc");
@@ -699,27 +707,40 @@ async function findSocialUser(provider, sub, email) {
   return null;
 }
 
-function socialProviderConfigured(provider) {
-  if (provider === "google") {
-    return Boolean(process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+/** Second step for accounts that turned on two-factor. Used by password and social sign-in. */
+async function respondTwoFactorChallenge(req, res, json, user) {
+  const challengeToken = await createChallenge(user, "login_2fa");
+  // Storefront accounts use a fixed login OTP (no email/SMS). Staff keep real authenticator/OTP.
+  if (skipStorefrontOtp(user) || user.two_factor_method === "otp") {
+    const channel = user.email ? "email" : "phone";
+    const issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
+    return json(req, res, 200, {
+      step: "challenge",
+      method: "otp",
+      challengeToken,
+      ...deliveryFields(issued.delivery, issued.code),
+    });
   }
-  if (provider === "apple") {
-    return Boolean(process.env.APPLE_CLIENT_ID || process.env.NEXT_PUBLIC_APPLE_CLIENT_ID);
-  }
-  if (provider === "facebook") {
-    return Boolean(process.env.FACEBOOK_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID);
-  }
-  return false;
+  return json(req, res, 200, {
+    step: "challenge",
+    method: user.two_factor_method,
+    challengeToken,
+  });
 }
 
-/** Demo social login when the provider app is not configured (QA / local). Set ALLOW_DEMO_SOCIAL=0 to disable. */
-function socialDemoAllowed(provider) {
-  if (process.env.ALLOW_DEMO_SOCIAL === "0") return false;
-  if (process.env.ALLOW_DEMO_SOCIAL === "1") return true;
-  return !socialProviderConfigured(provider);
-}
-
-async function verifyGoogleAccessToken(accessToken) {
+/**
+ * Verify a Google OAuth access token: it must have been issued to OUR client id (otherwise a token
+ * from any other app could be replayed here), and the email on the account must be verified.
+ */
+async function verifyGoogleAccessToken(accessToken, clientId) {
+  const info = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!info.ok) throw new Error("Google could not confirm that sign-in");
+  const meta = await info.json();
+  if (String(meta.aud || meta.azp || "") !== clientId) {
+    throw new Error("Google token audience did not match");
+  }
   const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -752,16 +773,20 @@ async function finishSocial(req, res, json, provider, sub, email, name) {
     await recordConsents(rows[0].id, ["privacy", "terms"], req).catch(() => {});
     user = await findUser(normalizedEmail);
   }
+  if (user.is_staff) {
+    // Staff always use the password + two-factor flow, never a social shortcut.
+    return json(req, res, 403, { error: "Staff accounts must sign in with email and password." });
+  }
+  await refreshStanding(user);
+  if (user.status === "pending") await activatePendingStorefrontUser(user);
   await (await db()).query(
     `INSERT INTO social_accounts (user_id, provider, provider_user_id, email)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (provider, provider_user_id) DO NOTHING`,
     [user.id, provider, sub, normalizedEmail || user.email],
   );
-  if (!skipStorefrontOtp(user) && (user.is_seller || user.is_staff) && !user.two_factor_enabled) {
-    const challengeToken = await createChallenge(user, "enroll_2fa", 20);
-    return json(req, res, 200, { step: "enroll", challengeToken });
-  }
+  // Anyone who turned on two-factor must still pass it when signing in with Google/Apple/Facebook.
+  if (user.two_factor_enabled) return respondTwoFactorChallenge(req, res, json, user);
   const token = await openSession(user, req, true);
   return json(req, res, 200, { token, user: await loadPublic(user) });
 }
@@ -989,23 +1014,7 @@ export async function handleIdentity(req, res, ctx) {
       }
     }
     if (user.two_factor_enabled) {
-      const challengeToken = await createChallenge(user, "login_2fa");
-      // Storefront accounts use a fixed login OTP (no email/SMS). Staff keep real authenticator/OTP.
-      if (skipStorefrontOtp(user) || user.two_factor_method === "otp") {
-        const channel = user.email ? "email" : "phone";
-        const issued = await issueCode(user, "login_2fa", user.email || user.phone, channel);
-        return json(req, res, 200, {
-          step: "challenge",
-          method: "otp",
-          challengeToken,
-          ...deliveryFields(issued.delivery, issued.code),
-        });
-      }
-      return json(req, res, 200, {
-        step: "challenge",
-        method: user.two_factor_method,
-        challengeToken,
-      });
+      return respondTwoFactorChallenge(req, res, json, user);
     }
     if (!skipStorefrontOtp(user)) {
       const must2fa = user.is_seller || user.is_staff;
@@ -1133,19 +1142,26 @@ export async function handleIdentity(req, res, ctx) {
   }
 
   if (pathname === `${API}/auth/social/config` && method === "GET") {
+    // Client ids are public. Sending them here means the web app does not need NEXT_PUBLIC_* rebuilds.
     return json(req, res, 200, {
       data: {
-        google: socialProviderConfigured("google") ? "live" : socialDemoAllowed("google") ? "demo" : "off",
-        apple: socialProviderConfigured("apple") ? "live" : socialDemoAllowed("apple") ? "demo" : "off",
-        facebook: socialProviderConfigured("facebook") ? "live" : socialDemoAllowed("facebook") ? "demo" : "off",
+        google: socialMode("google"),
+        apple: socialMode("apple"),
+        facebook: socialMode("facebook"),
       },
+      clientIds: {
+        google: socialClientId("google"),
+        apple: socialClientId("apple"),
+        facebook: socialClientId("facebook"),
+      },
+      appleRedirectUri: process.env.APPLE_REDIRECT_URI || "",
     });
   }
 
   if (pathname === `${API}/auth/social/demo` && method === "POST") {
     const body = await readJson(req);
     const provider = String(body.provider ?? "").trim().toLowerCase();
-    if (!["google", "apple", "facebook"].includes(provider)) {
+    if (!isSocialProvider(provider)) {
       return json(req, res, 400, { error: "Choose Google, Apple, or Facebook." });
     }
     if (!socialDemoAllowed(provider)) {
@@ -1163,32 +1179,32 @@ export async function handleIdentity(req, res, ctx) {
 
   if (pathname === `${API}/auth/google` && method === "POST") {
     const body = await readJson(req);
+    const clientId = socialClientId("google");
+    if (!clientId) return json(req, res, 503, { error: "Google sign-in is not set up yet." });
     try {
+      let profile;
       if (body.idToken) {
         const info = await fetch(
           `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(body.idToken)}`,
         );
         if (!info.ok) return json(req, res, 401, { error: "Google could not confirm that sign-in" });
-        const profile = await info.json();
-        const audience = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-        if (audience && profile.aud !== audience) {
+        profile = await info.json();
+        if (profile.aud !== clientId) {
           return json(req, res, 401, { error: "Google token audience did not match" });
         }
-        const email = String(profile.email ?? "").toLowerCase();
-        const name = profile.name || email;
-        const sub = profile.sub;
-        if (!email || !sub) return json(req, res, 400, { error: "A Google email is required" });
-        return await finishSocial(req, res, json, "google", String(sub), email, name);
+      } else if (body.accessToken) {
+        profile = await verifyGoogleAccessToken(body.accessToken, clientId);
+      } else {
+        return json(req, res, 400, { error: "Google sign-in requires a Google ID token or access token" });
       }
-      if (body.accessToken) {
-        const profile = await verifyGoogleAccessToken(body.accessToken);
-        const email = String(profile.email ?? "").toLowerCase();
-        const name = profile.name || email;
-        const sub = profile.sub;
-        if (!email || !sub) return json(req, res, 400, { error: "A Google email is required" });
-        return await finishSocial(req, res, json, "google", String(sub), email, name);
+      if (!isVerifiedFlag(profile.email_verified)) {
+        return json(req, res, 401, { error: "Your Google email address is not verified." });
       }
-      return json(req, res, 400, { error: "Google sign-in requires a Google ID token or access token" });
+      const email = String(profile.email ?? "").toLowerCase();
+      const name = profile.name || email;
+      const sub = profile.sub;
+      if (!email || !sub) return json(req, res, 400, { error: "A Google email is required" });
+      return await finishSocial(req, res, json, "google", String(sub), email, name);
     } catch (err) {
       return json(req, res, 401, { error: err instanceof Error ? err.message : "Google could not confirm that sign-in" });
     }
@@ -1197,10 +1213,15 @@ export async function handleIdentity(req, res, ctx) {
   if (pathname === `${API}/auth/apple` && method === "POST") {
     const body = await readJson(req);
     if (!body.idToken) return json(req, res, 400, { error: "Apple sign-in requires an identity token" });
+    if (!socialClientId("apple")) return json(req, res, 503, { error: "Apple sign-in is not set up yet." });
     try {
       const profile = await verifyAppleIdToken(body.idToken);
-      const email = String(profile.email || body.email || "").trim().toLowerCase();
-      const name = String(body.name || profile.email || "Apple user").trim();
+      // Only trust the email inside Apple's signed token, never one sent by the browser.
+      const email = String(profile.email || "").trim().toLowerCase();
+      if (email && !isVerifiedFlag(profile.email_verified)) {
+        return json(req, res, 401, { error: "Your Apple email address is not verified." });
+      }
+      const name = String(body.name || "").trim().slice(0, 80) || email.split("@")[0] || "Apple user";
       return await finishSocial(req, res, json, "apple", String(profile.sub), email, name);
     } catch (err) {
       return json(req, res, 401, { error: err instanceof Error ? err.message : "Apple could not confirm that sign-in" });
@@ -1210,6 +1231,9 @@ export async function handleIdentity(req, res, ctx) {
   if (pathname === `${API}/auth/facebook` && method === "POST") {
     const body = await readJson(req);
     if (!body.accessToken) return json(req, res, 400, { error: "Facebook sign-in requires an access token" });
+    if (!socialProviderConfigured("facebook")) {
+      return json(req, res, 503, { error: "Facebook sign-in is not set up yet." });
+    }
     try {
       const profile = await verifyFacebookToken(body.accessToken);
       const email = String(profile.email || "").trim().toLowerCase();

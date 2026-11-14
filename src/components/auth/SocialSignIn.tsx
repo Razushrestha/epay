@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
 import { emailError } from "@/lib/email";
 
-type SocialStep = { step?: string; challengeToken?: string; token?: string };
+type SocialStep = {
+  step?: string;
+  challengeToken?: string;
+  token?: string;
+  method?: string;
+  sent?: boolean;
+  deliveryError?: string;
+};
+export type SocialChallenge = { challengeToken: string; method: string; sent?: boolean; deliveryError?: string };
 type Provider = "google" | "apple" | "facebook";
 type Mode = "live" | "demo" | "off";
 
@@ -40,34 +48,74 @@ type Props = {
   layout?: "stack" | "row";
   onError: (message: string) => void;
   onEnroll: (challengeToken: string) => void;
+  /** Account has two-factor on: show the code step. */
+  onChallenge?: (challenge: SocialChallenge) => void;
   onSignedIn: (token: string) => void;
+  /** Called with false when no provider is available, so the parent can hide its "or" divider. */
+  onAvailabilityChange?: (available: boolean) => void;
 };
 
 function label(provider: Provider) {
   return provider === "google" ? "Google" : provider === "apple" ? "Apple" : "Facebook";
 }
 
-export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }: Props) {
+export function SocialSignIn({
+  layout = "stack",
+  onError,
+  onEnroll,
+  onChallenge,
+  onSignedIn,
+  onAvailabilityChange,
+}: Props) {
   const [busy, setBusy] = useState<string | null>(null);
+  // Buttons stay hidden until we know a provider is really available (no dead buttons).
   const [modes, setModes] = useState<Record<Provider, Mode>>({
-    google: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? "live" : "demo",
-    apple: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID ? "live" : "demo",
-    facebook: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ? "live" : "demo",
+    google: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? "live" : "off",
+    apple: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID ? "live" : "off",
+    facebook: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ? "live" : "off",
   });
+  const [ids, setIds] = useState<Record<Provider, string>>({
+    google: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
+    apple: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || "",
+    facebook: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "",
+  });
+  const [appleRedirect, setAppleRedirect] = useState(process.env.NEXT_PUBLIC_APPLE_REDIRECT_URI || "");
   const [demoProvider, setDemoProvider] = useState<Provider | null>(null);
   const [demoEmail, setDemoEmail] = useState("");
   const [demoError, setDemoError] = useState<string | null>(null);
 
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
-  const appleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || "";
-  const facebookAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "";
+  const googleClientId = ids.google;
+  const appleClientId = ids.apple;
+  const facebookAppId = ids.facebook;
+  const visibleCount = Object.values(modes).filter((mode) => mode !== "off").length;
 
   useEffect(() => {
+    onAvailabilityChange?.(visibleCount > 0);
+  }, [visibleCount, onAvailabilityChange]);
+
+  useEffect(() => {
+    // The server says which providers are live and gives their public client ids,
+    // so Google/Apple/Facebook only need server environment variables.
     void fetch(`${apiBase}/api/v1/auth/social/config`)
       .then((res) => res.json())
-      .then((body: { data?: Record<Provider, Mode> }) => {
-        if (body?.data) setModes((prev) => ({ ...prev, ...body.data }));
-      })
+      .then(
+        (body: {
+          data?: Record<Provider, Mode>;
+          clientIds?: Partial<Record<Provider, string>>;
+          appleRedirectUri?: string;
+        }) => {
+          if (body?.data) setModes((prev) => ({ ...prev, ...body.data }));
+          if (body?.clientIds) {
+            const next = body.clientIds;
+            setIds((prev) => ({
+              google: next.google || prev.google,
+              apple: next.apple || prev.apple,
+              facebook: next.facebook || prev.facebook,
+            }));
+          }
+          if (body?.appleRedirectUri) setAppleRedirect(body.appleRedirectUri);
+        },
+      )
       .catch(() => {});
   }, []);
 
@@ -108,6 +156,19 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
     });
     const body = (await res.json()) as SocialStep & { error?: string };
     if (!res.ok) throw new Error(body.error ?? "Social sign-in did not complete.");
+    if (body.step === "challenge" && body.challengeToken) {
+      if (onChallenge) {
+        onChallenge({
+          challengeToken: body.challengeToken,
+          method: body.method ?? "otp",
+          sent: body.sent,
+          deliveryError: body.deliveryError,
+        });
+      } else {
+        onError("This account uses two-factor. Sign in with your email and password instead.");
+      }
+      return;
+    }
     if (body.step === "enroll" && body.challengeToken) {
       onEnroll(body.challengeToken);
       return;
@@ -147,9 +208,13 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
       onError("Google sign-in is turned off.");
       return;
     }
-    if (modes.google === "demo" || !googleClientId) {
+    if (modes.google === "demo") {
       setDemoProvider("google");
       setDemoError(null);
+      return;
+    }
+    if (!googleClientId) {
+      onError("Google sign-in is not set up yet.");
       return;
     }
     const g = (
@@ -193,9 +258,13 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
       onError("Apple sign-in is turned off.");
       return;
     }
-    if (modes.apple === "demo" || !appleClientId) {
+    if (modes.apple === "demo") {
       setDemoProvider("apple");
       setDemoError(null);
+      return;
+    }
+    if (!appleClientId) {
+      onError("Apple sign-in is not set up yet.");
       return;
     }
     const apple = (
@@ -218,7 +287,7 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
     apple.auth.init({
       clientId: appleClientId,
       scope: "name email",
-      redirectURI: process.env.NEXT_PUBLIC_APPLE_REDIRECT_URI || window.location.origin,
+      redirectURI: appleRedirect || window.location.origin,
       usePopup: true,
     });
     const resp = await apple.auth.signIn();
@@ -233,9 +302,13 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
       onError("Facebook sign-in is turned off.");
       return;
     }
-    if (modes.facebook === "demo" || !facebookAppId) {
+    if (modes.facebook === "demo") {
       setDemoProvider("facebook");
       setDemoError(null);
+      return;
+    }
+    if (!facebookAppId) {
+      onError("Facebook sign-in is not set up yet.");
       return;
     }
     const fb = (
@@ -277,17 +350,21 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
     { name: "Google", provider: "google" as const, logo: <GoogleLogo />, onClick: () => void run("Google", startGoogle) },
     { name: "Apple", provider: "apple" as const, logo: <AppleLogo />, onClick: () => void run("Apple", startApple) },
     { name: "Facebook", provider: "facebook" as const, logo: <FacebookLogo />, onClick: () => void run("Facebook", startFacebook) },
-  ];
+  ].filter((b) => modes[b.provider] !== "off");
+
+  if (buttons.length === 0 && !demoProvider) return null;
+
+  const rowCols = buttons.length === 1 ? "grid-cols-1" : buttons.length === 2 ? "grid-cols-2" : "grid-cols-3";
 
   return (
     <>
       {layout === "row" ? (
-        <div className="grid grid-cols-3 gap-2">
+        <div className={`grid gap-2 ${rowCols}`}>
           {buttons.map((s) => (
             <button
               key={s.name}
               type="button"
-              disabled={Boolean(busy) || modes[s.provider] === "off"}
+              disabled={Boolean(busy)}
               onClick={s.onClick}
               className="flex h-10 items-center justify-center gap-1.5 rounded-full border border-[#e3e8f0] text-[13px] font-medium text-[#1a2338] hover:bg-[#f8fafd] disabled:opacity-60"
             >
@@ -302,7 +379,7 @@ export function SocialSignIn({ layout = "stack", onError, onEnroll, onSignedIn }
             <button
               key={s.name}
               type="button"
-              disabled={Boolean(busy) || modes[s.provider] === "off"}
+              disabled={Boolean(busy)}
               onClick={s.onClick}
               className="relative flex h-11 w-full items-center justify-center rounded-full border border-[#dfe5ee] bg-white text-[14.5px] font-medium text-[#1a2338] transition hover:border-[#c3cddd] hover:bg-[#f8fafd] disabled:opacity-60"
             >

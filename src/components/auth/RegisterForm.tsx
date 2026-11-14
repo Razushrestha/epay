@@ -27,6 +27,7 @@ function Icon({ children }: { children: React.ReactNode }) {
 export function RegisterForm() {
   const router = useRouter();
   const [accountType, setAccountType] = useState<"individual" | "business">("individual");
+  const [socialAvailable, setSocialAvailable] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -529,7 +530,7 @@ export function RegisterForm() {
 
       {accountType === "individual" && (
       <>
-      <div className="my-3 flex items-center gap-3 text-[12.5px] text-[#8a94a6]">
+      <div className={`my-3 flex items-center gap-3 text-[12.5px] text-[#8a94a6] ${socialAvailable ? "" : "hidden"}`}>
         <span className="h-px flex-1 bg-[#e5eaf2]" />
         or
         <span className="h-px flex-1 bg-[#e5eaf2]" />
@@ -537,6 +538,8 @@ export function RegisterForm() {
 
       <SocialSignIn
         layout="row"
+        onAvailabilityChange={setSocialAvailable}
+        onChallenge={() => router.push("/login")}
         onError={(message) => {
           setNotice(null);
           setError(message);
