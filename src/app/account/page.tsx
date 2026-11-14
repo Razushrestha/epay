@@ -11,6 +11,7 @@ import { StatusPill, money } from "@/components/commerce/BuyShell";
 import { FeedbackBoard } from "@/components/account/FeedbackBoard";
 import { MessagesInbox } from "@/components/account/MessagesInbox";
 import { SellerHub } from "@/components/account/SellerHub";
+import { FileDrop, SellerApplicationForm } from "@/components/account/SellerApplicationForm";
 import { ReturnsBoard } from "@/components/account/ReturnsBoard";
 import { TicketsBoard } from "@/components/account/TicketsBoard";
 import { RecentlyViewed } from "@/components/browse/RecentlyViewed";
@@ -1425,8 +1426,10 @@ function AccountScreen() {
                   {user.kyc?.status === "rejected" ? "Re-upload documents" : "Apply as Seller"}
                 </button>
               ) : (
-                <form
-                  className="mt-4 grid max-w-[560px] gap-3"
+                <SellerApplicationForm
+                  draft={kycForm}
+                  onChange={setKycForm}
+                  onCancel={() => setKycApplyOpen(false)}
                   onSubmit={async (e) => {
                     e.preventDefault();
                     setError(null);
@@ -1462,84 +1465,7 @@ function AccountScreen() {
                       setError(err instanceof Error ? err.message : "Could not submit application");
                     }
                   }}
-                >
-                  <fieldset className="flex gap-4 text-[14px] text-[#0f1c3f]">
-                    <legend className="sr-only">Account type</legend>
-                    {(["individual", "business"] as const).map((type) => (
-                      <label key={type} className="flex items-center gap-2 capitalize">
-                        <input
-                          type="radio"
-                          name="sellerType"
-                          value={type}
-                          checked={kycForm.sellerType === type}
-                          onChange={() => setKycForm({ ...kycForm, sellerType: type })}
-                          className="accent-[#3665f3]"
-                        />
-                        {type}
-                      </label>
-                    ))}
-                  </fieldset>
-                  {kycForm.sellerType === "business" ? (
-                    <input
-                      value={kycForm.legalName}
-                      onChange={(e) => setKycForm({ ...kycForm, legalName: e.target.value })}
-                      placeholder="Business legal name"
-                      aria-label="Business legal name"
-                      required
-                      className="h-10 rounded-full border px-4"
-                    />
-                  ) : (
-                    <input
-                      value={kycForm.fullName}
-                      onChange={(e) => setKycForm({ ...kycForm, fullName: e.target.value })}
-                      placeholder="Full name"
-                      aria-label="Full name"
-                      required
-                      className="h-10 rounded-full border px-4"
-                    />
-                  )}
-                  <input
-                    value={kycForm.pan}
-                    onChange={(e) => setKycForm({ ...kycForm, pan: e.target.value })}
-                    placeholder="PAN number"
-                    aria-label="PAN number"
-                    required
-                    className="h-10 rounded-full border px-4"
-                  />
-                  <select
-                    value={kycForm.docType}
-                    onChange={(e) => setKycForm({ ...kycForm, docType: e.target.value })}
-                    aria-label="ID type"
-                    className="h-10 rounded-full border px-4"
-                  >
-                    <option value="citizenship">Nepali Citizenship</option>
-                    <option value="passport">Passport</option>
-                  </select>
-                  <input
-                    value={kycForm.docNumber}
-                    onChange={(e) => setKycForm({ ...kycForm, docNumber: e.target.value })}
-                    placeholder={kycForm.docType === "passport" ? "Passport number" : "Citizenship number"}
-                    aria-label={kycForm.docType === "passport" ? "Passport number" : "Citizenship number"}
-                    required
-                    className="h-10 rounded-full border px-4"
-                  />
-                  <label className="block text-[13px] text-[#0f1c3f]">
-                    {kycForm.docType === "passport" ? "Passport photo" : "Citizenship (Front)"}
-                    <input name="front" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required aria-label="Citizenship front" className="mt-1 block text-[13px]" />
-                  </label>
-                  {kycForm.docType === "citizenship" ? (
-                    <label className="block text-[13px] text-[#0f1c3f]">
-                      Citizenship (Back)
-                      <input name="back" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required aria-label="Citizenship back" className="mt-1 block text-[13px]" />
-                    </label>
-                  ) : null}
-                  <div className="flex gap-2">
-                    <button className="h-10 rounded-full bg-[#3665f3] px-5 text-[14px] font-semibold text-white">Submit application</button>
-                    <button type="button" className="h-10 rounded-full px-4 text-[14px] text-[#5b6780]" onClick={() => setKycApplyOpen(false)}>
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+                />
               )
             ) : null}
           </div>
@@ -1552,21 +1478,30 @@ function AccountScreen() {
             </>
           ) : null}
 
-          <h2 className="mt-8 text-[16px] font-bold">Leave feedback for a seller</h2>
-          <form className="mt-2 flex flex-wrap gap-2" onSubmit={async (e) => {
+          <div className="mt-8 rounded-2xl border border-[#e7eef6] p-5">
+            <h2 className="text-[16px] font-bold text-[#0f1c3f]">Leave feedback for a seller</h2>
+            <p className="mt-1 text-[13px] text-[#667085]">Rate a seller you have bought from. Use the email or phone they registered with.</p>
+          <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:items-end" onSubmit={async (e) => {
             e.preventDefault();
             const rating = new FormData(e.currentTarget).get("rating");
             await accountApi("/api/v1/account/feedback", { method: "POST", body: JSON.stringify({ sellerId, rating }) });
             setNotice("Feedback saved.");
           }}>
-            <input value={sellerId} onChange={(e) => setSellerId(e.target.value)} placeholder="Seller email or phone" className="h-10 flex-1 rounded-full border px-4" />
-            <select name="rating" className="h-10 rounded-full border px-3">
-              <option value="positive">Positive</option>
-              <option value="neutral">Neutral</option>
-              <option value="negative">Negative</option>
-            </select>
-            <button className="h-10 rounded-full border px-4 text-[14px]">Save</button>
+            <div>
+              <label htmlFor="fb-seller" className="mb-1.5 block text-[13px] font-semibold text-[#0f1c3f]">Seller</label>
+              <input id="fb-seller" value={sellerId} onChange={(e) => setSellerId(e.target.value)} placeholder="Seller email or phone" required className="h-12 w-full rounded-xl border border-[#d9e2ef] bg-white px-4 text-[16px] text-[#0f1c3f] outline-none transition placeholder:text-[#9aa6b8] hover:border-[#c2cfe2] focus:border-[#3665f3] focus:ring-4 focus:ring-[#3665f3]/10 sm:text-[15px]" />
+            </div>
+            <div>
+              <label htmlFor="fb-rating" className="mb-1.5 block text-[13px] font-semibold text-[#0f1c3f]">Rating</label>
+              <select id="fb-rating" name="rating" className="h-12 w-full rounded-xl border border-[#d9e2ef] bg-white px-4 text-[16px] text-[#0f1c3f] outline-none transition hover:border-[#c2cfe2] focus:border-[#3665f3] focus:ring-4 focus:ring-[#3665f3]/10 sm:text-[15px]">
+                <option value="positive">Positive</option>
+                <option value="neutral">Neutral</option>
+                <option value="negative">Negative</option>
+              </select>
+            </div>
+            <button className="h-12 rounded-full bg-[#0f1c3f] px-7 text-[14.5px] font-semibold text-white transition hover:bg-[#1b2e5c] sm:h-12">Save feedback</button>
           </form>
+          </div>
         </section>
       )}
 
@@ -2003,10 +1938,7 @@ function Standing({ user, appeal, setAppeal, onDone }: { user: User; appeal: str
             required
             className="nexlo-field h-auto min-h-24 rounded-2xl py-3"
           />
-          <label className="block text-[13px] text-[#0f1c3f]">
-            Evidence (photo or PDF)
-            <input name="evidence" type="file" accept="image/*,.pdf" aria-label="Appeal evidence" className="mt-1 block text-[13px]" />
-          </label>
+          <FileDrop name="evidence" label="Evidence (photo or PDF)" accept="image/*,.pdf" required={false} hint="Optional. JPG, PNG or PDF." />
           <button type="submit" className="nexlo-btn nexlo-btn-blue w-fit">
             Submit appeal
           </button>

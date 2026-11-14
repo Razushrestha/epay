@@ -638,10 +638,9 @@ async function createListing(data, userId) {
   const listingFormat = format || 'fixed';
   const listingDescription = description == null ? '' : String(description);
   const isAuction = listingFormat === 'auction' || listingFormat === 'both';
-  const allowedDurations = new Set([72, 120, 168, 240]);
-  const durationHours = allowedDurations.has(Number(auction_duration))
-    ? Number(auction_duration)
-    : 168;
+  // Any whole number of hours from 1 hour to 30 days (720h); anything else falls back to 7 days.
+  const requestedHours = Number(auction_duration);
+  const durationHours = Number.isInteger(requestedHours) && requestedHours >= 1 && requestedHours <= 720 ? requestedHours : 168;
   const startPrice = Number(auction_start_price || (isAuction ? 0 : price) || 0);
   const reservePrice = auction_reserve_price == null || auction_reserve_price === ''
     ? null
@@ -909,9 +908,8 @@ async function relistListing(listingId, userId) {
   }
 
   const isAuction = source.format === 'auction' || source.format === 'both';
-  const durationHours = [72, 120, 168, 240].includes(Number(source.auction_duration))
-    ? Number(source.auction_duration)
-    : 168;
+  const sourceHours = Number(source.auction_duration);
+  const durationHours = Number.isInteger(sourceHours) && sourceHours >= 1 && sourceHours <= 720 ? sourceHours : 168;
   const copiedQty = Math.max(Number(source.quantity) || 0, 1);
 
   const created = await query(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { accountApi, apiBase } from "@/lib/account-api";
 import Link from "next/link";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -31,16 +31,42 @@ function formatPrice(price: number | null) {
   return `NPR ${Number(price).toLocaleString("en-NP")}`;
 }
 
+const STAT_ICONS: Record<"bolt" | "box" | "file" | "eye" | "heart", ReactNode> = {
+  bolt: (
+    <>
+      <path d="M3.5 3.5h8.2l9 9a1.4 1.4 0 0 1 0 2L14.5 20.7a1.4 1.4 0 0 1-2 0l-9-9V3.5Z" />
+      <circle cx="7.9" cy="7.9" r="1.3" />
+    </>
+  ),
+  box: (
+    <>
+      <path d="M5.2 8.2h13.6l-.9 11.6a1 1 0 0 1-1 .9H7.1a1 1 0 0 1-1-.9L5.2 8.2Z" />
+      <path d="M9 8.2V6.8a3 3 0 0 1 6 0v1.4" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M14 3H7.5a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7.5 21h9a1.5 1.5 0 0 0 1.5-1.5V7l-4-4Z" />
+      <path d="M14 3v4h4M9.5 12.5h5M9.5 16h3.5" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </>
+  ),
+  heart: <path d="M12 20.5s-7.5-4.6-9-9.4C2 8 3.8 5.2 6.8 5.2c1.9 0 3.5 1 5.2 3 1.7-2 3.3-3 5.2-3 3 0 4.8 2.8 3.8 5.9-1.5 4.8-9 9.4-9 9.4Z" />,
+};
+
 function StatCard({
   value,
   label,
-  tone,
   icon,
   onClick,
 }: {
   value: number | string;
   label: string;
-  tone: string;
   icon: "bolt" | "box" | "file" | "eye" | "heart";
   onClick: () => void;
 }) {
@@ -48,24 +74,12 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-2xl border border-[#e7eef6] bg-white px-4 py-4 text-left shadow-[0_8px_24px_-18px_rgba(15,28,63,0.35)] hover:border-[#d5e0ee]"
+      className="group flex w-full items-center gap-3 rounded-2xl border border-[#e7eef6] bg-white px-4 py-4 text-left shadow-[0_8px_24px_-18px_rgba(15,28,63,0.35)] transition hover:border-[#cfdbec]"
     >
-      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone}`}>
-        {icon === "bolt" ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M13 2 4 14h7l-1 8 10-14h-7l0-6Z" /></svg>
-        ) : null}
-        {icon === "box" ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><path d="M4 7h16v12H4zM8 7V5h8v2" /></svg>
-        ) : null}
-        {icon === "file" ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><path d="M7 3h7l5 5v13H7zM14 3v5h5" /></svg>
-        ) : null}
-        {icon === "eye" ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
-        ) : null}
-        {icon === "heart" ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><path d="M12 21s-7-4.4-9.5-8.2C.6 9.7 2.2 6 5.8 6c2 0 3.3 1.2 4.2 2.4C10.9 7.2 12.2 6 14.2 6c3.6 0 5.2 3.7 3.3 6.8C19 16.6 12 21 12 21Z" /></svg>
-        ) : null}
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#eef2f8] text-[#0f1c3f] transition group-hover:bg-[#e4eaf4]">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          {STAT_ICONS[icon]}
+        </svg>
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[22px] font-extrabold leading-none text-[#0f1c3f]">{value}</span>
@@ -289,11 +303,11 @@ export default function SellerListingsPage() {
           ) : null}
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <StatCard value={active} label="Active listings" tone="bg-[#dcfce7] text-[#16a34a]" icon="bolt" onClick={() => setFilter("active")} />
-            <StatCard value={Number(stats.sold_count || 0)} label="Sold items" tone="bg-[#dbeafe] text-[#2563eb]" icon="box" onClick={() => setFilter("sold")} />
-            <StatCard value={Number(stats.draft_count || 0)} label="Drafts" tone="bg-[#ede9fe] text-[#7c3aed]" icon="file" onClick={() => setFilter("draft")} />
-            <StatCard value={Number(stats.total_views || 0).toLocaleString()} label="Views" tone="bg-[#fce7f3] text-[#db2777]" icon="eye" onClick={() => setFilter("all")} />
-            <StatCard value={Number(stats.total_watches || 0).toLocaleString()} label="Watchers" tone="bg-[#ffedd5] text-[#ea580c]" icon="heart" onClick={() => setFilter("all")} />
+            <StatCard value={active} label="Active listings" icon="bolt" onClick={() => setFilter("active")} />
+            <StatCard value={Number(stats.sold_count || 0)} label="Sold items" icon="box" onClick={() => setFilter("sold")} />
+            <StatCard value={Number(stats.draft_count || 0)} label="Drafts" icon="file" onClick={() => setFilter("draft")} />
+            <StatCard value={Number(stats.total_views || 0).toLocaleString()} label="Views" icon="eye" onClick={() => setFilter("all")} />
+            <StatCard value={Number(stats.total_watches || 0).toLocaleString()} label="Watchers" icon="heart" onClick={() => setFilter("all")} />
           </div>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">

@@ -71,6 +71,93 @@ function specificFieldError(spec: Specific, raw: string) {
   return null;
 }
 
+function Section({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
+  return (
+    <section className="border-b border-[#eef2f7] pb-8 last:border-b-0 last:pb-0">
+      <div className="mb-5 flex items-start gap-3">
+        <span aria-hidden className="mt-1 h-6 w-1 shrink-0 rounded-full bg-[#13948e]" />
+        <div>
+          <h2 className="text-[17px] font-extrabold leading-7 text-[#0f1c3f]">{title}</h2>
+          {sub ? <p className="text-[13px] leading-snug text-[#6b7587]">{sub}</p> : null}
+        </div>
+      </div>
+      <div className="space-y-5">{children}</div>
+    </section>
+  );
+}
+
+function FieldLabel({ children, required, optional, help, htmlFor }: { children: ReactNode; required?: boolean; optional?: boolean; help?: string; htmlFor?: string }) {
+  return (
+    <div className="mb-2">
+      <label htmlFor={htmlFor} className="block text-[14px] font-semibold text-[#0f1c3f]">
+        {children}
+        {required ? <span className="text-[#e11d48]"> *</span> : null}
+        {optional ? <span className="font-normal text-[#8a94a6]"> (optional)</span> : null}
+      </label>
+      {help ? <p className="mt-0.5 text-[12.5px] leading-snug text-[#8a94a6]">{help}</p> : null}
+    </div>
+  );
+}
+
+function MoneyInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  min = "0",
+  required,
+  className,
+  invalid,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  min?: string;
+  required?: boolean;
+  className: string;
+  invalid?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[13px] font-semibold text-[#6b7587]">NPR</span>
+      <input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        step="0.01"
+        min={min}
+        required={required}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`${className} pl-14 ${invalid ? "border-[#e53238] focus:border-[#e53238] focus:ring-[#e53238]/15" : ""}`}
+      />
+    </div>
+  );
+}
+
+function Toggle({ checked, onChange, label, help }: { checked: boolean; onChange: (next: boolean) => void; label: string; help?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <p className="text-[14px] font-semibold text-[#0f1c3f]">{label}</p>
+        {help ? <p className="mt-0.5 text-[12.5px] leading-snug text-[#8a94a6]">{help}</p> : null}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full outline-none transition focus-visible:ring-4 focus-visible:ring-[#13948e]/20 ${checked ? "bg-[#13948e]" : "bg-[#cbd5e3]"}`}
+      >
+        <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-5" : ""}`} />
+      </button>
+    </div>
+  );
+}
+
 function Hint({ children }: { children: ReactNode }) {
   return (
     <p className="mt-1.5 flex items-start gap-1.5 text-[12.5px] leading-snug text-[#8a94a6]">
@@ -87,6 +174,11 @@ export default function CreateListingPage() {
   const router = useRouter();
   const [sellerOk, setSellerOk] = useState<boolean | null>(null);
   const [step, setStep] = useState(1);
+  const [showSubtitle, setShowSubtitle] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [customDuration, setCustomDuration] = useState(false);
+  const [customDays, setCustomDays] = useState("0");
+  const [customHours, setCustomHours] = useState("12");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -121,7 +213,7 @@ export default function CreateListingPage() {
     allow_best_offer: false,
     auto_accept_price: "",
     auto_decline_price: "",
-    shipping_free: false,
+    shipping_free: true,
     shipping_cost: "",
     shipping_additional: "",
     compare_at: "",
@@ -561,8 +653,9 @@ export default function CreateListingPage() {
         setError("Reserve price must be at least the starting bid.");
         return false;
       }
-      if (!["72", "120", "168", "240"].includes(String(formData.auction_duration))) {
-        setError("Select a duration of 3, 5, 7, or 10 days.");
+      const hours = Number(formData.auction_duration);
+      if (!Number.isInteger(hours) || hours < 1 || hours > 720) {
+        setError("Choose an auction length between 1 hour and 30 days.");
         return false;
       }
     }
@@ -598,6 +691,59 @@ export default function CreateListingPage() {
     setError(null);
     return true;
   }
+
+  const shortName = (c: Category) => c.name.split(" › ").pop() || c.name;
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const catPath: Category[] = [];
+  for (let c = formData.category_id ? catById.get(Number(formData.category_id)) : undefined; c; c = c.parent_id != null ? catById.get(c.parent_id) : undefined) {
+    catPath.unshift(c);
+  }
+  const catRows: { label: string; options: Category[]; selectedId: number | null }[] = [
+    { label: "Category", options: categories.filter((c) => c.parent_id == null), selectedId: catPath[0]?.id ?? null },
+  ];
+  catPath.forEach((node, i) => {
+    const kids = categories.filter((c) => c.parent_id === node.id);
+    if (kids.length) catRows.push({ label: `More specific: ${shortName(node)}`, options: kids, selectedId: catPath[i + 1]?.id ?? null });
+  });
+  const chip = (on: boolean) =>
+    `rounded-full border px-4 py-2.5 text-[14px] font-semibold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#13948e]/20 ${
+      on ? "border-[#0f3d4c] bg-[#0f3d4c] text-white shadow-sm" : "border-[#dbe3ee] bg-white text-[#3a4a66] hover:border-[#13948e] hover:text-[#0f3d4c]"
+    }`;
+
+  const startN = Number(formData.auction_start_price);
+  const binN = Number(formData.price);
+  const reserveN = Number(formData.auction_reserve_price);
+  const binTooLow =
+    formData.format === "both" && formData.auction_start_price !== "" && formData.price !== "" && Number.isFinite(startN) && Number.isFinite(binN) && binN <= startN;
+  const reserveTooLow =
+    formData.auction_reserve_price !== "" && formData.auction_start_price !== "" && Number.isFinite(reserveN) && Number.isFinite(startN) && reserveN < startN;
+  const isFixed = formData.format === "fixed" || formData.format === "both";
+  const isAuction = formData.format === "auction" || formData.format === "both";
+  const advancedOn = Boolean(formData.compare_at || formData.allow_best_offer || formData.use_variations || formData.auction_reserve_price);
+  const moreOpen = showMore || advancedOn;
+  const npr = (v: string) => `NPR ${Number(v).toLocaleString("en-NP")}`;
+  const fmtDuration = (h: number) => {
+    if (!Number.isFinite(h) || h < 1) return "not set";
+    if (h < 24) return `${h} hour${h === 1 ? "" : "s"}`;
+    const d = Math.floor(h / 24);
+    const r = h % 24;
+    return `${d} day${d === 1 ? "" : "s"}${r ? ` ${r} hour${r === 1 ? "" : "s"}` : ""}`;
+  };
+  const durationLabel = fmtDuration(Number(formData.auction_duration));
+  const applyCustomDuration = (days: string, hours: string) => {
+    setCustomDays(days);
+    setCustomHours(hours);
+    const total = (parseInt(days, 10) || 0) * 24 + (parseInt(hours, 10) || 0);
+    updateField("auction_duration", String(total));
+  };
+  const priceSummary = (() => {
+    const parts: string[] = [];
+    if (isAuction && formData.auction_start_price && startN > 0) parts.push(`Bidding starts at ${npr(formData.auction_start_price)}`);
+    if (isFixed && formData.price && binN > 0) parts.push(formData.format === "both" ? `Buy Now ${npr(formData.price)}` : npr(formData.price));
+    if (isAuction && parts.length) parts.push(`ends in ${durationLabel}`);
+    if (formData.format === "fixed" && parts.length && Number(formData.quantity) > 0) parts.push(`${formData.quantity} in stock`);
+    return parts.join(" · ");
+  })();
 
   const field =
     "w-full rounded-2xl border border-[#e4eaf2] bg-white px-4 py-3 text-[14.5px] text-[#0f1c3f] outline-none transition placeholder:text-[#9aa3b2] focus:border-[#13948e] focus:ring-2 focus:ring-[#13948e]/15";
@@ -650,125 +796,120 @@ export default function CreateListingPage() {
 
         <form noValidate onSubmit={handleSubmit} className="rounded-[28px] border border-[#e8eef6] bg-white p-5 shadow-[0_18px_50px_-32px_rgba(15,40,80,0.35)] sm:p-8">
           {step === 1 && (
-            <div className="space-y-5">
-              <div>
-                <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                  Category <span className="text-[#e11d48]">*</span>
-                </label>
-                <select
-                  required
-                  value={formData.category_id}
-                  onChange={(e) => updateField("category_id", e.target.value)}
-                  className={field}
-                >
-                  <option value="">Select a category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-                <Hint>Choose the most relevant category for your item.</Hint>
-              </div>
+            <div className="space-y-8">
+              <Section title="What are you selling?" sub="Pick a category, then give your item a clear title.">
+                {catRows.map((row, idx) => (
+                  <div key={idx}>
+                    <FieldLabel required={idx === 0}>{row.label}</FieldLabel>
+                    <div className="flex flex-wrap gap-2" role="group" aria-label={row.label}>
+                      {row.options.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          aria-pressed={row.selectedId === c.id}
+                          onClick={() => updateField("category_id", String(c.id))}
+                          className={chip(row.selectedId === c.id)}
+                        >
+                          {shortName(c)}
+                        </button>
+                      ))}
+                    </div>
+                    {idx === 0 && !categories.length ? <p className="mt-2 text-[13px] text-[#8a94a6]">Loading categories…</p> : null}
+                  </div>
+                ))}
 
-              <div>
-                <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                  Title <span className="text-[#e11d48]">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={80}
-                  value={formData.title}
-                  onChange={(e) => updateField("title", e.target.value)}
-                  placeholder="e.g. iPhone 14 Pro Max 256GB, Space Black"
-                  className={field}
-                />
-                <div className="mt-1.5 flex items-start justify-between gap-3">
-                  <Hint>Use a clear and descriptive title to get better visibility.</Hint>
-                  <span className="shrink-0 text-[12px] text-[#8a94a6]">{formData.title.length}/80 characters</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                  Subtitle <span className="font-normal text-[#8a94a6]">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  maxLength={55}
-                  value={formData.subtitle}
-                  onChange={(e) => updateField("subtitle", e.target.value)}
-                  placeholder="e.g. Excellent condition, 1 year warranty, with original box"
-                  className={field}
-                />
-                <div className="mt-1.5 flex items-start justify-between gap-3">
-                  <Hint>Add a short subtitle to highlight key details (e.g. brand, condition, features).</Hint>
-                  <span className="shrink-0 text-[12px] text-[#8a94a6]">{formData.subtitle.length}/55 characters</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                  Description <span className="text-[#e11d48]">*</span>
-                </label>
-                <textarea
-                  required
-                  maxLength={1000}
-                  value={formData.description}
-                  onChange={(e) => updateField("description", e.target.value)}
-                  rows={6}
-                  placeholder="Describe your item in detail, including features, condition, and what's included."
-                  className={`${field} min-h-[140px] resize-y`}
-                />
-                <div className="mt-1.5 flex items-start justify-between gap-3">
-                  <Hint>Be honest and detailed to build trust and get better offers.</Hint>
-                  <span className="shrink-0 text-[12px] text-[#8a94a6]">{formData.description.length}/1000 characters</span>
-                </div>
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                    Condition <span className="text-[#e11d48]">*</span>
-                  </label>
-                  <select
+                  <FieldLabel required htmlFor="sell-title" help="Include the key detail buyers search for: name, year, size, grade.">
+                    Title
+                  </FieldLabel>
+                  <div className="relative">
+                    <input
+                      id="sell-title"
+                      type="text"
+                      required
+                      maxLength={80}
+                      value={formData.title}
+                      onChange={(e) => updateField("title", e.target.value)}
+                      placeholder="e.g. 1950 Nepal 1 Rupee Silver Coin, Extra Fine"
+                      className={`${field} pr-16`}
+                    />
+                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[12px] tabular-nums text-[#9aa3b2]">{formData.title.length}/80</span>
+                  </div>
+                </div>
+              </Section>
+
+              <Section title="Tell buyers about it" sub="Honest, detailed descriptions get more bids and fewer questions.">
+                <div>
+                  <FieldLabel required htmlFor="sell-desc" help="Features, condition, history, and what is included.">
+                    Description
+                  </FieldLabel>
+                  <textarea
+                    id="sell-desc"
                     required
-                    value={formData.condition_id}
-                    onChange={(e) => updateField("condition_id", e.target.value)}
-                    className={field}
-                  >
-                    <option value="">Select condition</option>
-                    {conditions.map((cond) => (
-                      <option key={cond.id} value={cond.id}>
-                        {cond.name}
-                      </option>
-                    ))}
-                  </select>
+                    maxLength={1000}
+                    value={formData.description}
+                    onChange={(e) => updateField("description", e.target.value)}
+                    rows={6}
+                    placeholder="Describe your item in detail..."
+                    className={`${field} min-h-[150px] resize-y`}
+                  />
+                  <p className="mt-1.5 text-right text-[12px] tabular-nums text-[#9aa3b2]">{formData.description.length}/1000</p>
                 </div>
-                <div>
-                  <label className="mb-1.5 flex flex-wrap items-center gap-2 text-[13.5px] font-semibold text-[#0f1c3f]">
-                    <span>
-                      Brand <span className="text-[#e11d48]">*</span>
-                    </span>
-                    {brands.find((brand) => String(brand.id) === formData.brand_id)?.is_verified ? <AuthenticityBadge /> : null}
-                  </label>
-                  <select
-                    value={formData.brand_id}
-                    onChange={(e) => updateField("brand_id", e.target.value)}
-                    className={field}
-                  >
-                    <option value="">No brand</option>
-                    {brands.map((brand) => (
-                      <option key={brand.id} value={brand.id}>
-                        {brand.is_verified ? `${brand.name} · Authentic` : brand.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
 
-              {formData.condition_id ? (
+                {showSubtitle || formData.subtitle ? (
+                  <div>
+                    <FieldLabel optional htmlFor="sell-subtitle" help="A short line shown under the title in search results.">
+                      Subtitle
+                    </FieldLabel>
+                    <div className="relative">
+                      <input
+                        id="sell-subtitle"
+                        type="text"
+                        maxLength={55}
+                        value={formData.subtitle}
+                        onChange={(e) => updateField("subtitle", e.target.value)}
+                        placeholder="e.g. Original box, certificate included"
+                        className={`${field} pr-16`}
+                      />
+                      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[12px] tabular-nums text-[#9aa3b2]">{formData.subtitle.length}/55</span>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setShowSubtitle(true)} className="text-[13.5px] font-semibold text-[#13948e] hover:underline">
+                    + Add a subtitle (optional)
+                  </button>
+                )}
+              </Section>
+
+              <Section title="Condition and brand" sub="Buyers filter by these, so choose carefully.">
+                <div>
+                  <FieldLabel required>Condition</FieldLabel>
+                  {conditions.length ? (
+                    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Condition">
+                      {conditions.map((cond) => (
+                        <button
+                          key={cond.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={formData.condition_id === String(cond.id)}
+                          onClick={() => updateField("condition_id", String(cond.id))}
+                          className={chip(formData.condition_id === String(cond.id))}
+                        >
+                          {cond.name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[13px] text-[#8a94a6]">{formData.category_id ? "No conditions available for this category." : "Choose a category first to see conditions."}</p>
+                  )}
+                  {conditions.find((cond) => String(cond.id) === formData.condition_id)?.description ? (
+                    <p className="mt-2 rounded-xl bg-[#f4f8ff] px-3.5 py-2.5 text-[12.5px] leading-snug text-[#4b5873]">
+                      {conditions.find((cond) => String(cond.id) === formData.condition_id)?.description}
+                    </p>
+                  ) : null}
+                </div>
+
+                {formData.condition_id ? (
                 <div>
                   <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
                     Seller notes
@@ -791,9 +932,27 @@ export default function CreateListingPage() {
                 </div>
               ) : null}
 
+                <div className="max-w-[420px]">
+                  <FieldLabel optional htmlFor="sell-brand">
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      Brand
+                      {brands.find((brand) => String(brand.id) === formData.brand_id)?.is_verified ? <AuthenticityBadge /> : null}
+                    </span>
+                  </FieldLabel>
+                  <select id="sell-brand" value={formData.brand_id} onChange={(e) => updateField("brand_id", e.target.value)} className={field}>
+                    <option value="">No brand</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.is_verified ? `${brand.name} · Authentic` : brand.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </Section>
+
               {specifics.length ? (
-                <div>
-                  <h2 className="mb-3 text-[15px] font-bold text-[#0f1c3f]">Item specifics</h2>
+                <Section title="Item details" sub="Specifics for this category help buyers find your item.">
+                                  <div>
                   <div className="grid gap-4 md:grid-cols-2">
                     {specifics.map((spec) => (
                       <label key={spec.id} className="block text-[13.5px] font-semibold text-[#0f1c3f]">
@@ -867,181 +1026,294 @@ export default function CreateListingPage() {
                     ))}
                   </div>
                 </div>
+                </Section>
               ) : null}
 
-              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-col-reverse gap-3 rounded-b-[28px] border-t border-[#e8eef6] bg-white/95 px-5 py-4 backdrop-blur sm:-mx-8 sm:-mb-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <button
                   type="button"
                   disabled={loading}
                   onClick={() => saveDraft()}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#d8dee8] bg-white px-5 text-[14.5px] font-semibold text-[#0f3d4c] hover:bg-[#f7fafc] disabled:opacity-60"
+                  className="inline-flex h-12 items-center justify-center rounded-full border border-[#d8dee8] bg-white px-6 text-[14.5px] font-semibold text-[#0f3d4c] transition hover:bg-[#f7fafc] disabled:opacity-60"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-                    <path d="M7 3h8l5 5v13H7V3Z" />
-                    <path d="M15 3v6h6M9 13h6M9 17h6" />
-                  </svg>
-                  {loading ? "Saving…" : "Save as Draft"}
+                  {loading ? "Saving…" : "Save as draft"}
                 </button>
                 <button
                   type="button"
                   onClick={() => validateStep1() && setStep(2)}
-                  className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#0f3d4c] px-6 text-[14.5px] font-semibold text-white shadow-[0_10px_24px_-12px_rgba(15,61,76,0.7)] hover:bg-[#0c3240] sm:max-w-[420px]"
+                  className="inline-flex h-12 flex-1 items-center justify-center rounded-full bg-[#0f3d4c] px-8 text-[15px] font-semibold text-white shadow-[0_10px_24px_-12px_rgba(15,61,76,0.7)] transition hover:bg-[#0c3240] sm:max-w-[360px]"
                 >
-                  Continue to pricing & format
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
-                    <path d="M5 12h14M13 6l6 6-6 6" />
-                  </svg>
+                  Continue to pricing
                 </button>
               </div>
             </div>
           )}
 
           {step === 2 && (
-            <div className="space-y-5">
-              <div>
-                <label className="mb-2 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                  Listing format <span className="text-[#e11d48]">*</span>
-                </label>
-                <div className="grid gap-2 sm:grid-cols-3">
+            <div className="space-y-8">
+              <Section title="How do you want to sell?" sub="Choose how buyers will purchase your item.">
+                <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Listing format">
                   {[
-                    ["fixed", "Buy It Now", "Set a fixed price"],
-                    ["auction", "Auction", "Buyers bid to win"],
-                    ["both", "Auction + BIN", "Bids with a buy price"],
-                  ].map(([value, title, hint]) => (
-                    <label
-                      key={value}
-                      className={`cursor-pointer rounded-2xl border px-4 py-3 ${
-                        formData.format === value ? "border-[#13948e] bg-[#f2fbfa]" : "border-[#e4eaf2] bg-white"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="format"
-                        value={value}
-                        checked={formData.format === value}
-                        onChange={(e) => updateField("format", e.target.value)}
-                        className="sr-only"
-                      />
-                      <span className="block text-[14px] font-semibold text-[#0f1c3f]">{title}</span>
-                      <span className="mt-0.5 block text-[12.5px] text-[#8a94a6]">{hint}</span>
-                    </label>
-                  ))}
+                    ["fixed", "Fixed price", "Sell now at a price you set.", "Most popular"],
+                    ["auction", "Auction", "Buyers bid, highest bid wins.", ""],
+                    ["both", "Auction with Buy Now", "Buyers can bid or buy instantly.", ""],
+                  ].map(([value, title, hint, tag]) => {
+                    const on = formData.format === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => updateField("format", value)}
+                        className={`rounded-2xl border-2 px-4 py-4 text-left transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#13948e]/20 ${
+                          on ? "border-[#13948e] bg-[#f2fbfa]" : "border-[#e4eaf2] bg-white hover:border-[#bfd9d7]"
+                        }`}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-[15px] font-bold text-[#0f1c3f]">{title}</span>
+                          <span
+                            aria-hidden
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${on ? "border-[#13948e]" : "border-[#cbd5e3]"}`}
+                          >
+                            {on ? <span className="h-2.5 w-2.5 rounded-full bg-[#13948e]" /> : null}
+                          </span>
+                        </span>
+                        <span className="mt-1 block text-[13px] leading-snug text-[#6b7587]">{hint}</span>
+                        {tag ? <span className="mt-2 inline-block rounded-full bg-[#e3f4f2] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#0f6d68]">{tag}</span> : null}
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
+              </Section>
 
-              {(formData.format === "fixed" || formData.format === "both") && (
+              <Section title="Set your price" sub={isAuction ? "Buyers place bids starting from your starting bid." : "The price buyers pay for this item."}>
                 <div className="grid gap-5 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                      {formData.format === "both" ? "Buy It Now price (NPR)" : "Price (NPR)"}{" "}
-                      <span className="text-[#e11d48]">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required={!formData.use_variations}
-                      step="0.01"
-                      min="0"
-                      value={formData.price}
-                      onChange={(e) => updateField("price", e.target.value)}
-                      className={field}
-                    />
-                    {formData.use_variations ? (
-                      <Hint>Used as the default for new SKU rows. Each combination can override this.</Hint>
-                    ) : null}
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Was price (NPR)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.compare_at}
-                      onChange={(e) => updateField("compare_at", e.target.value)}
-                      placeholder="Optional compare-at for Daily Deals"
-                      className={field}
-                    />
-                    <Hint>If this is higher than the sale price, the listing can appear in Today&apos;s Deals.</Hint>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                      {skuRows.length ? "Default quantity per combination" : "Stock quantity"}{" "}
-                      <span className="text-[#e11d48]">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={formData.quantity}
-                      onChange={(e) => updateField("quantity", e.target.value)}
-                      className={field}
-                    />
-                    {skuRows.length ? (
-                      <Hint>Used for new size/color rows. Total stock is the sum of the matrix below.</Hint>
-                    ) : null}
-                  </div>
-                </div>
-              )}
+                  {isAuction ? (
+                    <div>
+                      <FieldLabel required htmlFor="sell-start" help="The lowest first bid. A low start attracts more bidders.">
+                        Starting bid
+                      </FieldLabel>
+                      <MoneyInput
+                        id="sell-start"
+                        required
+                        min="1"
+                        value={formData.auction_start_price}
+                        onChange={(v) => updateField("auction_start_price", v)}
+                        placeholder="e.g. 200"
+                        className={field}
+                      />
+                    </div>
+                  ) : null}
 
-              {(formData.format === "fixed" || formData.format === "both") && (
-                <div className="space-y-4 rounded-2xl border border-[#e4eaf2] bg-white px-4 py-4">
-                  <label className="flex items-center gap-2 text-[14px] font-medium text-[#0f1c3f]">
-                    <input
-                      type="checkbox"
-                      checked={formData.allow_best_offer}
-                      onChange={(e) => updateField("allow_best_offer", e.target.checked)}
-                      className="h-4 w-4 rounded border-[#c5cedb] text-[#13948e]"
-                    />
-                    Allow Best Offer
-                  </label>
-                  {formData.allow_best_offer ? (
-                    <div className="grid gap-5 md:grid-cols-2">
-                      <div>
-                        <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                          Auto-Accept Threshold (NPR)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.auto_accept_price}
-                          onChange={(e) => updateField("auto_accept_price", e.target.value)}
-                          placeholder="e.g. 9000"
-                          className={field}
-                        />
-                        <Hint>Offers at or above this amount are accepted immediately.</Hint>
-                      </div>
-                      <div>
-                        <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                          Auto-Decline Threshold (NPR)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.auto_decline_price}
-                          onChange={(e) => updateField("auto_decline_price", e.target.value)}
-                          placeholder="e.g. 7000"
-                          className={field}
-                        />
-                        <Hint>Offers below this amount are declined immediately. Amounts in between wait for review.</Hint>
-                      </div>
+                  {isFixed ? (
+                    <div>
+                      <FieldLabel
+                        required={!formData.use_variations}
+                        htmlFor="sell-price"
+                        help={formData.use_variations ? "Default for new variation rows. Each combination can override it." : formData.format === "both" ? "Buyers can skip bidding and pay this price." : undefined}
+                      >
+                        {formData.format === "both" ? "Buy Now price" : "Price"}
+                      </FieldLabel>
+                      <MoneyInput
+                        id="sell-price"
+                        required={!formData.use_variations}
+                        value={formData.price}
+                        onChange={(v) => updateField("price", v)}
+                        placeholder="e.g. 1000"
+                        className={field}
+                        invalid={binTooLow}
+                      />
+                      {binTooLow ? (
+                        <p role="alert" className="mt-1.5 text-[12.5px] font-medium text-[#e53238]">Buy Now must be higher than the starting bid.</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {isFixed ? (
+                    <div>
+                      <FieldLabel required htmlFor="sell-qty" help={skuRows.length ? "Default for new size and color rows. Total stock is the sum of the matrix below." : undefined}>
+                        {skuRows.length ? "Default quantity per combination" : "Quantity in stock"}
+                      </FieldLabel>
+                      <input id="sell-qty" type="number" min="1" value={formData.quantity} onChange={(e) => updateField("quantity", e.target.value)} className={field} />
                     </div>
                   ) : null}
                 </div>
-              )}
 
-              {formData.format === "fixed" || formData.format === "both" ? (
-                <div className="space-y-4">
-                  <label className="flex items-center gap-2 text-[14px] font-medium text-[#0f1c3f]">
-                    <input
-                      type="checkbox"
-                      checked={formData.use_variations}
-                      onChange={(e) => updateField("use_variations", e.target.checked)}
-                      className="h-4 w-4 rounded border-[#d8dee8] text-[#13948e]"
-                    />
-                    Variations
-                  </label>
-                  <Hint>Turn on to add Size and Color options with a unique price, quantity, and SKU for each combination.</Hint>
-                  {formData.use_variations ? (
+                {isAuction ? (
+                  <div>
+                    <FieldLabel required help="How long buyers can bid. From 1 hour up to 30 days.">Auction length</FieldLabel>
+                    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Auction length">
+                      {[
+                        ["1", "1 hour"],
+                        ["24", "1 day"],
+                        ["48", "2 days"],
+                        ["72", "3 days"],
+                        ["120", "5 days"],
+                        ["168", "7 days"],
+                        ["240", "10 days"],
+                      ].map(([value, label]) => {
+                        const on = !customDuration && String(formData.auction_duration) === value;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            onClick={() => {
+                              setCustomDuration(false);
+                              updateField("auction_duration", value);
+                            }}
+                            className={chip(on)}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={customDuration}
+                        onClick={() => {
+                          setCustomDuration(true);
+                          applyCustomDuration(customDays, customHours);
+                        }}
+                        className={chip(customDuration)}
+                      >
+                        Custom
+                      </button>
+                    </div>
+                    {customDuration ? (
+                      <div className="mt-3 flex flex-wrap items-end gap-4 rounded-2xl border border-[#e4eaf2] bg-[#f7fafc] p-4">
+                        <div>
+                          <label htmlFor="sell-days" className="mb-1.5 block text-[13px] font-semibold text-[#0f1c3f]">Days</label>
+                          <input
+                            id="sell-days"
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            max="30"
+                            value={customDays}
+                            onChange={(e) => applyCustomDuration(e.target.value, customHours)}
+                            className={`${field} w-28`}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="sell-hours" className="mb-1.5 block text-[13px] font-semibold text-[#0f1c3f]">Hours</label>
+                          <input
+                            id="sell-hours"
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            max="23"
+                            value={customHours}
+                            onChange={(e) => applyCustomDuration(customDays, e.target.value)}
+                            className={`${field} w-28`}
+                          />
+                        </div>
+                        <p className={`pb-3 text-[13.5px] ${Number(formData.auction_duration) >= 1 && Number(formData.auction_duration) <= 720 ? "text-[#3a4a66]" : "font-medium text-[#e53238]"}`}>
+                          {Number(formData.auction_duration) >= 1 && Number(formData.auction_duration) <= 720
+                            ? `Auction will run for ${durationLabel}.`
+                            : "Choose between 1 hour and 30 days."}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {priceSummary ? (
+                  <p className="rounded-xl bg-[#f4f8ff] px-4 py-3 text-[13.5px] text-[#3a4a66]">
+                    <span className="font-semibold text-[#0f1c3f]">Buyers will see:</span> {priceSummary}
+                  </p>
+                ) : null}
+              </Section>
+
+              <section>
+                <button
+                  type="button"
+                  aria-expanded={moreOpen}
+                  onClick={() => setShowMore((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-2xl border border-[#e4eaf2] bg-[#fafcff] px-5 py-4 text-left transition hover:border-[#cfdbec]"
+                >
+                  <span>
+                    <span className="block text-[15px] font-bold text-[#0f1c3f]">More options</span>
+                    <span className="block text-[12.5px] text-[#6b7587]">
+                      {formData.format === "fixed"
+                        ? "Was price, Best Offer, variations."
+                        : formData.format === "auction"
+                          ? "Reserve price."
+                          : "Was price, Best Offer, variations, reserve price."}{" "}
+                      Most sellers skip these.
+                    </span>
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7587" strokeWidth="2.2" className={`shrink-0 transition-transform ${moreOpen ? "rotate-180" : ""}`} aria-hidden>
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+
+                {moreOpen ? (
+                  <div className="mt-5 space-y-6 px-1">
+                    {isAuction ? (
+                      <div className="max-w-[420px]">
+                        <FieldLabel optional htmlFor="sell-reserve" help="Buyers never see this amount, only whether the reserve is met.">
+                          Reserve price
+                        </FieldLabel>
+                        <MoneyInput
+                          id="sell-reserve"
+                          value={formData.auction_reserve_price}
+                          onChange={(v) => updateField("auction_reserve_price", v)}
+                          placeholder="Minimum price you will accept"
+                          className={field}
+                          invalid={reserveTooLow}
+                        />
+                        {reserveTooLow ? (
+                          <p role="alert" className="mt-1.5 text-[12.5px] font-medium text-[#e53238]">Reserve must be at least the starting bid.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {isFixed ? (
+                      <>
+                        <div className="max-w-[420px]">
+                          <FieldLabel optional htmlFor="sell-was" help="If higher than your price, the listing can appear in Today's Deals.">
+                            Was price
+                          </FieldLabel>
+                          <MoneyInput id="sell-was" value={formData.compare_at} onChange={(v) => updateField("compare_at", v)} placeholder="Original price" className={field} />
+                        </div>
+
+                        <div className="space-y-4 rounded-2xl border border-[#e4eaf2] bg-white p-4">
+                          <Toggle
+                            checked={formData.allow_best_offer}
+                            onChange={(next) => updateField("allow_best_offer", next)}
+                            label="Allow Best Offer"
+                            help="Let buyers send you offers below your price."
+                          />
+                          {formData.allow_best_offer ? (
+                            <div className="grid gap-5 border-t border-[#eef2f7] pt-4 md:grid-cols-2">
+                              <div>
+                                <FieldLabel optional htmlFor="sell-accept" help="Offers at or above this are accepted instantly.">
+                                  Auto-accept at
+                                </FieldLabel>
+                                <MoneyInput id="sell-accept" value={formData.auto_accept_price} onChange={(v) => updateField("auto_accept_price", v)} placeholder="e.g. 900" className={field} />
+                              </div>
+                              <div>
+                                <FieldLabel optional htmlFor="sell-decline" help="Offers below this are declined instantly. Others wait for you.">
+                                  Auto-decline below
+                                </FieldLabel>
+                                <MoneyInput id="sell-decline" value={formData.auto_decline_price} onChange={(v) => updateField("auto_decline_price", v)} placeholder="e.g. 700" className={field} />
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-4 rounded-2xl border border-[#e4eaf2] bg-white p-4">
+                          <Toggle
+                            checked={formData.use_variations}
+                            onChange={(next) => updateField("use_variations", next)}
+                            label="This item has variations"
+                            help="Add Size and Color options, each with its own price, quantity and SKU."
+                          />
+                          {formData.use_variations ? (
                   <>
                   <div className="grid gap-5 md:grid-cols-2">
                     <div>
@@ -1103,74 +1375,27 @@ export default function CreateListingPage() {
                   />
                   </>
                   ) : null}
-                </div>
-              ) : null}
-
-              {(formData.format === "auction" || formData.format === "both") && (
-                <div className="space-y-5">
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <div>
-                      <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                        Starting price (NPR) <span className="text-[#e11d48]">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        step="0.01"
-                        min="1"
-                        value={formData.auction_start_price}
-                        onChange={(e) => updateField("auction_start_price", e.target.value)}
-                        className={field}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Reserve price (NPR)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.auction_reserve_price}
-                        onChange={(e) => updateField("auction_reserve_price", e.target.value)}
-                        className={field}
-                      />
-                      <Hint>Optional. Buyers never see this amount — only whether the reserve is met.</Hint>
-                    </div>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
-                      Duration <span className="text-[#e11d48]">*</span>
-                    </label>
-                    <select
-                      value={formData.auction_duration}
-                      onChange={(e) => updateField("auction_duration", e.target.value)}
-                      className={field}
-                    >
-                      <option value="72">3 days</option>
-                      <option value="120">5 days</option>
-                      <option value="168">7 days</option>
-                      <option value="240">10 days</option>
-                    </select>
-                  </div>
-                </div>
-              )}
+                ) : null}
+              </section>
 
-              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-col-reverse gap-3 rounded-b-[28px] border-t border-[#e8eef6] bg-white/95 px-5 py-4 backdrop-blur sm:-mx-8 sm:-mb-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-[#d8dee8] bg-white px-5 text-[14.5px] font-semibold text-[#0f3d4c] hover:bg-[#f7fafc]"
+                  className="inline-flex h-12 items-center justify-center rounded-full border border-[#d8dee8] bg-white px-6 text-[14.5px] font-semibold text-[#0f3d4c] transition hover:bg-[#f7fafc]"
                 >
                   Back
                 </button>
                 <button
                   type="button"
                   onClick={() => validateStep2() && setStep(3)}
-                  className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#0f3d4c] px-6 text-[14.5px] font-semibold text-white sm:max-w-[420px]"
+                  className="inline-flex h-12 flex-1 items-center justify-center rounded-full bg-[#0f3d4c] px-8 text-[15px] font-semibold text-white shadow-[0_10px_24px_-12px_rgba(15,61,76,0.7)] transition hover:bg-[#0c3240] sm:max-w-[360px]"
                 >
-                  Continue to photos & publish
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
-                    <path d="M5 12h14M13 6l6 6-6 6" />
-                  </svg>
+                  Continue to photos
                 </button>
               </div>
             </div>
@@ -1215,54 +1440,26 @@ export default function CreateListingPage() {
                 )}
               </div>
 
-              <label className="flex items-center gap-2 text-[14px] font-medium text-[#0f1c3f]">
-                <input
-                  type="checkbox"
-                  checked={formData.shipping_free}
-                  onChange={(e) => updateField("shipping_free", e.target.checked)}
-                  className="h-4 w-4 rounded border-[#d8dee8] text-[#13948e]"
-                />
-                Free shipping
-              </label>
+              <div className="rounded-2xl border border-[#e4eaf2] bg-[#f7fafc] px-4 py-3.5">
+                <p className="text-[14px] font-semibold text-[#0f1c3f]">Free shipping</p>
+                <p className="mt-0.5 text-[12.5px] leading-snug text-[#6b7587]">
+                  Every listing currently ships free to the buyer, so there is no shipping cost to set.
+                </p>
+              </div>
 
-              {!formData.shipping_free && (
-                <div className="grid gap-5 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Shipping cost (NPR)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.shipping_cost}
-                      onChange={(e) => updateField("shipping_cost", e.target.value)}
-                      className={field}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Additional item shipping (NPR)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.shipping_additional}
-                      onChange={(e) => updateField("shipping_additional", e.target.value)}
-                      placeholder="Combined shipping add-on"
-                      className={field}
-                    />
-                    <Hint>Charged for extra items from you in the same cart. Defaults to half the first-item rate.</Hint>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">Item location</label>
-                    <input
-                      type="text"
-                      value={formData.item_location}
-                      onChange={(e) => updateField("item_location", e.target.value)}
-                      placeholder="e.g. Kathmandu, Nepal"
-                      className={field}
-                    />
-                  </div>
-                </div>
-              )}
+              <div>
+                <label htmlFor="sell-location" className="mb-1.5 block text-[13.5px] font-semibold text-[#0f1c3f]">
+                  Item location
+                </label>
+                <input
+                  id="sell-location"
+                  type="text"
+                  value={formData.item_location}
+                  onChange={(e) => updateField("item_location", e.target.value)}
+                  placeholder="e.g. Kathmandu, Nepal"
+                  className={field}
+                />
+              </div>
 
               <label className="flex items-center gap-2 text-[14px] font-medium text-[#0f1c3f]">
                 <input
