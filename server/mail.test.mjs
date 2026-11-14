@@ -80,3 +80,25 @@ test("codes are sent through Resend when RESEND_API_KEY is set", async () => {
     else process.env.EMAIL_FROM = saved.from;
   }
 });
+
+test("Resend sends from support@meroauction.com when EMAIL_FROM is not set", async () => {
+  const saved = { key: process.env.RESEND_API_KEY, from: process.env.EMAIL_FROM, fetch: globalThis.fetch };
+  process.env.RESEND_API_KEY = "re_test_key";
+  delete process.env.EMAIL_FROM;
+  let sentBody;
+  globalThis.fetch = async (_url, init) => {
+    sentBody = JSON.parse(init.body);
+    return { ok: true, status: 200, json: async () => ({ id: "email_456" }) };
+  };
+  try {
+    const result = await sendCodeEmail({ to: "buyer@example.com", code: "111222", purpose: "reset" });
+    assert.equal(result.sent, true);
+    assert.equal(sentBody.from, "MeroAuction <support@meroauction.com>");
+  } finally {
+    globalThis.fetch = saved.fetch;
+    if (saved.key === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = saved.key;
+    if (saved.from === undefined) delete process.env.EMAIL_FROM;
+    else process.env.EMAIL_FROM = saved.from;
+  }
+});

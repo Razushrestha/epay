@@ -148,8 +148,8 @@ export function resendConfigured() {
 function resendFrom() {
   const from = String(process.env.EMAIL_FROM || "").trim();
   if (from) return from;
-  console.warn("[mail] EMAIL_FROM is not set; using Resend's test sender, which only delivers to your own Resend account email");
-  return "MeroAuction <onboarding@resend.dev>";
+  console.warn("[mail] EMAIL_FROM is not set; defaulting to support@meroauction.com");
+  return "MeroAuction <support@meroauction.com>";
 }
 
 export function classifyResendError(err) {
