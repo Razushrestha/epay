@@ -6,6 +6,7 @@ export type CatalogNode = {
   slug: string;
   parent_id: number | null;
   level: number;
+  icon?: string | null;
   children?: CatalogNode[];
 };
 

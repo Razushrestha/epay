@@ -4,6 +4,10 @@ import { initDb } from "./db.mjs";
 import { handleRequest } from "./router.mjs";
 import { startJobs } from "./jobs.mjs";
 
+import { assertSecureConfig } from "./security/config-check.mjs";
+
+assertSecureConfig();
+
 const PORT = Number(process.env.PORT || process.env.API_PORT) || 4000;
 
 await initDb();
@@ -17,7 +21,8 @@ const server = createServer(async (req, res) => {
       const status = Number(err?.status || err?.statusCode);
       const code = status >= 400 && status < 600 ? status : 500;
       res.writeHead(code, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: code === 400 ? err.message : "Internal server error" }));
+      const exposeMessage = code === 400 || code === 413;
+      res.end(JSON.stringify({ error: exposeMessage ? err.message : "Internal server error" }));
     }
   }
 });

@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { accountApi, apiBase } from "@/lib/account-api";
 import { Empty, StatusPill } from "@/components/admin/admin-ui";
 import { AuthenticityBadge } from "@/components/catalog/AuthenticityBadge";
+import { CategoryEditorDrawer, type CategoryDraft } from "@/components/admin/CategoryEditorDrawer";
 
 interface Category {
   id: number;
@@ -33,7 +34,35 @@ interface Brand {
   description: string | null;
   website: string | null;
   is_verified: boolean;
+  is_active: boolean;
   listing_count: number;
+}
+
+type CategoryDrawerState = null | { mode: "create" } | { mode: "edit"; category: Category };
+
+function errorMessage(err: unknown, fallback = "Something went wrong") {
+  return err instanceof Error ? err.message : fallback;
+}
+
+/** Depth-first order (parent, then its children by sort order) so the table reads like the menu. */
+function orderAsTree(rows: Category[]): Category[] {
+  const byParent = new Map<number | null, Category[]>();
+  for (const row of rows) {
+    const key = row.parent_id ?? null;
+    byParent.set(key, [...(byParent.get(key) || []), row]);
+  }
+  const out: Category[] = [];
+  const walk = (parent: number | null) => {
+    const kids = (byParent.get(parent) || []).slice().sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    for (const kid of kids) {
+      out.push(kid);
+      walk(kid.id);
+    }
+  };
+  walk(null);
+  // Anything whose parent is missing from the list still shows up at the end.
+  const seen = new Set(out.map((row) => row.id));
+  return [...out, ...rows.filter((row) => !seen.has(row.id))];
 }
 
 interface Condition {
@@ -52,18 +81,8 @@ export default function CatalogAdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Category form
-  const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [categoryForm, setCategoryForm] = useState({
-    name: "",
-    slug: "",
-    parent_id: null as number | null,
-    level: 1,
-    icon: "",
-    description: "",
-    is_restricted: false,
-    requires_approval: false,
-  });
+  // One slide-over handles both "New category" and "Edit category".
+  const [categoryDrawer, setCategoryDrawer] = useState<CategoryDrawerState>(null);
 
   // Brand form
   const [showBrandForm, setShowBrandForm] = useState(false);
@@ -83,6 +102,24 @@ export default function CatalogAdminPage() {
   });
   const [feeSaved, setFeeSaved] = useState<string | null>(null);
 
+  // Hidden (old) categories and brands stay in the database; this switch only controls what the table shows.
+  const [showInactive, setShowInactive] = useState(false);
+  const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
+  const [brandEdit, setBrandEdit] = useState({
+    name: "",
+    slug: "",
+    logo_url: "",
+    description: "",
+    website: "",
+    is_verified: false,
+    is_active: true,
+  });
+
+  const visibleCategories = orderAsTree(categories).filter((cat) => showInactive || cat.is_active);
+  const visibleBrands = brands.filter((brand) => showInactive || brand.is_active);
+  const hiddenCategoryCount = categories.filter((cat) => !cat.is_active).length;
+  const hiddenBrandCount = brands.filter((brand) => !brand.is_active).length;
+
   useEffect(() => {
     loadData();
   }, [view]);
@@ -96,20 +133,23 @@ export default function CatalogAdminPage() {
         const data = await res.json();
         const rows: Category[] = data.categories || [];
         setCategories(rows);
-        const laptops = rows.find((cat) => cat.slug === "laptops" || cat.name === "Laptops");
-        if (laptops) {
+        const firstActive = orderAsTree(rows).find((cat) => cat.is_active);
+        if (firstActive) {
           setFeeForm((current) =>
             current.category_id
               ? current
               : {
-                  category_id: String(laptops.id),
-                  insertion_fee: String(laptops.insertion_fee ?? 50),
-                  final_value_fee_percentage: String(laptops.final_value_fee_percentage ?? 5),
+                  category_id: String(firstActive.id),
+                  insertion_fee: String(firstActive.insertion_fee ?? 50),
+                  final_value_fee_percentage: String(firstActive.final_value_fee_percentage ?? 5),
                 },
           );
         }
       } else if (view === "brands") {
-        const res = await fetch(`${apiBase}/api/v1/catalog/brands?limit=200`);
+        const token = accountApi.getToken();
+        const res = await fetch(`${apiBase}/api/v1/catalog/admin/brands?limit=200`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         const data = await res.json();
         setBrands(data.brands || []);
       } else if (view === "conditions") {
@@ -117,48 +157,10 @@ export default function CatalogAdminPage() {
         const data = await res.json();
         setConditions(data.conditions || []);
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleCreateCategory(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      const token = accountApi.getToken();
-      if (!token) throw new Error("Not authenticated");
-
-      const res = await fetch(`${apiBase}/api/v1/catalog/admin/categories`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(categoryForm),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to create category");
-      }
-
-      setShowCategoryForm(false);
-      setCategoryForm({
-        name: "",
-        slug: "",
-        parent_id: null,
-        level: 1,
-        icon: "",
-        description: "",
-        is_restricted: false,
-        requires_approval: false,
-      });
-      loadData();
-    } catch (err: any) {
-      setError(err.message);
     }
   }
 
@@ -193,8 +195,8 @@ export default function CatalogAdminPage() {
         is_verified: false,
       });
       loadData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
@@ -228,8 +230,113 @@ export default function CatalogAdminPage() {
       const catName = body.category?.name || "Category";
       setFeeSaved(`${catName}: insertion NPR ${feeForm.insertion_fee}, FVF ${feeForm.final_value_fee_percentage}%`);
       loadData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
+    }
+  }
+
+  async function saveCategory(values: CategoryDraft): Promise<string | null> {
+    const editing = categoryDrawer?.mode === "edit" ? categoryDrawer.category : null;
+    try {
+      const token = accountApi.getToken();
+      if (!token) return "Not authenticated";
+      const icon = values.icon.trim() || null;
+      const description = values.description.trim() || null;
+      const payload = editing
+        ? {
+            name: values.name,
+            slug: values.slug,
+            icon,
+            description,
+            is_restricted: values.is_restricted,
+            requires_approval: values.requires_approval,
+            is_active: values.is_active,
+          }
+        : {
+            name: values.name,
+            slug: values.slug,
+            parent_id: values.parent_id,
+            level: values.level,
+            icon,
+            description,
+            is_restricted: values.is_restricted,
+            requires_approval: values.requires_approval,
+          };
+      const res = await fetch(
+        editing
+          ? `${apiBase}/api/v1/catalog/admin/categories/${editing.id}`
+          : `${apiBase}/api/v1/catalog/admin/categories`,
+        {
+          method: editing ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return body.error || "Could not save the category";
+      setCategoryDrawer(null);
+      setError(null);
+      await loadData();
+      return null;
+    } catch (err: unknown) {
+      return errorMessage(err);
+    }
+  }
+
+  function startEditBrand(brand: Brand) {
+    setEditingBrand(brand);
+    setBrandEdit({
+      name: brand.name,
+      slug: brand.slug,
+      logo_url: brand.logo_url || "",
+      description: brand.description || "",
+      website: brand.website || "",
+      is_verified: brand.is_verified,
+      is_active: brand.is_active,
+    });
+    setShowBrandForm(false);
+    setError(null);
+  }
+
+  async function handleSaveBrand(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingBrand) return;
+    setError(null);
+    try {
+      const token = accountApi.getToken();
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/brands/${editingBrand.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          ...brandEdit,
+          logo_url: brandEdit.logo_url.trim() || null,
+          website: brandEdit.website.trim() || null,
+          description: brandEdit.description.trim() || null,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Failed to update brand");
+      setEditingBrand(null);
+      await loadData();
+    } catch (err: unknown) {
+      setError(errorMessage(err));
+    }
+  }
+
+  async function handleToggleBrandActive(brand: Brand) {
+    try {
+      const token = accountApi.getToken();
+      if (!token) throw new Error("Not authenticated");
+      const res = await fetch(`${apiBase}/api/v1/catalog/admin/brands/${brand.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ is_active: !brand.is_active }),
+      });
+      if (!res.ok) throw new Error("Failed to update brand");
+      await loadData();
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
@@ -247,8 +354,8 @@ export default function CatalogAdminPage() {
       });
       if (!res.ok) throw new Error("Failed to update authenticity badge");
       loadData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
@@ -268,8 +375,8 @@ export default function CatalogAdminPage() {
 
       if (!res.ok) throw new Error("Failed to update category");
       loadData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
@@ -293,13 +400,13 @@ export default function CatalogAdminPage() {
       }
 
       loadData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
   function siblingsOf(cat: Category) {
-    return categories.filter((c) => c.parent_id === cat.parent_id);
+    return visibleCategories.filter((c) => c.parent_id === cat.parent_id);
   }
 
   async function moveCategory(cat: Category, direction: -1 | 1) {
@@ -328,8 +435,8 @@ export default function CatalogAdminPage() {
         throw new Error(err.error || "Failed to reorder");
       }
       await loadData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
@@ -347,10 +454,13 @@ export default function CatalogAdminPage() {
         },
       });
 
-      if (!res.ok) throw new Error("Failed to delete brand");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to delete brand");
+      }
       loadData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
@@ -391,118 +501,40 @@ export default function CatalogAdminPage() {
         {view === "categories" && (
           <div>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-[16px] font-bold text-[#0f1c3f]">Categories ({categories.length})</h2>
-              <button
-                type="button"
-                onClick={() => setShowCategoryForm(!showCategoryForm)}
-                className={showCategoryForm ? "nexlo-btn-ghost" : "nexlo-btn nexlo-btn-blue"}
-              >
-                {showCategoryForm ? "Cancel" : "Add category"}
-              </button>
+              <h2 className="text-[16px] font-bold text-[#0f1c3f]">
+                Categories ({visibleCategories.length})
+              </h2>
+              <div className="flex flex-wrap items-center gap-4">
+                {hiddenCategoryCount > 0 ? (
+                  <label className="flex items-center gap-2 text-[13px] text-[#3a4a66]">
+                    <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+                    Show {hiddenCategoryCount} hidden
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setCategoryDrawer({ mode: "create" })}
+                  className="nexlo-btn nexlo-btn-blue"
+                >
+                  + Add category
+                </button>
+              </div>
             </div>
 
-            {showCategoryForm && (
-              <form onSubmit={handleCreateCategory} className="mb-4 nexlo-card space-y-3 p-5">
-                <h3 className="text-[16px] font-bold text-[#0f1c3f]">New category</h3>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
-                    Name *
-                    <input
-                      type="text"
-                      required
-                      value={categoryForm.name}
-                      onChange={(e) => {
-                        setCategoryForm({
-                          ...categoryForm,
-                          name: e.target.value,
-                          slug: generateSlug(e.target.value),
-                        });
-                      }}
-                      className="nexlo-field mt-1"
-                    />
-                  </label>
-                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
-                    Slug *
-                    <input
-                      type="text"
-                      required
-                      value={categoryForm.slug}
-                      onChange={(e) => setCategoryForm({ ...categoryForm, slug: e.target.value })}
-                      className="nexlo-field mt-1"
-                    />
-                  </label>
-                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
-                    Parent category
-                    <select
-                      value={categoryForm.parent_id || ""}
-                      onChange={(e) => {
-                        const parentId = e.target.value ? parseInt(e.target.value) : null;
-                        const parent = categories.find((c) => c.id === parentId);
-                        setCategoryForm({
-                          ...categoryForm,
-                          parent_id: parentId,
-                          level: parent ? parent.level + 1 : 1,
-                        });
-                      }}
-                      className="nexlo-field mt-1"
-                    >
-                      <option value="">None (root)</option>
-                      {categories
-                        .filter((c) => Number(c.level) < 3)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {`${"\u2014 ".repeat(Math.max(c.level - 1, 0))}${c.name}`}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
-                    Icon
-                    <input
-                      type="text"
-                      value={categoryForm.icon}
-                      onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
-                      className="nexlo-field mt-1"
-                      placeholder="Optional"
-                    />
-                  </label>
-                  <label className="block text-[13px] font-medium text-[#0f1c3f] md:col-span-2">
-                    Description
-                    <textarea
-                      value={categoryForm.description}
-                      onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                      className="nexlo-field mt-1 h-auto min-h-20 rounded-2xl py-3"
-                      rows={2}
-                    />
-                  </label>
-                  <div className="flex items-center gap-6 text-[13px] text-[#0f1c3f]">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={categoryForm.is_restricted}
-                        onChange={(e) => setCategoryForm({ ...categoryForm, is_restricted: e.target.checked })}
-                      />
-                      Restricted
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={categoryForm.requires_approval}
-                        onChange={(e) => setCategoryForm({ ...categoryForm, requires_approval: e.target.checked })}
-                      />
-                      Requires approval
-                    </label>
-                  </div>
-                </div>
-                <button type="submit" className="nexlo-btn nexlo-btn-blue">
-                  Create category
-                </button>
-              </form>
-            )}
+            {categoryDrawer ? (
+              <CategoryEditorDrawer
+                key={categoryDrawer.mode === "edit" ? `edit-${categoryDrawer.category.id}` : "create"}
+                mode={categoryDrawer.mode}
+                initial={categoryDrawer.mode === "edit" ? categoryDrawer.category : undefined}
+                categories={orderAsTree(categories).filter((c) => c.is_active && Number(c.level) < 3)}
+                onSubmit={saveCategory}
+                onClose={() => setCategoryDrawer(null)}
+              />
+            ) : null}
 
             {loading ? (
               <p className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</p>
-            ) : categories.length === 0 ? (
+            ) : visibleCategories.length === 0 ? (
               <div className="nexlo-card">
                 <Empty title="No categories yet" sub="Add a root category, then nest subcategories under it." />
               </div>
@@ -522,10 +554,13 @@ export default function CatalogAdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {categories.map((cat) => (
-                      <tr key={cat.id} className="border-b border-[#f3f6fa]">
-                        <td className="px-4 py-3">
-                          <p className="font-semibold text-[#0f1c3f]">{cat.name}</p>
+                    {visibleCategories.map((cat) => (
+                      <tr key={cat.id} className={`border-b border-[#f3f6fa] ${cat.is_active ? "" : "opacity-60"}`}>
+                        <td className="px-4 py-3" style={{ paddingLeft: 16 + Math.max(cat.level - 1, 0) * 22 }}>
+                          <p className="font-semibold text-[#0f1c3f]">
+                            {cat.icon ? <span className="mr-1.5">{cat.icon}</span> : null}
+                            {cat.name}
+                          </p>
                           {cat.child_count > 0 ? (
                             <p className="text-[12px] text-[#8a94a6]">{cat.child_count} subcategories</p>
                           ) : null}
@@ -544,6 +579,13 @@ export default function CatalogAdminPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setCategoryDrawer({ mode: "edit", category: cat })}
+                              className="text-[12.5px] font-semibold text-[#3665f3]"
+                            >
+                              Edit
+                            </button>
                             <button
                               type="button"
                               disabled={siblingsOf(cat)[0]?.id === cat.id}
@@ -584,15 +626,107 @@ export default function CatalogAdminPage() {
         {view === "brands" && (
           <div>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-[16px] font-bold text-[#0f1c3f]">Brands ({brands.length})</h2>
-              <button
-                type="button"
-                onClick={() => setShowBrandForm(!showBrandForm)}
-                className={showBrandForm ? "nexlo-btn-ghost" : "nexlo-btn nexlo-btn-blue"}
-              >
-                {showBrandForm ? "Cancel" : "Add brand"}
-              </button>
+              <h2 className="text-[16px] font-bold text-[#0f1c3f]">Brands ({visibleBrands.length})</h2>
+              <div className="flex flex-wrap items-center gap-4">
+                {hiddenBrandCount > 0 ? (
+                  <label className="flex items-center gap-2 text-[13px] text-[#3a4a66]">
+                    <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+                    Show {hiddenBrandCount} hidden
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBrandForm(!showBrandForm);
+                    setEditingBrand(null);
+                  }}
+                  className={showBrandForm ? "nexlo-btn-ghost" : "nexlo-btn nexlo-btn-blue"}
+                >
+                  {showBrandForm ? "Cancel" : "Add brand"}
+                </button>
+              </div>
             </div>
+
+            {editingBrand && (
+              <form onSubmit={handleSaveBrand} className="mb-4 nexlo-card space-y-3 p-5">
+                <h3 className="text-[16px] font-bold text-[#0f1c3f]">Edit “{editingBrand.name}”</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Name *
+                    <input
+                      type="text"
+                      required
+                      value={brandEdit.name}
+                      onChange={(e) => setBrandEdit({ ...brandEdit, name: e.target.value })}
+                      className="nexlo-field mt-1"
+                    />
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Slug *
+                    <input
+                      type="text"
+                      required
+                      value={brandEdit.slug}
+                      onChange={(e) => setBrandEdit({ ...brandEdit, slug: e.target.value })}
+                      className="nexlo-field mt-1"
+                    />
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Logo URL
+                    <input
+                      type="url"
+                      value={brandEdit.logo_url}
+                      onChange={(e) => setBrandEdit({ ...brandEdit, logo_url: e.target.value })}
+                      className="nexlo-field mt-1"
+                    />
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f]">
+                    Website
+                    <input
+                      type="url"
+                      value={brandEdit.website}
+                      onChange={(e) => setBrandEdit({ ...brandEdit, website: e.target.value })}
+                      className="nexlo-field mt-1"
+                    />
+                  </label>
+                  <label className="block text-[13px] font-medium text-[#0f1c3f] md:col-span-2">
+                    Description
+                    <textarea
+                      value={brandEdit.description}
+                      onChange={(e) => setBrandEdit({ ...brandEdit, description: e.target.value })}
+                      className="nexlo-field mt-1 h-auto min-h-20 rounded-2xl py-3"
+                      rows={2}
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-center gap-6 text-[13px] text-[#0f1c3f]">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={brandEdit.is_active}
+                        onChange={(e) => setBrandEdit({ ...brandEdit, is_active: e.target.checked })}
+                      />
+                      Visible to sellers
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={brandEdit.is_verified}
+                        onChange={(e) => setBrandEdit({ ...brandEdit, is_verified: e.target.checked })}
+                      />
+                      Authenticity badge
+                    </label>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" className="nexlo-btn nexlo-btn-blue">
+                    Save changes
+                  </button>
+                  <button type="button" onClick={() => setEditingBrand(null)} className="nexlo-btn-ghost">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
 
             {showBrandForm && (
               <form onSubmit={handleCreateBrand} className="mb-4 nexlo-card space-y-3 p-5">
@@ -664,19 +798,20 @@ export default function CatalogAdminPage() {
 
             {loading ? (
               <p className="py-12 text-center text-[14px] text-[#6b7587]">Loading…</p>
-            ) : brands.length === 0 ? (
+            ) : visibleBrands.length === 0 ? (
               <div className="nexlo-card">
                 <Empty title="No brands yet" sub="Add a brand so sellers can pick it on a listing." />
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {brands.map((brand) => (
-                  <div key={brand.id} className="nexlo-card p-4">
+                {visibleBrands.map((brand) => (
+                  <div key={brand.id} className={`nexlo-card p-4 ${brand.is_active ? "" : "opacity-60"}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-[#0f1c3f]">{brand.name}</h3>
                           {brand.is_verified ? <AuthenticityBadge /> : null}
+                          {brand.is_active ? null : <StatusPill status="inactive" />}
                         </div>
                         <p className="text-[12.5px] text-[#6b7587]">{brand.slug}</p>
                         {brand.description ? <p className="mt-2 text-[13px] text-[#5b6780]">{brand.description}</p> : null}
@@ -685,6 +820,20 @@ export default function CatalogAdminPage() {
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditBrand(brand)}
+                          className="text-[12.5px] font-semibold text-[#3665f3]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBrandActive(brand)}
+                          className="text-[12.5px] font-semibold text-[#3665f3]"
+                        >
+                          {brand.is_active ? "Hide" : "Show"}
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleToggleBrandVerified(brand)}
@@ -733,7 +882,7 @@ export default function CatalogAdminPage() {
                     className="nexlo-field mt-1"
                   >
                     <option value="">Select category</option>
-                    {categories.map((c) => (
+                    {visibleCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {`${"\u2014 ".repeat(Math.max(c.level - 1, 0))}${c.name}`}
                       </option>
@@ -785,7 +934,7 @@ export default function CatalogAdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {categories.map((cat) => (
+                    {visibleCategories.map((cat) => (
                       <tr key={cat.id} className="border-b border-[#f3f6fa]">
                         <td className="px-4 py-3 font-semibold text-[#0f1c3f]">{cat.name}</td>
                         <td className="px-4 py-3 text-[#6b7587]">{cat.slug}</td>

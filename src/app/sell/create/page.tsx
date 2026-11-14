@@ -201,6 +201,29 @@ export default function CreateListingPage() {
       .catch(() => setSpecifics([]));
   }, [formData.category_id]);
 
+  // Some categories have their own condition scale (e.g. coin grades), so reload it per category.
+  useEffect(() => {
+    if (!sellerOk) return;
+    const query = formData.category_id ? `?category_id=${encodeURIComponent(formData.category_id)}` : "";
+    let cancelled = false;
+    fetch(`${apiBase}/api/v1/catalog/conditions${query}`)
+      .then((res) => res.json())
+      .then((body) => {
+        if (cancelled) return;
+        const list: Condition[] = body.conditions || [];
+        setConditions(list);
+        setFormData((current) =>
+          current.condition_id && !list.some((cond) => String(cond.id) === current.condition_id)
+            ? { ...current, condition_id: "" }
+            : current,
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.category_id, sellerOk]);
+
   async function loadFormData() {
     try {
       // Load categories (level 1 for now - can add cascading later)

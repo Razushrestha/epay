@@ -8,7 +8,7 @@ import { reservationState } from './stock.mjs';
 import { uploadPhoto, deletePhoto, setPrimaryPhoto, reorderListingPhotos } from './upload.mjs';
 import { enforceVerification, evaluateUser } from './trust.mjs';
 import { commerceBlock } from './standing.mjs';
-import { validateListingSpecifics } from './catalog.mjs';
+import { assertSellableCategory, validateListingSpecifics } from './catalog.mjs';
 import { conditionMatchSql, indexListing, listingSearchVectorSql, searchListingsAdvanced, suggestListings } from './search-index.mjs';
 import { notify } from './notify.mjs';
 import { sellerDsr } from './m3-commerce.mjs';
@@ -626,6 +626,9 @@ async function createListing(data, userId) {
   } else if (!category_id || !title || !description || !format) {
     return { status: 400, body: { error: 'Missing required fields: category_id, title, description, format' } };
   }
+
+  const categoryError = await assertSellableCategory(category_id);
+  if (categoryError) return categoryError;
 
   if (!saveAsDraft) {
     const specError = await validateListingSpecifics(category_id, specifics);

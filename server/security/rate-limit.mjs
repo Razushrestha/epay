@@ -3,6 +3,8 @@
  * Protects endpoints from brute force and abuse using sliding window algorithm
  */
 
+import { clientIp } from "./client-ip.mjs";
+
 // Store for rate limiting: Map<key, { attempts: [], blocked_until: timestamp }>
 const rateLimitStore = new Map();
 
@@ -60,6 +62,15 @@ export const RateLimitConfig = {
     blockDuration: 30 * 60 * 1000,
     message: 'Too many 2FA attempts. Please try again in 30 minutes.'
   },
+  /** Applied to every API request, per client IP (see router). Tunable via GLOBAL_RATE_LIMIT_PER_MIN. */
+  GLOBAL_API: {
+    key: 'global',
+    ipOnly: true,
+    window: 60 * 1000,
+    maxAttempts: Number(process.env.GLOBAL_RATE_LIMIT_PER_MIN) || 600,
+    blockDuration: 60 * 1000,
+    message: 'Too many requests from this address. Please slow down.'
+  },
   DEFAULT: {
     key: 'default',
     window: 60 * 1000,
@@ -73,21 +84,50 @@ export const RateLimitConfig = {
  * Get client identifier (IP + User-Agent)
  */
 function getClientIdentifier(req, accountKey, config = RateLimitConfig.DEFAULT) {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() 
-           || req.headers['x-real-ip'] 
-           || req.socket.remoteAddress 
-           || 'unknown';
-  
+  const ip = clientIp(req);
   const userAgent = req.headers['user-agent'] || 'unknown';
   const scope = config.key || 'default';
   return `${scope}:${ip}:${userAgent}`;
 }
 
+/** IP-wide bucket: rotating the User-Agent header must not reset the limit. */
+function getIpIdentifier(req, config) {
+  return `${config.key || 'default'}:ip:${clientIp(req)}`;
+}
+
+/** Per-account bucket: rotating IPs must not allow unlimited guesses against one account. */
+function getAccountIdentifier(accountKey, config) {
+  return `${config.key || 'default'}:acct:${String(accountKey).trim().toLowerCase()}`;
+}
+
+const IP_BUCKET_MULTIPLIER = 6; // shared NAT/office IPs get more headroom than a single device
+const ACCOUNT_BUCKET_MULTIPLIER = 2; // high enough that attackers can't trivially lock a victim out
+
 /**
- * Check if request should be rate limited
+ * Check if request should be rate limited.
+ * Three independent buckets are consulted: IP+User-Agent (strict), IP only, and account (if given).
  */
 export function checkRateLimit(req, config = RateLimitConfig.DEFAULT, accountKey) {
-  const identifier = getClientIdentifier(req, accountKey, config);
+  if (config.ipOnly) return hitBucket(getIpIdentifier(req, config), config, config.maxAttempts);
+
+  const primary = hitBucket(getClientIdentifier(req, accountKey, config), config, config.maxAttempts);
+  if (!primary.allowed) return primary;
+
+  const ipWide = hitBucket(getIpIdentifier(req, config), config, config.maxAttempts * IP_BUCKET_MULTIPLIER);
+  if (!ipWide.allowed) return ipWide;
+
+  if (accountKey) {
+    const account = hitBucket(
+      getAccountIdentifier(accountKey, config),
+      config,
+      config.maxAttempts * ACCOUNT_BUCKET_MULTIPLIER,
+    );
+    if (!account.allowed) return account;
+  }
+  return primary;
+}
+
+function hitBucket(identifier, config, maxAttempts) {
   const now = Date.now();
   
   // Get or create rate limit entry
@@ -113,7 +153,7 @@ export function checkRateLimit(req, config = RateLimitConfig.DEFAULT, accountKey
   limitData.attempts = limitData.attempts.filter(t => now - t < config.window);
 
   // Check if exceeded max attempts
-  if (limitData.attempts.length >= config.maxAttempts) {
+  if (limitData.attempts.length >= maxAttempts) {
     limitData.blocked_until = now + config.blockDuration;
     
     return {
@@ -128,7 +168,7 @@ export function checkRateLimit(req, config = RateLimitConfig.DEFAULT, accountKey
 
   return {
     allowed: true,
-    remaining: config.maxAttempts - limitData.attempts.length
+    remaining: maxAttempts - limitData.attempts.length
   };
 }
 
@@ -183,8 +223,8 @@ export function rateLimit(req, config = RateLimitConfig.DEFAULT, accountKey) {
  * Clear rate limit for a specific identifier (e.g., after successful login)
  */
 export function clearRateLimit(req, accountKey, config = RateLimitConfig.AUTH_LOGIN) {
-  const identifier = getClientIdentifier(req, accountKey, config);
-  rateLimitStore.delete(identifier);
+  rateLimitStore.delete(getClientIdentifier(req, accountKey, config));
+  if (accountKey) rateLimitStore.delete(getAccountIdentifier(accountKey, config));
 }
 
 export function resetRateLimitStore() {

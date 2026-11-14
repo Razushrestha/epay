@@ -24,7 +24,7 @@ export async function handleCatalog(req, method, urlPath, headers, body, ipAddre
 
     if (method === 'GET' && pathParts[0] === 'conditions') {
       await ensureItemConditions();
-      return await getConditions();
+      return await getConditions(url.searchParams);
     }
 
     if (method === 'GET' && pathParts[0] === 'brands') {
@@ -93,6 +93,9 @@ export async function handleCatalog(req, method, urlPath, headers, body, ipAddre
       }
 
       if (pathParts[1] === 'brands') {
+        if (method === 'GET' && !pathParts[2]) {
+          return await getBrands(url.searchParams, { includeInactive: true });
+        }
         if (method === 'POST' && !pathParts[2]) {
           return await createBrand(body, auth.userId);
         }
@@ -472,6 +475,17 @@ async function ensureDefaultSpecifics(categoryId) {
   await attachSpecifics(categoryId, DEFAULT_SPECIFICS);
 }
 
+/** Sellers may only list in categories that are currently active (managed in the admin catalog). */
+export async function assertSellableCategory(categoryId) {
+  if (!categoryId) return null;
+  const { rows } = await query('SELECT is_active FROM categories WHERE id = $1', [categoryId]);
+  if (!rows[0]) return { status: 400, body: { error: 'Category not found' } };
+  if (!rows[0].is_active) {
+    return { status: 400, body: { error: 'This category is no longer available. Choose another category.' } };
+  }
+  return null;
+}
+
 export async function validateListingSpecifics(categoryId, values) {
   if (!categoryId) return null;
   const loaded = await getCategorySpecifics(categoryId);
@@ -658,11 +672,41 @@ async function syncItemConditions() {
 /**
  * Get all conditions
  */
-async function getConditions() {
+async function getConditions(params) {
+  // Category-scoped conditions (e.g. coin grades) are only returned for that category and its
+  // descendants. The nearest ancestor that defines scoped conditions wins.
+  const categoryKey = params?.get('category_id') || params?.get('category');
+  if (categoryKey) {
+    const isId = /^\d+$/.test(String(categoryKey));
+    const owner = await query(
+      `SELECT anc.id
+       FROM categories cat
+       JOIN categories anc ON anc.lft <= cat.lft AND anc.rgt >= cat.rgt
+       WHERE ${isId ? 'cat.id = $1' : 'cat.slug = $1'}
+         AND EXISTS (SELECT 1 FROM category_conditions cc WHERE cc.category_id = anc.id)
+       ORDER BY anc.level DESC
+       LIMIT 1`,
+      [isId ? Number(categoryKey) : String(categoryKey)]
+    );
+    if (owner.rows[0]) {
+      const scoped = await query(
+        `SELECT c.id, c.name, c.slug, c.description, c.sort_order, cc.is_default
+         FROM category_conditions cc
+         JOIN conditions c ON c.id = cc.condition_id
+         WHERE cc.category_id = $1 AND c.is_active = true
+         ORDER BY c.sort_order`,
+        [owner.rows[0].id]
+      );
+      if (scoped.rows.length) return { status: 200, body: { conditions: scoped.rows } };
+    }
+  }
+
+  // Default list: every active condition that is not reserved for specific categories.
   const result = await query(
     `SELECT id, name, slug, description, sort_order
-     FROM conditions
-     WHERE is_active = true
+     FROM conditions c
+     WHERE c.is_active = true
+       AND NOT EXISTS (SELECT 1 FROM category_conditions cc WHERE cc.condition_id = c.id)
      ORDER BY sort_order`
   );
   return { status: 200, body: { conditions: result.rows } };
@@ -671,7 +715,7 @@ async function getConditions() {
 /**
  * Get brands with optional search
  */
-async function getBrands(params) {
+async function getBrands(params, { includeInactive = false } = {}) {
   const search = params.get('search');
   const verified = params.get('verified');
   const limit = Math.min(parseInt(params.get('limit')) || 50, 200);
@@ -679,9 +723,9 @@ async function getBrands(params) {
 
   let sql = `
     SELECT id, name, slug, logo_url, description, website, 
-           is_verified, listing_count
+           is_verified, listing_count, is_active
     FROM brands
-    WHERE is_active = true
+    WHERE ${includeInactive ? 'TRUE' : 'is_active = true'}
   `;
   const values = [];
   let paramCount = 1;
@@ -859,10 +903,18 @@ async function updateCategory(categoryId, data, userId, ipAddress, userAgent) {
   fields.push(`updated_at = NOW()`);
   values.push(categoryId);
 
-  const result = await query(
-    `UPDATE categories SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
-    values
-  );
+  let result;
+  try {
+    result = await query(
+      `UPDATE categories SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+      values
+    );
+  } catch (err) {
+    if (err?.code === '23505') {
+      return { status: 409, body: { error: 'A category with that name or slug already exists' } };
+    }
+    throw err;
+  }
 
   if (!result.rows[0]) {
     return { status: 404, body: { error: 'Category not found' } };
@@ -887,11 +939,13 @@ async function deleteCategory(categoryId, userId, ipAddress, userAgent) {
     return { status: 400, body: { error: 'Cannot delete category with subcategories' } };
   }
 
-  // Check if has listings (when listings table exists)
-  // const listingCheck = await query('SELECT COUNT(*) as count FROM listings WHERE category_id = $1', [categoryId]);
-  // if (listingCheck.rows[0].count > 0) {
-  //   return { status: 400, body: { error: 'Cannot delete category with active listings' } };
-  // }
+  const listingCheck = await query('SELECT COUNT(*)::int AS count FROM listings WHERE category_id = $1', [categoryId]);
+  if (listingCheck.rows[0].count > 0) {
+    return {
+      status: 400,
+      body: { error: `Cannot delete: ${listingCheck.rows[0].count} listing(s) use this category. Hide it instead.` },
+    };
+  }
 
   await query(
     `INSERT INTO category_audit_log (category_id, action, changed_by, ip_address, user_agent)
@@ -1042,10 +1096,18 @@ async function updateBrand(brandId, data, userId) {
   fields.push(`updated_at = NOW()`);
   values.push(brandId);
 
-  const result = await query(
-    `UPDATE brands SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
-    values
-  );
+  let result;
+  try {
+    result = await query(
+      `UPDATE brands SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+      values
+    );
+  } catch (err) {
+    if (err?.code === '23505') {
+      return { status: 409, body: { error: 'A brand with that name or slug already exists' } };
+    }
+    throw err;
+  }
 
   if (!result.rows[0]) {
     return { status: 404, body: { error: 'Brand not found' } };
@@ -1058,6 +1120,13 @@ async function updateBrand(brandId, data, userId) {
  * ADMIN: Delete brand
  */
 async function deleteBrand(brandId) {
+  const used = await query('SELECT COUNT(*)::int AS count FROM listings WHERE brand_id = $1', [brandId]);
+  if (used.rows[0].count > 0) {
+    return {
+      status: 400,
+      body: { error: `Cannot delete: ${used.rows[0].count} listing(s) use this brand. Hide it instead.` },
+    };
+  }
   await query('DELETE FROM brands WHERE id = $1', [brandId]);
   return { status: 200, body: { success: true } };
 }

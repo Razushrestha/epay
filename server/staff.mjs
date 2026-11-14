@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hashPassword } from "./passwords.mjs";
 import { pool, initDb } from "./db.mjs";
 import { cdnOrigin, storageOrigin } from "./cdn.mjs";
+import { corsStreamHeaders } from "./security/cors.mjs";
 
 const API = "/api/v1";
 
@@ -72,7 +73,7 @@ export async function attachAdminQueuesStream(req, res, searchParams) {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
+    ...corsStreamHeaders(req),
   });
   res.write(": connected\n\n");
 

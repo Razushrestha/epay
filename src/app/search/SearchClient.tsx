@@ -359,19 +359,9 @@ export function SearchContent({
         <CategoryTreePanel
           categoryId={activeCategoryId}
           query={query}
-          specFilters={specFilters}
           onCategoryName={setCategoryTitle}
           initialTree={initialTree}
           initialDetail={initialDetail}
-          onSpec={(slug, value) => {
-            setSpecFilters((current) => {
-              const next = { ...current };
-              if (next[slug] === value) delete next[slug];
-              else next[slug] = value;
-              return next;
-            });
-            setCurrentPage(1);
-          }}
         >
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div>

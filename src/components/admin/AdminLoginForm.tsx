@@ -48,6 +48,7 @@ export function AdminLoginForm() {
   const [challengeToken, setChallengeToken] = useState("");
   const [code, setCode] = useState("");
   const [canClaim, setCanClaim] = useState(false);
+  const [claimSecret, setClaimSecret] = useState("");
 
   useEffect(() => {
     const token = getToken();
@@ -235,12 +236,22 @@ export function AdminLoginForm() {
       )}
 
       {canClaim ? (
+        <input
+          type="password"
+          autoComplete="off"
+          value={claimSecret}
+          onChange={(e) => setClaimSecret(e.target.value)}
+          placeholder="Admin setup secret (NEXLO_ADMIN_SECRET)"
+          className="mt-3 h-[44px] w-full rounded-xl border border-[#c9d2e0] px-3 text-[14px]"
+        />
+      ) : null}
+      {canClaim ? (
         <button
           type="button"
           className="mt-3 h-[48px] w-full rounded-full border border-[#3665f3] text-[14px] font-semibold text-[#3665f3]"
           onClick={async () => {
             try {
-              await accountApi("/api/v1/admin/claim", { method: "POST", body: "{}" });
+              await accountApi("/api/v1/admin/claim", { method: "POST", body: JSON.stringify({ secret: claimSecret }) });
               router.push("/admin");
             } catch (err) {
               setError(err instanceof Error ? err.message : "Could not claim staff access");

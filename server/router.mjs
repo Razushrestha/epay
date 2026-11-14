@@ -8,6 +8,8 @@ import { handlePhase3, isPhase3Path } from "./phase3.mjs";
 import { handlePhase4, isPhase4Path } from "./phase4.mjs";
 import { attachAuctionStream } from "./auctions.mjs";
 import { attachAdminQueuesStream } from "./staff.mjs";
+import { corsAllowed, setSecurityHeaders, API_JSON_CSP } from "./security/cors.mjs";
+import { rateLimit, RateLimitConfig } from "./security/rate-limit.mjs";
 
 async function db() {
   if (!pool) await initDb();
@@ -16,30 +18,7 @@ async function db() {
 
 const API_PREFIX = "/api/v1";
 
-function isLocalDevOrigin(origin) {
-  try {
-    const { hostname } = new URL(origin);
-    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
-    if (/^10(?:\.\d{1,3}){3}$/.test(hostname)) return true;
-    if (/^192\.168(?:\.\d{1,3}){2}$/.test(hostname)) return true;
-    if (/^172\.(1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}$/.test(hostname)) return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-function corsAllowed(origin) {
-  if (!origin) return false;
-  const configured = String(process.env.CORS_ORIGIN || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  if (configured.includes("*") || configured.includes(origin)) return true;
-  if (process.env.NODE_ENV !== "production" && isLocalDevOrigin(origin)) return true;
-  if (!configured.length && isLocalDevOrigin(origin)) return true;
-  return false;
-}
+const MAX_JSON_BODY_BYTES = Number(process.env.MAX_JSON_BODY_BYTES || 1024 * 1024);
 
 function setCors(req, res) {
   const origin = req.headers.origin;
@@ -53,7 +32,11 @@ function setCors(req, res) {
 
 function json(req, res, status, body, extraHeaders = {}) {
   setCors(req, res);
-  res.writeHead(status, { "Content-Type": "application/json", ...extraHeaders });
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Content-Security-Policy": API_JSON_CSP,
+    ...extraHeaders,
+  });
   res.end(JSON.stringify(body));
 }
 
@@ -63,7 +46,16 @@ function isMultipart(req) {
 
 async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let received = 0;
+  for await (const chunk of req) {
+    received += chunk.length;
+    if (received > MAX_JSON_BODY_BYTES) {
+      const err = new Error("Request body too large");
+      err.status = 413;
+      throw err;
+    }
+    chunks.push(chunk);
+  }
   if (chunks.length === 0) return {};
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -88,12 +80,19 @@ function parseUrl(req) {
 export async function handleRequest(req, res) {
   const { pathname, searchParams } = parseUrl(req);
   const method = req.method ?? "GET";
+  setSecurityHeaders(res);
 
   if (method === "OPTIONS") {
     setCors(req, res);
     res.writeHead(204);
     res.end();
     return;
+  }
+
+  // Global per-IP throttle (health checks and long-lived SSE streams are exempt).
+  if (pathname !== "/health" && !pathname.endsWith("/stream")) {
+    const limited = rateLimit(req, RateLimitConfig.GLOBAL_API);
+    if (limited) return json(req, res, limited.status, limited.body, limited.headers);
   }
 
   if (pathname === "/health" && method === "GET") {

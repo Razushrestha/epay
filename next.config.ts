@@ -27,7 +27,19 @@ const remotePatterns = [
   hostPattern(process.env.AWS_ENDPOINT_URL_S3),
 ].filter(Boolean) as { protocol: "http" | "https"; hostname: string; pathname?: `/${string}` }[];
 
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+];
+
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
   assetPrefix: cdnPrefix || undefined,
   images: {
     remotePatterns,

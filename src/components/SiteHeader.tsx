@@ -28,6 +28,8 @@ export function SiteHeader() {
               </svg>
               Nepal (NPR)
             </button>
+            <Link href="/deals" className="hidden hover:text-[#3665f3] hover:underline md:inline">Deals</Link>
+            <Link href="/sell" className="hidden font-semibold text-[#0f1c3f] hover:text-[#3665f3] hover:underline md:inline">Sell</Link>
             <AccountLinks />
           </div>
         </div>

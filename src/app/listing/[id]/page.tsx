@@ -12,7 +12,7 @@ export default async function ListingPage({
   const { id } = await params;
   const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
   try {
-    const res = await fetch(`${api}/api/v1/listings/${id}`, { cache: "no-store" });
+    const res = await fetch(`${api}/api/v1/listings/${encodeURIComponent(id)}`, { cache: "no-store" });
     if (res.ok) {
       const body = (await res.json()) as { listing?: Record<string, unknown> };
       if (body.listing) {
@@ -31,7 +31,7 @@ export default async function ListingPage({
         };
         return (
           <>
-            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
             <LiveListing listing={body.listing as never} />
           </>
         );

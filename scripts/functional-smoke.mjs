@@ -201,7 +201,8 @@ await check("Passkeys list + registration options", async () => {
   if (!started.json.options?.rp?.id || !started.json.challengeToken) {
     throw new Error("missing WebAuthn options");
   }
-  await req("POST", "/api/v1/auth/passkeys/options", { body: { identifier: email }, expectStatus: 200 });
+  // A brand-new account has no passkey yet: sign-in options are refused (same answer as for unknown accounts).
+  await req("POST", "/api/v1/auth/passkeys/options", { body: { identifier: email }, expectStatus: 400 });
   await req("POST", "/api/v1/auth/passkeys", {
     body: { challengeToken: "deadbeef", response: { id: "x" } },
     expectStatus: 401,
@@ -250,8 +251,8 @@ await check("Create variation listing", async () => {
       shipping_free: true,
       publish_immediately: true,
       variations: [
-        { name: "Size", values: ["S", "M"] },
-        { name: "Color", values: ["Red"] },
+        { name: "Size", options: ["S", "M"] },
+        { name: "Color", options: ["Red"] },
       ],
       skus: [
         { combination: { Size: "S", Color: "Red" }, price: 500, quantity: 2, sku: `SMK-S-${stamp}` },

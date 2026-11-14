@@ -6,6 +6,7 @@ import { notify } from "./notify.mjs";
 import { enforceVerification, evaluateUser } from "./trust.mjs";
 import { redisPublish } from "./redis.mjs";
 import { publicBids } from "./m3-commerce.mjs";
+import { corsStreamHeaders } from "./security/cors.mjs";
 
 const rooms = new Map();
 
@@ -31,7 +32,7 @@ export function attachAuctionStream(req, res, listingId) {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
+    ...corsStreamHeaders(req),
   });
   res.write(": connected\n\n");
   const key = String(listingId);

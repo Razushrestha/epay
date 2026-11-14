@@ -8,6 +8,7 @@
     "dev:worker": "node server/worker.mjs",
     "dev:all": "concurrently -n web,api,worker -c blue,green,magenta \"npm run dev\" \"npm run dev:api\" \"npm run dev:worker\"",
     "db:migrate": "node --import dotenv/config scripts/migrate.mjs",
+    "db:seed-taxonomy": "node scripts/seed-taxonomy.mjs",
     "db:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
     "build": "next build",
     "start": "next start",
@@ -15,7 +16,9 @@
     "test": "node --test server/*.test.mjs",
     "test:load": "node scripts/load-test.mjs",
     "test:smoke": "node scripts/functional-smoke.mjs",
-    "test:uat": "node scripts/uat.mjs"
+    "test:uat": "node scripts/uat.mjs",
+    "test:authz": "node scripts/authz-test.mjs",
+    "test:catalog": "node scripts/catalog-admin-test.mjs"
   },
   "engines": {
     "node": ">=18.18.0"
@@ -25,7 +28,7 @@
     "@aws-sdk/s3-presigned-post": "^3.1147.0",
     "@aws-sdk/s3-request-presigner": "^3.1147.0",
     "@electric-sql/pglite": "^0.5.8",
-    "@imgly/background-removal-node": "^1.4.5",
+    "@imgly/background-removal-node": "^1.1.5",
     "@neon/config": "^1.8.4",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.3",
@@ -35,7 +38,7 @@
     "hash-wasm": "^4.12.0",
     "mailgun.js": "^14.1.0",
     "multer": "^2.4.0",
-    "next": "16.3.8",
+    "next": "^16.4.5",
     "pg": "^8.13.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -48,8 +51,17 @@
     "@types/react-dom": "^19",
     "concurrently": "^10.0.5",
     "eslint": "^9",
-    "eslint-config-next": "16.3.8",
+    "eslint-config-next": "^16.4.5",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "lodash": "^4.17.24",
+    "sharp": "$sharp",
+    "hono": "^4.13.18",
+    "@hono/node-server": "^2.1.8",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
   }
 }

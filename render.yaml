@@ -26,6 +26,10 @@ services:
         generateValue: true
       - key: CORS_ORIGIN
         sync: false
+      - key: NEXLO_ADMIN_SECRET
+        sync: false
+      - key: TRUST_PROXY
+        value: 1
       - key: FRONTEND_URL
         sync: false
       - key: API_PUBLIC_URL

@@ -1825,12 +1825,24 @@ export async function handleIdentity(req, res, ctx) {
   }
 
   if (pathname === `${API}/admin/claim` && method === "POST") {
-    const { rows } = await (await db()).query(`SELECT COUNT(*)::int AS count FROM users WHERE is_staff = TRUE`);
-    if (rows[0].count > 0 && !actor.is_staff) return json(req, res, 403, { error: "A staff account already exists" });
-    await (await db()).query(
-      `UPDATE users SET is_staff = TRUE, staff_role = 'super_admin', status = 'active', updated_at = NOW() WHERE id = $1`,
+    // One-time bootstrap only: allowed while NO staff account exists, and only with the
+    // deployment's NEXLO_ADMIN_SECRET. Existing staff can never self-promote through this route.
+    const limited = rateLimit(req, RateLimitConfig.AUTH_2FA);
+    if (limited) return json(req, res, limited.status, limited.body, limited.headers);
+    const expected = String(process.env.NEXLO_ADMIN_SECRET || "");
+    const provided = String((await readJson(req))?.secret ?? "");
+    const a = createHash("sha256").update(provided).digest();
+    const b = createHash("sha256").update(expected).digest();
+    if (!expected || !timingSafeEqual(a, b)) {
+      return json(req, res, 403, { error: "Admin bootstrap is not available" });
+    }
+    // Atomic: the UPDATE only succeeds if there is still no staff account (no race between two claimants).
+    const claimed = await (await db()).query(
+      `UPDATE users SET is_staff = TRUE, staff_role = 'super_admin', status = 'active', updated_at = NOW()
+       WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM users WHERE is_staff = TRUE)`,
       [actor.id],
     );
+    if (!claimed.rowCount) return json(req, res, 403, { error: "Admin bootstrap is not available" });
     return json(req, res, 200, { data: { isStaff: true, staffRole: "super_admin" } });
   }
 

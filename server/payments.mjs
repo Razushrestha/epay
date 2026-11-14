@@ -88,7 +88,12 @@ export async function handlePayments(req, method, urlPath, headers, body, ipAddr
 
     // Get payment status
     if (method === 'GET' && pathParts[0] === 'status' && pathParts[1]) {
-      return await getPaymentStatus(pathParts[1]);
+      const token = headers.authorization?.replace('Bearer ', '');
+      const auth = token ? await validateToken(token) : null;
+      if (!auth) {
+        return { status: 401, body: { error: 'Unauthorized' } };
+      }
+      return await getPaymentStatus(pathParts[1], auth.userId);
     }
 
     if (method === 'POST' && pathParts[0] === 'khalti' && pathParts[1] === 'lookup') {
@@ -101,7 +106,7 @@ export async function handlePayments(req, method, urlPath, headers, body, ipAddr
     return { status: 404, body: { error: 'Not found' } };
   } catch (error) {
     console.error('Payment API error:', error);
-    return { status: 500, body: { error: 'Internal server error', details: error.message } };
+    return { status: 500, body: { error: 'Internal server error' } };
   }
 }
 
@@ -710,13 +715,19 @@ async function processKhaltiWebhook(payload) {
 /**
  * Get payment status
  */
-async function getPaymentStatus(paymentId) {
+async function getPaymentStatus(paymentId, userId) {
+  // Ownership enforced in SQL (buyer only) and only non-sensitive columns are returned;
+  // a non-owner gets the same 404 as a missing payment so ids can't be probed.
+  if (!/^\d+$/.test(String(paymentId))) {
+    return { status: 404, body: { error: 'Payment not found' } };
+  }
   const result = await query(
-    `SELECT p.*, o.order_number, o.status as order_status
+    `SELECT p.id, p.order_id, p.gateway, p.amount, p.currency, p.status,
+            p.initiated_at, p.completed_at, o.order_number, o.status as order_status
      FROM payments p
      JOIN orders o ON p.order_id = o.id
-     WHERE p.id = $1`,
-    [paymentId]
+     WHERE p.id = $1 AND o.buyer_id = $2`,
+    [paymentId, userId]
   );
 
   if (!result.rows[0]) {
