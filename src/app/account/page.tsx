@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { accountApi, apiBase, cacheProfile, digitsCode, getToken, setToken, STATIC_VERIFY_OTP } from "@/lib/account-api";
+import { accountApi, apiBase, cacheProfile, getToken, setToken } from "@/lib/account-api";
 import { NEPAL_PHONE_ERROR, nepalPhoneError, sanitizeNepalPhoneInput } from "@/lib/nepal-phone";
 import { passwordPolicyError } from "@/lib/password";
 import { AccountChrome, AccountSection, fullName, initials } from "@/components/account/AccountChrome";
@@ -467,15 +467,18 @@ function AccountScreen() {
     setPhoneBusy(true);
     try {
       const body = await accountApi<{
-        data: { sent?: boolean; deliveryError?: string; destinationMasked?: string; devCode?: string };
+        data: { sent?: boolean; deliveryError?: string; destinationMasked?: string };
       }>("/api/v1/account/phone/start", {
         method: "POST",
         body: JSON.stringify({ phone: phoneDraft }),
       });
-      const filled = digitsCode(body.data?.devCode) || STATIC_VERIFY_OTP;
-      setPhoneCode(filled);
+      setPhoneCode("");
       setPhoneStep("code");
-      setNotice("Use code 123456 to confirm the new phone number. No email is required.");
+      setNotice(
+        body.data?.sent === false
+          ? body.data.deliveryError ?? "We could not send the code. Try again."
+          : `We sent a 6-digit code to ${body.data?.destinationMasked ?? "your email"}. Enter it to confirm the new phone number.`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start the phone change.");
     } finally {
@@ -856,7 +859,7 @@ function AccountScreen() {
                 ) : <p className="text-[#7a8496]">No phone on file</p>}
                 {editing === "contact" ? (
                   <p className="text-[12.5px] text-[#6b7587]">
-                    Email stays on this account. Change the phone number in the Phone number section with code 123456.
+                    Email stays on this account. Change the phone number in the Phone number section. We will send you a code to confirm it.
                   </p>
                 ) : null}
               </div>
@@ -875,8 +878,8 @@ function AccountScreen() {
                 >
                   <p className="text-[12.5px] text-[#6b7587]">
                     {phoneStep === "code"
-                      ? "Enter code 123456 to save the new number."
-                      : "Enter a Nepal mobile number, then confirm with code 123456."}
+                      ? "Enter the 6-digit code we sent to save the new number."
+                      : "Enter a Nepal mobile number. We will send a code to confirm it."}
                   </p>
                   <input
                     value={phoneDraft}
@@ -899,7 +902,7 @@ function AccountScreen() {
                     <input
                       value={phoneCode}
                       onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="123456"
+                      placeholder="6-digit code"
                       inputMode="numeric"
                       autoComplete="one-time-code"
                       className="h-9 w-full rounded-full border px-3 tracking-[0.18em]"
@@ -1245,16 +1248,16 @@ function AccountScreen() {
               <p className="text-[14px] text-[#0f1c3f]">Status: <strong>{user.twoFactor ?? "Off"}</strong></p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" className="h-9 rounded-full border px-4 text-[13px]" onClick={async () => {
-                  const body = await accountApi<{ data: { secret?: string; uri?: string; devCode?: string } }>("/api/v1/account/2fa/start", { method: "POST", body: JSON.stringify({ method: "authenticator" }) });
+                  const body = await accountApi<{ data: { secret?: string; uri?: string } }>("/api/v1/account/2fa/start", { method: "POST", body: JSON.stringify({ method: "authenticator" }) });
                   setSecret(body.data.secret ?? "");
                   setOtpUri(body.data.uri ?? "");
                   setNotice("Scan the QR code with Google Authenticator or Authy, then enter the 6-digit code.");
                 }}>Use authenticator app</button>
                 <button type="button" className="h-9 rounded-full border px-4 text-[13px]" onClick={async () => {
-                  const body = await accountApi<{ data: { devCode?: string } }>("/api/v1/account/2fa/start", { method: "POST", body: JSON.stringify({ method: "otp" }) });
+                  await accountApi("/api/v1/account/2fa/start", { method: "POST", body: JSON.stringify({ method: "otp" }) });
                   setOtpUri("");
                   setSecret("");
-                  setNotice(body.data.devCode ? `Your code is ${body.data.devCode}` : "Enter the code we sent.");
+                  setNotice("Enter the code we sent.");
                 }}>Use email or phone code</button>
               </div>
               {otpUri ? (

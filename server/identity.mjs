@@ -47,10 +47,11 @@ mkdirSync(appealsDir, { recursive: true });
 const API = "/api/v1";
 const devCodes = process.env.NODE_ENV !== "production";
 /**
- * Fixed QA code (123456). NEVER available in production unless ALLOW_STATIC_OTP=1 is set on purpose,
- * because it would let anyone verify, reset passwords and pass 2FA for any account.
+ * Fixed test code (123456). OFF everywhere unless ALLOW_STATIC_OTP=1 is set on purpose (e.g. automated
+ * tests), because it would let anyone verify, reset passwords and pass 2FA for any account.
+ * Normal operation always sends a real random code by email or SMS.
  */
-const staticOtpAllowed = process.env.NODE_ENV !== "production" || process.env.ALLOW_STATIC_OTP === "1";
+const staticOtpAllowed = process.env.ALLOW_STATIC_OTP === "1";
 const STATIC_OTP = "123456";
 const STATIC_LOGIN_OTP = STATIC_OTP;
 const STATIC_OTP_PURPOSES = new Set(["login_2fa", "verify", "enroll_2fa", "reset", "change_phone"]);
@@ -886,7 +887,6 @@ export async function handleIdentity(req, res, ctx) {
           expiresIn: codeTtlSeconds("verify"),
           resendAfter: VERIFY_RESEND_SECONDS,
           ...deliveryFields(issued.delivery, issued.code),
-          devCode: staticOtpAllowed ? STATIC_OTP : undefined,
         },
       });
     } catch (err) {
@@ -934,7 +934,6 @@ export async function handleIdentity(req, res, ctx) {
         expiresIn: codeTtlSeconds("verify"),
         resendAfter: VERIFY_RESEND_SECONDS,
         ...deliveryFields(issued.delivery, issued.code),
-        devCode: staticOtpAllowed ? STATIC_OTP : undefined,
       },
     });
   }
@@ -1000,7 +999,6 @@ export async function handleIdentity(req, res, ctx) {
           method: "otp",
           challengeToken,
           ...deliveryFields(issued.delivery, issued.code),
-          devCode: staticOtpAllowed ? STATIC_LOGIN_OTP : undefined,
         });
       }
       return json(req, res, 200, {
@@ -1427,7 +1425,7 @@ export async function handleIdentity(req, res, ctx) {
     }
     const taken = await (await db()).query(`SELECT id FROM users WHERE phone = $1 AND id <> $2 LIMIT 1`, [phone, actor.id]);
     if (taken.rows[0]) return json(req, res, 409, { error: "That phone number is already in use." });
-    // Static OTP 123456 (non-production only) — no email verification required for QA.
+    // The confirmation code is sent by email, like every other OTP.
     const destination = actor.email || actor.phone || phone;
     const channel = actor.email ? "email" : "sms";
     const issued = await issueCode(actor, "change_phone", destination, channel);

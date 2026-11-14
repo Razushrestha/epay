@@ -5,11 +5,7 @@ import { useEffect, useState } from "react";
 import {
   apiBase,
   apiUnreachableMessage,
-  digitsCode,
-  localOtpNotice,
-  localSmsOtpNotice,
   setToken,
-  STATIC_VERIFY_OTP,
   VERIFY_RESEND_COOLDOWN_SECONDS,
 } from "@/lib/account-api";
 
@@ -66,16 +62,19 @@ export function VerifyForm() {
   useEffect(() => {
     setIdentifier(sessionStorage.getItem("nexlo_verify_id") ?? "");
     const channel = sessionStorage.getItem("nexlo_verify_channel") === "phone" ? "phone" : "email";
-    const filled = digitsCode(sessionStorage.getItem("nexlo_dev_code")) || STATIC_VERIFY_OTP;
-    sessionStorage.setItem("nexlo_dev_code", filled);
+    sessionStorage.removeItem("nexlo_dev_code");
     sessionStorage.removeItem("nexlo_code_error");
     const storedSent = Number(sessionStorage.getItem("nexlo_otp_sent_at") || 0);
     if (storedSent) setCooldown(cooldownLeft(storedSent));
     else markOtpSent();
-    setCode(filled);
-    setShowCode(Boolean(filled));
+    setCode("");
+    setShowCode(false);
     setError(null);
-    setNotice(channel === "phone" ? localSmsOtpNotice : localOtpNotice);
+    setNotice(
+      channel === "phone"
+        ? "We sent a 6-digit code to your phone. Enter it below."
+        : "We sent a 6-digit code to your email. Enter it below.",
+    );
   }, []);
 
   useEffect(() => {
@@ -148,15 +147,17 @@ export function VerifyForm() {
         setError(body.error ?? "Could not resend the code.");
         return;
       }
+      if (body.data?.sent === false) {
+        setError(body.data.deliveryError ?? "We could not send the code. Tap Resend.");
+        return;
+      }
       markOtpSent();
-      const filled = digitsCode(body.data?.devCode) || STATIC_VERIFY_OTP;
-      sessionStorage.setItem("nexlo_dev_code", filled);
       sessionStorage.removeItem("nexlo_code_error");
       if (body.data?.destinationMasked) sessionStorage.setItem("nexlo_verify_dest", body.data.destinationMasked);
-      setCode(filled);
-      setShowCode(Boolean(filled));
+      setCode("");
+      setShowCode(false);
       setError(null);
-      setNotice(localOtpNotice);
+      setNotice("We sent a new 6-digit code. Enter it below.");
       setResent(false);
     } catch (err) {
       setError(apiUnreachableMessage(err));
@@ -177,7 +178,7 @@ export function VerifyForm() {
         </span>
       </h1>
       <p className="mt-1.5 text-[13.5px] text-[#6b7587]">
-        Use the static code <span className="font-semibold text-[#0f1c3f]">123456</span>. Email/SMS OTP is disabled for now.
+        Enter the 6-digit code we sent to your email or phone.
       </p>
 
       <div className="mt-4" aria-live="polite">

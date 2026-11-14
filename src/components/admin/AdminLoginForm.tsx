@@ -79,7 +79,11 @@ export function AdminLoginForm() {
       if (body.step === "challenge") {
         setStep("challenge");
         setChallengeToken(body.challengeToken);
-        setNotice(body.devCode ? `Enter the 6-digit code, or use ${body.devCode}.` : "Enter the 6-digit code from your authenticator.");
+        setNotice(
+          body.method === "otp"
+            ? "We sent a 6-digit code to your email. Enter it below."
+            : "Enter the 6-digit code from your authenticator.",
+        );
         return;
       }
       if (body.step === "enroll") {

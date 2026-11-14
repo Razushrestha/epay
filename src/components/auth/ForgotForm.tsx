@@ -70,10 +70,8 @@ export function ForgotForm() {
         setError(body.error ?? "Could not send a code.");
         return;
       }
-      const filled = digitsCode(body.data?.devCode);
-      if (filled) setCode(filled);
       if (body.data?.resetUrl) setResetUrl(String(body.data.resetUrl));
-      if (body.data?.sent === false && !filled && !body.data?.resetUrl) {
+      if (body.data?.sent === false && !body.data?.resetUrl) {
         setError(body.data.deliveryError ?? "We could not send a reset link. Try again.");
         setSent(true);
         return;

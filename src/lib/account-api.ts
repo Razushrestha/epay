@@ -79,21 +79,7 @@ export function digitsCode(value: unknown) {
   return digits.length === 6 ? digits : "";
 }
 
-export const VERIFY_OTP_TTL_SECONDS = 30;
 export const VERIFY_RESEND_COOLDOWN_SECONDS = 30;
-
-// Fixed QA code, only ever shown or pre-filled outside production builds.
-export const STATIC_VERIFY_OTP = process.env.NODE_ENV === "production" ? "" : "123456";
-
-export const localOtpNotice =
-  process.env.NODE_ENV === "production"
-    ? "We sent a 6-digit code to your email. Enter it below."
-    : "Use the static code 123456. No email OTP is sent. Tap Verify.";
-
-export const localSmsOtpNotice =
-  process.env.NODE_ENV === "production"
-    ? "We sent a 6-digit code to your phone. Enter it below."
-    : "Use the static code 123456. No SMS OTP is sent. Tap Verify.";
 
 export async function accountApi<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);

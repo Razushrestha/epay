@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiBase, apiUnreachableMessage, digitsCode, setToken, STATIC_VERIFY_OTP } from "@/lib/account-api";
+import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
 import { SocialSignIn } from "@/components/auth/SocialSignIn";
 import { authenticatePasskey, passkeysSupported } from "@/lib/webauthn";
 
@@ -82,13 +82,14 @@ export function LoginForm() {
       if (body.step === "challenge") {
         setStep("challenge");
         setChallengeToken(body.challengeToken);
+        setCode("");
         if (body.method === "otp") {
-          const filled = digitsCode(body.devCode) || STATIC_VERIFY_OTP;
-          setCode(filled);
-          setNotice("Use the static login code 123456. No email OTP is sent.");
+          setNotice(
+            body.sent === false
+              ? body.deliveryError ?? "We could not send the code. Try again."
+              : "We sent a 6-digit code to your email or phone. Enter it below.",
+          );
         } else {
-          const filled = digitsCode(body.devCode);
-          if (filled) setCode(filled);
           setNotice("Enter the 6-digit code from your authenticator app.");
         }
         return;
@@ -150,16 +151,13 @@ export function LoginForm() {
       setEnrollMethod(body.data.method);
       setSecret(body.data.secret ?? "");
       setOtpUri(body.data.uri ?? "");
-      const filled = digitsCode(body.data.devCode);
-      setCode(filled);
+      setCode("");
       setNotice(
         body.data.secret
           ? "Add this key to an authenticator app, then enter the 6-digit code."
-          : filled
-            ? "Email is not sending from this computer yet. The code is filled in."
-            : body.data.sent === false
-              ? body.data.deliveryError ?? "We could not send the code. Try email/phone again."
-              : "Enter the code we sent.",
+          : body.data.sent === false
+            ? body.data.deliveryError ?? "We could not send the code. Try email/phone again."
+            : "Enter the code we sent.",
       );
     } catch (err) {
       setError(apiUnreachableMessage(err));
@@ -229,7 +227,7 @@ export function LoginForm() {
             onChange={(e) => setCode(e.target.value)}
             inputMode="numeric"
             autoComplete="one-time-code"
-            placeholder="123456"
+            placeholder="6-digit code"
             className="h-11 w-full rounded-full border border-[#dfe5ee] px-4 text-[15px] outline-none focus:border-[#3665f3]"
           />
           <button type="submit" disabled={loading} className="h-11 w-full rounded-full bg-[#3665f3] text-[15px] font-semibold text-white disabled:opacity-60">
@@ -276,7 +274,7 @@ export function LoginForm() {
                 onChange={(e) => setCode(e.target.value)}
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                placeholder="123456"
+                placeholder="6-digit code"
                 className="h-11 w-full rounded-full border border-[#dfe5ee] px-4 text-[15px] outline-none focus:border-[#3665f3]"
               />
               <button type="submit" disabled={loading} className="h-11 w-full rounded-full bg-[#3665f3] text-[15px] font-semibold text-white disabled:opacity-60">
