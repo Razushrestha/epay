@@ -5,24 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { accountApi, apiBase, getToken, setToken } from "@/lib/account-api";
 
-function MailIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="5" width="18" height="14" rx="2.5" />
-      <path d="m3.5 7 8.5 6 8.5-6" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
-      <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
-    </svg>
-  );
-}
-
 function EyeIcon({ off }: { off: boolean }) {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -141,7 +123,7 @@ export function AdminLoginForm() {
   }
 
   const fieldWrap =
-    "flex h-[48px] items-center gap-3 rounded-full border border-[#e4ebf4] bg-[#f7faff] px-4 text-[#9aa6b8] transition focus-within:border-[#3665f3] focus-within:bg-white focus-within:text-[#3665f3] focus-within:shadow-[0_0_0_4px_rgba(54,101,243,0.1)]";
+    "flex h-[48px] items-center gap-3 rounded-full border border-[#e4ebf4] bg-[#f7faff] px-5 text-[#9aa6b8] transition focus-within:border-[#3665f3] focus-within:bg-white focus-within:text-[#3665f3] focus-within:shadow-[0_0_0_4px_rgba(54,101,243,0.1)]";
 
   return (
     <div className="w-full">
@@ -172,7 +154,6 @@ export function AdminLoginForm() {
         <form onSubmit={onSubmit} className="mt-7 space-y-3.5">
           <label className="sr-only" htmlFor="admin-identifier">Email or username</label>
           <div className={fieldWrap}>
-            <MailIcon />
             <input
               id="admin-identifier"
               value={identifier}
@@ -185,7 +166,6 @@ export function AdminLoginForm() {
           </div>
           <label className="sr-only" htmlFor="admin-password">Password</label>
           <div className={fieldWrap}>
-            <LockIcon />
             <input
               id="admin-password"
               type={showPassword ? "text" : "password"}
@@ -226,11 +206,6 @@ export function AdminLoginForm() {
             className="flex h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#3665f3] text-[15px] font-semibold text-white shadow-[0_10px_22px_-8px_rgba(54,101,243,0.85)] transition hover:bg-[#2953c6] disabled:opacity-60"
           >
             {loading ? "Signing in…" : "Sign In"}
-            {!loading ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-            ) : null}
           </button>
         </form>
       )}
@@ -269,12 +244,6 @@ export function AdminLoginForm() {
       </div>
 
       <div className="flex items-center gap-3 rounded-[18px] border border-[#eef2f7] bg-[#f7faff] px-4 py-3.5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#3665f3] shadow-sm">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-            <path d="M12 3 5 6.2v5.3c0 4.2 2.7 8 7 9.5 4.3-1.5 7-5.3 7-9.5V6.2L12 3Z" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
-        </span>
         <div>
           <p className="text-[13.5px] font-bold text-[#0f1c3f]">Protected Admin Access</p>
           <p className="text-[12px] leading-snug text-[#8a94a6]">Only authorized users can access this area.</p>

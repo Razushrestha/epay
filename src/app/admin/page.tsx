@@ -49,12 +49,12 @@ function Change({ value }: { value: number }) {
   );
 }
 
-const activityMeta: Record<string, { bg: string; color: string; d: string }> = {
-  user: { bg: "bg-[#eaf1ff]", color: "text-[#3665f3]", d: "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 9c.6-3.5 3.2-5 7-5s6.4 1.5 7 5" },
-  order: { bg: "bg-[#e7fbf4]", color: "text-[#12a37e]", d: "M6 6h15l-1.5 9h-12L5 3H2M7 20a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0Zm9 0a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0Z" },
-  product: { bg: "bg-[#fff6e5]", color: "text-[#d97706]", d: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
-  message: { bg: "bg-[#eaf1ff]", color: "text-[#3665f3]", d: "M4 6h16v10H8l-4 4V6Z" },
-  refund: { bg: "bg-[#fdecec]", color: "text-[#e5484d]", d: "M3 12a9 9 0 1 0 3-6.7M3 4v5h5" },
+const activityMeta: Record<string, { bg: string; color: string }> = {
+  user: { bg: "bg-[#eaf1ff]", color: "text-[#3665f3]" },
+  order: { bg: "bg-[#e7fbf4]", color: "text-[#12a37e]" },
+  product: { bg: "bg-[#fff6e5]", color: "text-[#d97706]" },
+  message: { bg: "bg-[#eaf1ff]", color: "text-[#3665f3]" },
+  refund: { bg: "bg-[#fdecec]", color: "text-[#e5484d]" },
 };
 
 function Banner() {
@@ -111,27 +111,27 @@ export default function AdminDashboardPage() {
     return `${d.toLocaleString("en-GB", { month: "short" })} ${String(d.getDate()).padStart(2, "0")}`;
   });
   const stats = [
-    { label: "Total Users", value: data?.stats.users.total ?? 0, change: data?.stats.users.change ?? 0, color: "#3665f3", bg: "bg-[#eef4ff]", iconBg: "bg-[#d9e6ff] text-[#3665f3]", spark: series.map((s) => s.users), icon: "M16 19c0-2.8-2.2-5-6-5s-6 2.2-6 5M10 11a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" },
-    { label: "Total Orders", value: data?.stats.orders.total ?? 0, change: data?.stats.orders.change ?? 0, color: "#12a37e", bg: "bg-[#eafaf3]", iconBg: "bg-[#d6f5e8] text-[#0f9f76]", spark: series.map((s) => s.orders), icon: "M6 7h12l1.2 12H4.8L6 7Zm3-3h6l1 3H8l1-3Z" },
-    { label: "Total Products", value: data?.stats.products.total ?? 0, change: data?.stats.products.change ?? 0, color: "#7c5cfc", bg: "bg-[#f4f0ff]", iconBg: "bg-[#e8e0ff] text-[#7c5cfc]", spark: series.map((s) => s.products), icon: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
-    { label: "Total Revenue", value: data?.stats.revenue.total ?? 0, change: data?.stats.revenue.change ?? 0, color: "#3665f3", bg: "bg-[#eef6ff]", iconBg: "bg-[#d9e6ff] text-[#3665f3]", spark: series.map((s) => s.revenue), money: true, icon: "M12 3v18M8 8h5.2a2.8 2.8 0 0 1 0 5.6H9.2A2.8 2.8 0 0 0 9.2 19H16" },
+    { label: "Total Users", value: data?.stats.users.total ?? 0, change: data?.stats.users.change ?? 0, color: "#3665f3", bg: "bg-[#eef4ff]", spark: series.map((s) => s.users) },
+    { label: "Total Orders", value: data?.stats.orders.total ?? 0, change: data?.stats.orders.change ?? 0, color: "#12a37e", bg: "bg-[#eafaf3]", spark: series.map((s) => s.orders) },
+    { label: "Total Products", value: data?.stats.products.total ?? 0, change: data?.stats.products.change ?? 0, color: "#7c5cfc", bg: "bg-[#f4f0ff]", spark: series.map((s) => s.products) },
+    { label: "Total Revenue", value: data?.stats.revenue.total ?? 0, change: data?.stats.revenue.change ?? 0, color: "#3665f3", bg: "bg-[#eef6ff]", spark: series.map((s) => s.revenue), money: true },
   ];
   const os = data?.orderStatus ?? { completed: 0, processing: 0, pending: 0, cancelled: 0, total: 0 };
   const q = data?.queues ?? {};
   const queues = [
-    { id: "kyc", href: "/admin/kyc", label: "KYC pending", count: q.kyc ?? 0, tone: "bg-[#fff6e5] text-[#b45309]", icon: "M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" },
-    { id: "disputes", href: "/admin/disputes", label: "Open disputes", count: q.disputes ?? 0, tone: "bg-[#fdecec] text-[#e5484d]", icon: "M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" },
-    { id: "payouts", href: "/admin/payouts", label: "Payouts waiting", count: q.payouts ?? 0, tone: "bg-[#eafaf3] text-[#0f9f76]", icon: "M4 7h16v10H4V7Zm0 4h16M8 15h4" },
-    { id: "moderation", href: "/admin/moderation", label: "Moderation", count: q.moderation ?? 0, tone: "bg-[#f4f0ff] text-[#7c5cfc]", icon: "M4 5h16v4H4V5Zm0 7h10v7H4v-7Zm12 0h4v7h-4v-7Z" },
-    { id: "tickets", href: "/admin/tickets", label: "Open tickets", count: q.tickets ?? 0, tone: "bg-[#eef4ff] text-[#3665f3]", icon: "M4 7h16v3l-1.5 1.5L20 13v4H4v-4l1.5-1.5L4 10V7Z" },
-    { id: "appeals", href: "/admin/appeals", label: "Appeals", count: q.appeals ?? 0, tone: "bg-[#eef4ff] text-[#3665f3]", icon: "M5 6h14v9H9l-4 3V6Zm4 4h6" },
+    { id: "kyc", href: "/admin/kyc", label: "KYC pending", count: q.kyc ?? 0, tone: "bg-[#fff6e5] text-[#b45309]" },
+    { id: "disputes", href: "/admin/disputes", label: "Open disputes", count: q.disputes ?? 0, tone: "bg-[#fdecec] text-[#e5484d]" },
+    { id: "payouts", href: "/admin/payouts", label: "Payouts waiting", count: q.payouts ?? 0, tone: "bg-[#eafaf3] text-[#0f9f76]" },
+    { id: "moderation", href: "/admin/moderation", label: "Moderation", count: q.moderation ?? 0, tone: "bg-[#f4f0ff] text-[#7c5cfc]" },
+    { id: "tickets", href: "/admin/tickets", label: "Open tickets", count: q.tickets ?? 0, tone: "bg-[#eef4ff] text-[#3665f3]" },
+    { id: "appeals", href: "/admin/appeals", label: "Appeals", count: q.appeals ?? 0, tone: "bg-[#eef4ff] text-[#3665f3]" },
   ].filter((item) => canAccessNav(role, item.id));
   const openQueueCount = queues.reduce((sum, item) => sum + item.count, 0);
   const actions = [
-    { id: "users", href: "/admin/users?new=1", label: "Add New User", d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6" },
-    { id: "products", href: "/admin/products", label: "Add Product", d: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
-    { id: "orders", href: "/admin/orders", label: "View Orders", d: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" },
-    { id: "messages", href: "/admin/messages", label: "Send Message", d: "M4 6h16v10H8l-4 4V6Z" },
+    { id: "users", href: "/admin/users?new=1", label: "Add New User" },
+    { id: "products", href: "/admin/products", label: "Add Product" },
+    { id: "orders", href: "/admin/orders", label: "View Orders" },
+    { id: "messages", href: "/admin/messages", label: "Send Message" },
   ].filter((item) => canAccessNav(role, item.id));
 
   return (
@@ -142,7 +142,7 @@ export default function AdminDashboardPage() {
         <div>
           <p className="text-[16px] text-[#6b7587]">{greeting()},</p>
           <h1 className="mt-0.5 text-[34px] font-extrabold tracking-tight text-[#0f1c3f]">
-            {name}! <span aria-hidden>👋</span>
+            {name}!
           </h1>
           <p className="mt-1 text-[14.5px] text-[#6b7587]">
             {openQueueCount > 0
@@ -179,11 +179,6 @@ export default function AdminDashboardPage() {
                 href={item.href}
                 className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 transition hover:brightness-[0.98] ${item.tone}`}
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/70">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-                    <path d={item.icon} />
-                  </svg>
-                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-semibold">{item.label}</span>
                   <span className="block text-[12px] opacity-80">{item.count ? "Needs review" : "Nothing waiting"}</span>
@@ -199,11 +194,6 @@ export default function AdminDashboardPage() {
             <section key={card.label} className={`rounded-[22px] ${card.bg} p-4`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 text-[13px] font-medium text-[#5b6780]">
-                  <span className={`flex h-8 w-8 items-center justify-center rounded-full ${card.iconBg}`}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d={card.icon} />
-                    </svg>
-                  </span>
                   {card.label}
                 </div>
                 <Sparkline values={card.spark} color={card.color} />
@@ -287,9 +277,7 @@ export default function AdminDashboardPage() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={row.thumbnail_url || row.photo_url || ""} alt="" className="h-8 w-8 rounded-lg object-cover" />
                         ) : (
-                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f4f8fd] text-[#9aa3b2]">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m8 14 2.5-3 2.5 3 3-4 3 4" /></svg>
-                          </span>
+                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f4f8fd] text-[#9aa3b2]"></span>
                         )}
                         <span className="text-[#3a4a66]">{row.product || "-"}</span>
                       </span>
@@ -319,9 +307,6 @@ export default function AdminDashboardPage() {
             {actions.map((item) => (
               <li key={item.label}>
                 <Link href={item.href} className="flex items-center gap-3 rounded-xl px-1 py-2.5 text-[14px] text-[#3a4a66] hover:bg-[#f7fafd]">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f7fb] text-[#3a4a66]">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={item.d} /></svg>
-                  </span>
                   <span className="flex-1">{item.label}</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c5d0e0" strokeWidth="2"><path d="m9 6 6 6-6 6" /></svg>
                 </Link>
@@ -337,9 +322,7 @@ export default function AdminDashboardPage() {
               const meta = activityMeta[item.kind] || activityMeta.user;
               return (
                 <li key={`${item.at}-${i}`} className="flex gap-3 px-1">
-                  <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${meta.bg} ${meta.color}`}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={meta.d} /></svg>
-                  </span>
+                  <span aria-hidden className={`mt-[7px] h-2 w-2 shrink-0 rounded-full bg-current ${meta.color}`} />
                   <div className="min-w-0">
                     <p className="text-[13.5px] font-semibold text-[#0f1c3f]">{item.title}</p>
                     <p className="truncate text-[12.5px] text-[#6b7587]">{item.detail}</p>

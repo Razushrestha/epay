@@ -27,8 +27,6 @@ export type CategoryDraft = {
   is_active: boolean;
 };
 
-const EMOJI = ["🪙", "💵", "✉️", "🏅", "🏺", "🃏", "🖼️", "🎬", "✍️", "💎", "👑", "📦", "⌚", "👜", "👟", "🏠", "🚗", "🏍️", "📚", "🎨", "🧸", "🔔", "🏆", "🗝️"];
-
 export function slugify(name: string) {
   return name
     .toLowerCase()
@@ -143,7 +141,7 @@ export function CategoryEditorDrawer({
     }
   }
 
-  const shownIcon = draft.icon.trim() || "🗂️";
+  const monogram = (draft.name.trim()[0] || "·").toUpperCase();
   const where = mode === "edit"
     ? editParent
       ? `Under ${editParent.name}`
@@ -183,7 +181,7 @@ export function CategoryEditorDrawer({
           <div className="rounded-2xl bg-gradient-to-br from-[#eef3ff] to-[#f7f1ff] p-4">
             <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#6b7587]">Preview</p>
             <div className="mt-2 flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[26px] shadow-sm">{shownIcon}</span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0f1c3f] text-[18px] font-bold tracking-wide text-white">{monogram}</span>
               <div className="min-w-0">
                 <p className="truncate text-[15px] font-bold text-[#0f1c3f]">{draft.name.trim() || "Category name"}</p>
                 <p className="truncate text-[12px] text-[#6b7587]">
@@ -294,35 +292,6 @@ export function CategoryEditorDrawer({
             ) : null}
           </section>
 
-          {/* icon */}
-          <section>
-            <span className={labelClass}>Icon</span>
-            <div className="flex flex-wrap gap-1.5">
-              {EMOJI.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => set("icon", draft.icon === emoji ? "" : emoji)}
-                  aria-label={`Use ${emoji}`}
-                  aria-pressed={draft.icon === emoji}
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl border text-[20px] transition ${
-                    draft.icon === emoji ? "border-[#3665f3] bg-[#f2f6ff] ring-4 ring-[#3665f3]/10" : "border-[#e7eef6] bg-white hover:bg-[#f7f9fc]"
-                  }`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-            <input
-              type="text"
-              value={draft.icon}
-              onChange={(e) => set("icon", e.target.value)}
-              placeholder="Or paste any emoji"
-              className={`${inputClass} mt-2`}
-              maxLength={8}
-              aria-label="Custom emoji"
-            />
-          </section>
 
           <section>
             <label htmlFor="cat-desc" className={labelClass}>

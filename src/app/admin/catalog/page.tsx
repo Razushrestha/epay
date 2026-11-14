@@ -558,7 +558,6 @@ export default function CatalogAdminPage() {
                       <tr key={cat.id} className={`border-b border-[#f3f6fa] ${cat.is_active ? "" : "opacity-60"}`}>
                         <td className="px-4 py-3" style={{ paddingLeft: 16 + Math.max(cat.level - 1, 0) * 22 }}>
                           <p className="font-semibold text-[#0f1c3f]">
-                            {cat.icon ? <span className="mr-1.5">{cat.icon}</span> : null}
                             {cat.name}
                           </p>
                           {cat.child_count > 0 ? (

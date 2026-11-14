@@ -63,21 +63,9 @@ function LaptopScene() {
       <div className="relative z-10 mx-auto h-[14px] w-[92%] -translate-y-[2px] rounded-b-[16px] bg-[#c9d8ec]" />
       <div className="relative z-10 mx-auto h-[8px] w-[38%] rounded-b-md bg-[#b7c9e0]" />
 
-      <svg viewBox="0 0 140 160" className="absolute -right-2 bottom-8 z-20 h-[150px] w-[130px]" aria-hidden>
-        <ellipse cx="70" cy="148" rx="34" ry="8" fill="#cfe4d8" />
-        <rect x="52" y="118" width="36" height="32" rx="8" fill="#eef6f2" stroke="#d5e6dc" />
-        <path d="M70 118 C 40 90, 38 50, 58 28 C 48 62, 62 90, 70 118Z" fill="#3ecf8e" />
-        <path d="M70 118 C 100 88, 108 46, 86 22 C 98 60, 82 92, 70 118Z" fill="#22c57a" />
-        <path d="M70 118 C 78 70, 58 40, 70 14 C 82 42, 72 78, 70 118Z" fill="#16a34a" />
-      </svg>
 
       <div className="absolute -right-4 bottom-16 z-30 w-[168px] rounded-2xl bg-white px-3.5 py-3 shadow-[0_18px_40px_-18px_rgba(15,40,80,0.45)] ring-1 ring-[#e7eef6]">
         <p className="flex items-center gap-1.5 text-[13px] font-extrabold text-[#0f1c3f]">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#eaf1ff] text-[#3665f3]">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              <path d="M12 3 5 6.2v5.3c0 4.2 2.7 8 7 9.5 4.3-1.5 7-5.3 7-9.5V6.2L12 3Z" />
-            </svg>
-          </span>
           Secure & Reliable
         </p>
         <p className="mt-1 text-[11px] leading-snug text-[#8a94a6]">Your data is always protected with us.</p>
@@ -108,14 +96,7 @@ export default function AdminLoginPage() {
         </p>
         <ul className="mt-8 flex max-w-[460px] gap-2">
           {features.map((item) => (
-            <li key={item.label} className="flex flex-1 flex-col items-center text-center">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#3665f3] shadow-[0_10px_24px_-14px_rgba(54,101,243,0.8)]">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d={item.d} />
-                </svg>
-              </span>
-              <span className="mt-2 text-[11px] font-semibold leading-snug text-[#3a4a66]">{item.label}</span>
-            </li>
+            <li key={item.label} className="flex-1 border-t border-[#0f1c3f]/15 pt-3 text-[12px] font-semibold leading-snug text-[#3a4a66]">{item.label}</li>
           ))}
         </ul>
         <div className="mt-auto">

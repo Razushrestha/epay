@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { accountApi, getToken } from "@/lib/account-api";
 import type { AdminQueues } from "@/lib/staff-nav";
 
@@ -38,6 +38,31 @@ export function NotificationBell({
   const [unread, setUnread] = useState(0);
   const [rows, setRows] = useState<Note[]>([]);
   const staff = variant === "staff";
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  // Phones render the panel as a full-width sheet pinned under the bell's row,
+  // so we track where that row ends (bell bottom) instead of anchoring to the bell's x.
+  const [sheetTop, setSheetTop] = useState(64);
+
+  const measure = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) setSheetTop(Math.max(8, Math.round(rect.bottom + 8)));
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    measure();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, measure]);
 
   async function load() {
     if (!getToken()) return;
@@ -74,8 +99,10 @@ export function NotificationBell({
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={staff ? "Staff inbox" : "Notifications"}
+        aria-expanded={open}
         onClick={markRead}
         className="relative rounded-full p-2 text-[#3a4a66] hover:bg-[#f3f7fc]"
       >
@@ -93,9 +120,21 @@ export function NotificationBell({
         ) : null}
       </button>
       {open ? (
+        <button
+          type="button"
+          aria-label="Close notifications"
+          tabIndex={-1}
+          className="fixed inset-0 z-30 cursor-default bg-[#0f1c3f]/25 sm:bg-transparent"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
+      {open ? (
         <div
-          className={`absolute right-0 z-40 mt-2 overflow-hidden rounded-2xl border border-[#e7eef6] bg-white shadow-xl ${
-            staff ? "w-[360px]" : "w-[320px]"
+          role="dialog"
+          aria-label={staff ? "Staff inbox" : "Notifications"}
+          style={{ ["--np-top" as string]: `${sheetTop}px` }}
+          className={`fixed inset-x-3 top-[var(--np-top)] z-40 flex max-h-[calc(100dvh-var(--np-top)-0.75rem)] flex-col overflow-hidden rounded-2xl border border-[#e7eef6] bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[min(80dvh,560px)] sm:w-[min(calc(100vw-1.5rem),var(--np-w))] ${
+            staff ? "sm:[--np-w:380px]" : "sm:[--np-w:340px]"
           }`}
         >
           <div className="flex items-center justify-between border-b border-[#eef2f7] px-4 py-3">
@@ -107,7 +146,7 @@ export function NotificationBell({
             </div>
             <Link
               href={staff ? "/admin" : "/account?tab=preferences"}
-              className="text-[12px] text-[#3665f3]"
+              className="shrink-0 rounded-lg px-2 py-1.5 text-[13px] font-medium text-[#3665f3] hover:bg-[#f3f7fc] sm:text-[12px]"
               onClick={() => setOpen(false)}
             >
               {staff ? "Dashboard" : "Preferences"}
@@ -138,7 +177,7 @@ export function NotificationBell({
             </div>
           ) : null}
 
-          <ul className={`overflow-auto ${staff ? "max-h-[280px]" : "max-h-[360px]"}`}>
+          <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {rows.length === 0 ? (
               <li className="px-4 py-8 text-center text-[13px] text-[#8a94a6]">
                 {staff ? "No personal staff notes yet. Queue badges above stay live." : "No notifications yet."}
@@ -148,11 +187,11 @@ export function NotificationBell({
                 <li key={row.id} className="border-b border-[#f3f6fa]">
                   <Link
                     href={row.href || (staff ? "/admin" : "/account")}
-                    className="block px-4 py-3 hover:bg-[#f7faff]"
+                    className="block px-4 py-3.5 hover:bg-[#f7faff] active:bg-[#f0f5fc] sm:py-3"
                     onClick={() => setOpen(false)}
                   >
-                    <p className="text-[13px] font-semibold text-[#0f1c3f]">{row.title}</p>
-                    {row.body ? <p className="mt-0.5 line-clamp-2 text-[12px] text-[#6b7587]">{row.body}</p> : null}
+                    <p className="break-words text-[14px] font-semibold text-[#0f1c3f] sm:text-[13px]">{row.title}</p>
+                    {row.body ? <p className="mt-0.5 line-clamp-2 break-words text-[13px] text-[#6b7587] sm:text-[12px]">{row.body}</p> : null}
                     <p className="mt-1 text-[11px] text-[#8a94a6]">{new Date(row.created_at).toLocaleString()}</p>
                   </Link>
                 </li>

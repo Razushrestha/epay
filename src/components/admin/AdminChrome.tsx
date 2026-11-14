@@ -33,36 +33,28 @@ function initials(user: ChromeUser) {
     .join("");
 }
 
-function Icon({ d, paths }: { d?: string; paths?: ReactNode }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {d ? <path d={d} /> : paths}
-    </svg>
-  );
-}
-
 const NAV = [
-  { id: "dashboard", href: "/admin", label: "Dashboard", icon: "M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" },
-  { id: "users", href: "/admin/users", label: "Users", icon: "M16 19c0-2.8-2.2-5-6-5s-6 2.2-6 5M10 11a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4ZM20 19v-2.4c0-1.7-1-3.2-2.6-3.8M16.4 5.2a3.2 3.2 0 0 1 0 6.1" },
-  { id: "products", href: "/admin/products", label: "Products", icon: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" },
-  { id: "catalog", href: "/admin/catalog", label: "Catalog", icon: "M4 6h7v7H4V6Zm9 0h7v7h-7V6ZM4 15h7v7H4v-7Zm9 0h7v7h-7v-7Z" },
-  { id: "orders", href: "/admin/orders", label: "Orders", icon: "M7 4h10l2 4H5l2-4Zm-2 4h14v12H5V8Zm4 4h6" },
-  { id: "payouts", href: "/admin/payouts", label: "Payouts", icon: "M4 7h16v10H4V7Zm0 4h16M8 15h4" },
-  { id: "finance", href: "/admin/finance", label: "Finance", icon: "M4 19V8l8-4 8 4v11H4Zm4-2h2m4 0h2m4 0h2" },
-  { id: "disputes", href: "/admin/disputes", label: "Disputes", icon: "M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Z" },
-  { id: "kyc", href: "/admin/kyc", label: "KYC", icon: "M12 3 4 7v5c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-4Zm-1 12-3-3 1.4-1.4L11 12.2l4.6-4.6L17 9l-6 6Z" },
-  { id: "appeals", href: "/admin/appeals", label: "Appeals", icon: "M5 6h14v9H9l-4 3V6Zm4 4h6" },
-  { id: "moderation", href: "/admin/moderation", label: "Moderation", icon: "M4 5h16v4H4V5Zm0 7h10v7H4v-7Zm12 0h4v7h-4v-7Z" },
-  { id: "tickets", href: "/admin/tickets", label: "Tickets", icon: "M4 7h16v3l-1.5 1.5L20 13v4H4v-4l1.5-1.5L4 10V7Z" },
-  { id: "cms", href: "/admin/cms", label: "CMS", icon: "M4 5h16v14H4V5Zm4 4h8M8 13h5" },
-  { id: "trust", href: "/admin/trust", label: "Trust", icon: "M12 3 5 6.2v5.3c0 4.2 2.7 8 7 9.5 4.3-1.5 7-5.3 7-9.5V6.2L12 3Z" },
-  { id: "audit", href: "/admin/audit", label: "Audit log", icon: "M8 4h8v4H8V4ZM5 10h14v10H5V10Zm4 3h6" },
-  { id: "messages", href: "/admin/messages", label: "Messages", icon: "M4 6h16v10H8l-4 4V6Z" },
-  { id: "reviews", href: "/admin/reviews", label: "Reviews", icon: "M12 3.6 14.4 9l6 .5-4.6 3.9 1.5 5.8L12 16.6 6.7 19.2 8.2 13.4 3.6 9.5 9.6 9 12 3.6Z" },
-  { id: "analytics", href: "/admin/analytics", label: "Analytics", icon: "M4 19V9m6 10V5m6 14v-7m6 7V3" },
-  { id: "roles", href: "/admin/roles", label: "Roles", icon: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2 19c.6-3 2.8-5 6-5s5.4 2 6 5M14 19c.4-2 1.6-3.5 4-4.2 2.2.6 3.6 2 4 4.2" },
-  { id: "settings", href: "/admin/settings", label: "Settings", icon: "M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM4 12a8 8 0 0 1 .3-2.2l-2-1.2 2-3.4 2.3.6A8 8 0 0 1 9 4.3L9.2 2h5.6L15 4.3a8 8 0 0 1 2.4 1.5l2.3-.6 2 3.4-2 1.2A8 8 0 0 1 20 12a8 8 0 0 1-.3 2.2l2 1.2-2 3.4-2.3-.6A8 8 0 0 1 15 19.7L14.8 22H9.2L9 19.7a8 8 0 0 1-2.4-1.5l-2.3.6-2-3.4 2-1.2A8 8 0 0 1 4 12Z" },
-  { id: "uat", href: "/admin/uat", label: "Go-live UAT", icon: "M9 11l3 3L22 4M4 20h16" },
+  { id: "dashboard", href: "/admin", label: "Dashboard" },
+  { id: "users", href: "/admin/users", label: "Users" },
+  { id: "products", href: "/admin/products", label: "Products" },
+  { id: "catalog", href: "/admin/catalog", label: "Catalog" },
+  { id: "orders", href: "/admin/orders", label: "Orders" },
+  { id: "payouts", href: "/admin/payouts", label: "Payouts" },
+  { id: "finance", href: "/admin/finance", label: "Finance" },
+  { id: "disputes", href: "/admin/disputes", label: "Disputes" },
+  { id: "kyc", href: "/admin/kyc", label: "KYC" },
+  { id: "appeals", href: "/admin/appeals", label: "Appeals" },
+  { id: "moderation", href: "/admin/moderation", label: "Moderation" },
+  { id: "tickets", href: "/admin/tickets", label: "Tickets" },
+  { id: "cms", href: "/admin/cms", label: "CMS" },
+  { id: "trust", href: "/admin/trust", label: "Trust" },
+  { id: "audit", href: "/admin/audit", label: "Audit log" },
+  { id: "messages", href: "/admin/messages", label: "Messages" },
+  { id: "reviews", href: "/admin/reviews", label: "Reviews" },
+  { id: "analytics", href: "/admin/analytics", label: "Analytics" },
+  { id: "roles", href: "/admin/roles", label: "Roles" },
+  { id: "settings", href: "/admin/settings", label: "Settings" },
+  { id: "uat", href: "/admin/uat", label: "Go-live UAT" },
 ];
 
 function Rocket() {
@@ -326,7 +318,6 @@ export function AdminChrome({
                     active ? "bg-[#e8f0ff] font-semibold text-[#3665f3]" : "font-medium text-[#4b5873] hover:bg-white/80"
                   }`}
                 >
-                  <Icon d={item.icon} />
                   <span className="flex-1">{item.label}</span>
                   {badge > 0 ? (
                     <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#3665f3] px-1.5 text-[11px] font-bold text-white">
