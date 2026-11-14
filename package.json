@@ -21,7 +21,7 @@
     "test:catalog": "node scripts/catalog-admin-test.mjs"
   },
   "engines": {
-    "node": ">=18.18.0"
+    "node": "22.x"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1147.0",
@@ -32,6 +32,10 @@
     "@neon/config": "^1.8.4",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "dotenv": "^16.4.7",
     "files-sdk": "^2.6.2",
     "form-data": "^4.0.6",
@@ -42,18 +46,14 @@
     "pg": "^8.13.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "sharp": "^0.35.5"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "concurrently": "^10.0.5",
-    "eslint": "^9",
-    "eslint-config-next": "^16.4.5",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "eslint": "^9",
+    "eslint-config-next": "^16.4.5"
   },
   "overrides": {
     "lodash": "^4.17.24",
