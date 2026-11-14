@@ -63,7 +63,7 @@ export async function notify(userId, type, title, body, href) {
 }
 
 async function sendNotice(to, title, body) {
-  await sendTransactional({ to, subject: `Nexlo: ${title}`, text: body || title });
+  await sendTransactional({ to, subject: `MeroAuction: ${title}`, text: body || title });
 }
 
 export async function handleNotify(method, pathParts, auth, body, searchParams) {

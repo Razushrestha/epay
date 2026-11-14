@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import BrandLogo from "@/components/BrandLogo";
 
 type ChromeUser = {
   displayName: string | null;
@@ -92,8 +92,8 @@ export function AccountChrome({
               {navOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
             </svg>
           </button>
-          <Link href="/" className="shrink-0" aria-label="Nexlo home">
-            <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" priority />
+          <Link href="/" className="shrink-0" aria-label="MeroAuction home">
+            <BrandLogo className="text-[26px]" />
           </Link>
 
           <form action="/search" method="get" className="mx-auto hidden min-w-0 max-w-[520px] flex-1 md:block">
@@ -296,7 +296,7 @@ export function AccountChrome({
             </p>
             <p className="relative z-10 mt-1.5 max-w-[180px] text-[12px] leading-relaxed text-[#5b6780]">
               {tab === "feedback"
-                ? "Help us improve and make Nexlo better for everyone."
+                ? "Help us improve and make MeroAuction better for everyone."
                 : "Keep your information safe and up to date."}
             </p>
             <svg viewBox="0 0 240 80" className="absolute inset-x-0 bottom-0 h-16 w-full" aria-hidden>

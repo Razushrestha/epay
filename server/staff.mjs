@@ -546,7 +546,7 @@ export async function handleStaffExtras(req, res, ctx, actor) {
     );
     return json(req, res, 200, {
       settings: {
-        siteName: stored.siteName || "Nexlo",
+        siteName: stored.siteName || "MeroAuction",
         currency: stored.currency || "NPR",
         country: stored.country || "Nepal",
         supportEmail: stored.supportEmail || process.env.MAIL_FROM || "",
@@ -567,7 +567,7 @@ export async function handleStaffExtras(req, res, ctx, actor) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
     const payload = {
-      siteName: String(body.siteName || "Nexlo").slice(0, 40),
+      siteName: String(body.siteName || "MeroAuction").slice(0, 40),
       currency: String(body.currency || "NPR").slice(0, 8),
       country: String(body.country || "Nepal").slice(0, 40),
       supportEmail: String(body.supportEmail || "").slice(0, 120),
@@ -661,7 +661,7 @@ export async function handleStaffExtras(req, res, ctx, actor) {
     const body = await readJson(req);
     const email = String(body.email ?? "").trim().toLowerCase();
     if (!email.includes("@")) return json(req, res, 400, { error: "A valid email is required" });
-    const password = String(body.password || "").length >= 8 ? String(body.password) : `Nexlo${randomBytes(3).toString("hex")}!`;
+    const password = String(body.password || "").length >= 8 ? String(body.password) : `MeroAuction${randomBytes(3).toString("hex")}!`;
     const publicId = randomUUID();
     try {
       const inserted = await (await db()).query(

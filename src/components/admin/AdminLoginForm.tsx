@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { accountApi, apiBase, getToken, setToken } from "@/lib/account-api";
+import BrandLogo from "@/components/BrandLogo";
 
 function EyeIcon({ off }: { off: boolean }) {
   return (
@@ -128,8 +129,7 @@ export function AdminLoginForm() {
   return (
     <div className="w-full">
       <div className="flex justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-transparent.png" alt="Nexlo" className="h-11 w-auto" />
+        <BrandLogo className="text-[28px]" />
       </div>
       <h1 className="mt-5 text-center text-[32px] font-extrabold tracking-tight text-[#0f1c3f]">
         Admin <span className="text-[#12c2b0]">Login</span>

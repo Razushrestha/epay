@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/LoginForm";
+import BrandLogo from "@/components/BrandLogo";
 
 export const metadata: Metadata = {
-  title: "Sign in | Nexlo",
-  description: "Sign in to your Nexlo account to bid, buy and sell.",
+  title: "Sign in | MeroAuction",
+  description: "Sign in to your MeroAuction account to bid, buy and sell.",
 };
 
 const features = [
@@ -59,15 +60,8 @@ export default function LoginPage() {
         />
 
         <div className="relative z-10 flex h-full flex-col px-10 pt-7 xl:px-14 xl:pt-8">
-          <Link href="/" aria-label="Nexlo home" className="w-fit">
-            <Image
-              src="/logo-transparent.png"
-              alt="Nexlo: Find What Comes Next."
-              width={808}
-              height={256}
-              priority
-              className="h-12 w-auto"
-            />
+          <Link href="/" aria-label="MeroAuction home" className="w-fit">
+            <BrandLogo className="text-[30px]" />
           </Link>
 
           <div className="mt-6 xl:mt-8">
@@ -78,7 +72,7 @@ export default function LoginPage() {
               Let&apos;s get you going.
             </p>
             <p className="mt-3 max-w-[360px] text-[13.5px] leading-relaxed text-[#4b566b]">
-              Sign in to your Nexlo account and explore a world of products, services and
+              Sign in to your MeroAuction account and explore a world of products, services and
               opportunities.
             </p>
           </div>
@@ -128,14 +122,8 @@ export default function LoginPage() {
         </svg>
 
         <header className="relative z-10 flex shrink-0 items-center justify-between px-5 py-4 sm:px-8 lg:justify-end">
-          <Link href="/" aria-label="Nexlo home" className="lg:hidden">
-            <Image
-              src="/logo-transparent.png"
-              alt="Nexlo"
-              width={808}
-              height={256}
-              className="h-10 w-auto"
-            />
+          <Link href="/" aria-label="MeroAuction home" className="lg:hidden">
+            <BrandLogo className="text-[26px]" />
           </Link>
           <p className="flex items-center gap-3 text-[13px] text-[#4b566b]">
             <span className="hidden sm:inline">Don&apos;t have an account?</span>

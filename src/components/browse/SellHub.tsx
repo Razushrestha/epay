@@ -13,9 +13,9 @@ const business = [
   { name: "Seller center", href: search("seller center") },
   { name: "Seller updates", href: search("seller updates") },
   { name: "Seller customer service", href: search("seller support") },
-  { name: "Nexlo managed payments", href: search("payments") },
-  { name: "Nexlo stores", href: search("stores") },
-  { name: "Nexlo fees", href: search("seller fees") },
+  { name: "MeroAuction managed payments", href: search("payments") },
+  { name: "MeroAuction stores", href: search("stores") },
+  { name: "MeroAuction fees", href: search("seller fees") },
 ];
 
 export function SellHub() {
@@ -53,7 +53,7 @@ export function SellHub() {
 
         <div className="relative flex min-h-[280px] flex-col justify-center overflow-hidden rounded-[22px] bg-[#2ec8c4] px-7 py-8 text-[#08343a] sm:px-8">
           <h2 className="max-w-[200px] text-[36px] font-extrabold leading-[1.02] tracking-tight">
-            Start selling on Nexlo
+            Start selling on MeroAuction
           </h2>
           <p className="mt-2 max-w-[200px] text-[16px] font-semibold leading-snug">
             All the resources you need to succeed as a seller.

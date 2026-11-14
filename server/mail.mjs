@@ -1,11 +1,11 @@
 import { sendSms } from "./sms.mjs";
 
 const SUBJECTS = {
-  verify: "Your Nexlo verification code",
-  login_2fa: "Your Nexlo sign-in code",
-  reset: "Your Nexlo password reset code",
-  enroll_2fa: "Your Nexlo security code",
-  change_phone: "Confirm your Nexlo phone-number change",
+  verify: "Your MeroAuction verification code",
+  login_2fa: "Your MeroAuction sign-in code",
+  reset: "Your MeroAuction password reset code",
+  enroll_2fa: "Your MeroAuction security code",
+  change_phone: "Confirm your MeroAuction phone-number change",
 };
 
 const SEND_TIMEOUT_MS = 10000;
@@ -82,7 +82,7 @@ export function classifyMailError(err) {
 }
 
 function fromAddress(domain) {
-  const fallback = `Nexlo <postmaster@${domain}>`;
+  const fallback = `MeroAuction <postmaster@${domain}>`;
   const from = String(process.env.MAILGUN_FROM || fallback).trim() || fallback;
   const host = from.match(/@([^>]+)/)?.[1]?.toLowerCase();
   const expected = String(domain).toLowerCase();
@@ -125,7 +125,7 @@ async function postMailgun(base, domain, key, fields) {
 }
 
 function codeEmailHtml(code, purpose, resetUrl) {
-  const label = SUBJECTS[purpose] ?? "Your Nexlo code";
+  const label = SUBJECTS[purpose] ?? "Your MeroAuction code";
   const link = resetUrl
     ? `<p style="margin:0 0 16px"><a href="${resetUrl}" style="display:inline-block;background:#3665f3;color:#fff;text-decoration:none;padding:12px 18px;border-radius:999px;font-weight:700">Reset your password</a></p>
   <p style="font-size:12px;color:#6b7587;margin:0 0 16px">Or paste this link: ${resetUrl}</p>`
@@ -159,10 +159,10 @@ export async function sendCodeEmail({ to, code, purpose = "verify", resetUrl }) 
   }
 
   const from = fromAddress(domain);
-  const subject = SUBJECTS[purpose] ?? "Your Nexlo code";
+  const subject = SUBJECTS[purpose] ?? "Your MeroAuction code";
   const text = resetUrl
-    ? `Reset your Nexlo password: ${resetUrl}\nThis link expires in 30 minutes. You can also use code ${code}.`
-    : `Your Nexlo code is ${code}. It expires in 10 minutes. If you requested another code, use the latest one.`;
+    ? `Reset your MeroAuction password: ${resetUrl}\nThis link expires in 30 minutes. You can also use code ${code}.`
+    : `Your MeroAuction code is ${code}. It expires in 10 minutes. If you requested another code, use the latest one.`;
   const html = codeEmailHtml(code, purpose, resetUrl);
   const fields = {
     from,
@@ -229,7 +229,7 @@ export async function deliverCode(channel, destination, code, purpose, extras = 
     return { sent: false, skipped: true, userMessage: "No email or phone to send a code to." };
   }
   if (channel === "phone") {
-    const text = `Your Nexlo code is ${code}. It expires in 10 minutes.`;
+    const text = `Your MeroAuction code is ${code}. It expires in 10 minutes.`;
     const sms = await sendSms(dest, text);
     if (sms.skipped) {
       console.warn("[mail] SMS skipped for", maskDestination(dest, "phone"));

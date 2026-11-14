@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -8,6 +7,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { accountApi } from "@/lib/account-api";
 import { canAccessNav, NAV_QUEUE_KEY, type AdminQueues } from "@/lib/staff-nav";
 import { money } from "@/components/admin/admin-ui";
+import BrandLogo from "@/components/BrandLogo";
 
 type SearchHit = {
   users: { public_id: string; email: string | null; phone: string | null; status: string; name: string }[];
@@ -158,8 +158,8 @@ export function AdminChrome({
               {navOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
             </svg>
           </button>
-          <Link href="/admin" className="shrink-0" aria-label="Nexlo admin">
-            <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" priority />
+          <Link href="/admin" className="shrink-0" aria-label="MeroAuction admin">
+            <BrandLogo className="text-[26px]" />
           </Link>
           <div className="relative mx-auto hidden min-w-0 max-w-[560px] flex-1 md:block">
             <label className="flex h-11 items-center gap-2 rounded-full border border-[#e6eef6] bg-[#f7fafd] px-4">
@@ -335,7 +335,7 @@ export function AdminChrome({
             </div>
             <p className="relative z-10 pt-10 text-[16px] font-extrabold text-[#0f1c3f]">Grow Faster</p>
             <p className="relative z-10 mt-1 max-w-[150px] text-[12px] leading-relaxed text-[#5b6780]">
-              Take your business to the next level with Nexlo.
+              Take your business to the next level with MeroAuction.
             </p>
             <Link href="/sell/create" className="relative z-10 mt-4 inline-flex h-9 items-center rounded-full bg-[#3665f3] px-4 text-[13px] font-semibold text-white shadow-[0_6px_16px_rgba(54,101,243,0.28)]">
               Upgrade Now →

@@ -30,7 +30,7 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   const mode =
     process.env.USE_PGLITE === "1" ? "PGLite (local)" : "PostgreSQL";
-  console.log(`Nexlo API listening on http://localhost:${PORT} [${mode}]`);
+  console.log(`MeroAuction API listening on http://localhost:${PORT} [${mode}]`);
   console.log(`  GET  /health`);
   console.log(`  GET  /api/v1/categories`);
   console.log(`  POST /api/v1/auth/register`);

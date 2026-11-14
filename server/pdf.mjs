@@ -4,7 +4,7 @@ function escapePdf(text) {
 
 export function buildInvoicePdf({ invoiceNumber, order, fees }) {
   const lines = [
-    `Nexlo VAT invoice ${invoiceNumber}`,
+    `MeroAuction VAT invoice ${invoiceNumber}`,
     `Order ${order.order_number}`,
     `Bill to: ${order.shipping_name || "Customer"}`,
     `Date: ${new Date(order.created_at).toISOString().slice(0, 10)}`,

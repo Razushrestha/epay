@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { CategoryMenu } from "@/components/CategoryMenu";
 import { CategoryNav } from "@/components/CategoryNav";
@@ -6,6 +5,7 @@ import { AccountLinks } from "@/components/account/AccountLinks";
 import { HeaderSearch } from "@/components/HeaderSearch";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { HeaderIcons } from "@/components/commerce/HeaderIconsGate";
+import BrandLogo from "@/components/BrandLogo";
 
 export function SiteHeader() {
   return (
@@ -37,15 +37,8 @@ export function SiteHeader() {
 
       {/* ── main bar ──────────────────────────────────── */}
       <div className="page-shell grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 pb-2.5 pt-3 md:flex md:gap-4">
-        <Link href="/" className="col-start-1 row-start-1 flex shrink-0 items-center" aria-label="Nexlo home">
-          <Image
-            src="/logo-transparent.png"
-            alt="Nexlo: Find What Comes Next."
-            width={808}
-            height={256}
-            className="h-9 w-auto sm:h-11 md:h-[48px]"
-            priority
-          />
+        <Link href="/" className="col-start-1 row-start-1 flex shrink-0 items-center" aria-label="MeroAuction home">
+          <BrandLogo className="text-[22px] sm:text-[28px] md:text-[30px]" />
         </Link>
 
         <CategoryMenu />

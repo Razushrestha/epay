@@ -132,7 +132,7 @@ export function SellerApplicationForm({
     <form onSubmit={handleSubmit} className="mt-5 space-y-7">
       {/* 1. seller type */}
       <section>
-        <Step n={1} title="Seller type" sub="Choose how you'll be selling on Nexlo." />
+        <Step n={1} title="Seller type" sub="Choose how you'll be selling on MeroAuction." />
         <div role="radiogroup" aria-label="Seller type" className="grid grid-cols-2 gap-2 rounded-2xl bg-[#eef3fa] p-1.5 sm:max-w-[360px]">
           {(["individual", "business"] as const).map((type) => (
             <label key={type} className="cursor-pointer">

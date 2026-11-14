@@ -722,7 +722,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                       <Icon name="check" className="h-3 w-3" />
                     </span>
                     <div>
-                      <p className="text-[13.5px] font-semibold text-[#0f1c3f]">This item is covered by Nexlo&apos;s Buyer Protection</p>
+                      <p className="text-[13.5px] font-semibold text-[#0f1c3f]">This item is covered by MeroAuction&apos;s Buyer Protection</p>
                       <p className="mt-0.5 text-[12.5px] text-[#5b6780]">
                         Shop with confidence.{" "}
                         <Link href="/buyer-protection" className="font-medium text-[#3665f3] hover:underline">Learn more</Link>
@@ -870,7 +870,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                       {quote.combinedAdditional ? ` · extra item ${money(quote.combinedAdditional)}` : ""}
                     </p>
                   ) : null}
-                  <p>Returns are accepted within 7 days if the item is not as described. Nexlo Buyer Protection covers eligible orders.</p>
+                  <p>Returns are accepted within 7 days if the item is not as described. MeroAuction Buyer Protection covers eligible orders.</p>
                   {isAuction ? <p>This auction ends in {countdown(endsAt, tick)}.</p> : null}
                 </div>
               ) : null}
@@ -1145,7 +1145,7 @@ export function LiveListing({ listing }: { listing: Listing }) {
                       </button>
                     ) : null}
                     <p className="mt-2 text-[11.5px] leading-snug text-[#8a94a6]">
-                      By placing a bid, you agree to Nexlo&apos;s Terms of Service and Privacy Policy.
+                      By placing a bid, you agree to MeroAuction&apos;s Terms of Service and Privacy Policy.
                     </p>
                     <ul className="mt-3 space-y-1 text-[12px] text-[#5b6780]">
                       {bids.slice(0, 6).map((b, i) => (

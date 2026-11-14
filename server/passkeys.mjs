@@ -73,7 +73,7 @@ export function webauthnConfig(req) {
     rpID = "localhost";
   }
   const origins = [...new Set([origin, headerOrigin, envOrigin].filter(Boolean))];
-  return { rpName: "Nexlo", rpID, origin, origins };
+  return { rpName: "MeroAuction", rpID, origin, origins };
 }
 
 async function saveChallenge(purpose, challenge, userId = null) {
@@ -131,7 +131,7 @@ export async function beginRegistration(req, user) {
     rpName,
     rpID,
     userName: user.email || user.phone || user.username || `user-${user.id}`,
-    userDisplayName: user.display_name || user.email || "Nexlo member",
+    userDisplayName: user.display_name || user.email || "MeroAuction member",
     userID: new Uint8Array(Buffer.from(String(user.public_id || user.id))),
     attestationType: "none",
     excludeCredentials: await listCredentialRows(user.id),
@@ -231,7 +231,7 @@ export async function finishAuthentication(req, body) {
   if (!credId) return { ok: false, error: "Passkey response was incomplete" };
   const { rows } = await query(`SELECT * FROM user_passkeys WHERE credential_id = $1`, [credId]);
   const passkey = rows[0];
-  if (!passkey) return { ok: false, error: "This passkey is not registered on Nexlo" };
+  if (!passkey) return { ok: false, error: "This passkey is not registered on MeroAuction" };
   const { origin, origins, rpID } = webauthnConfig(req);
   let verification;
   try {

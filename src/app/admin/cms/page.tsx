@@ -128,7 +128,7 @@ export default function AdminCmsPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-[26px] font-extrabold text-[#0f1c3f]">Content</h1>
-        <p className="text-[14px] text-[#6b7587]">Help pages, banners, and site rules used across Nexlo.</p>
+        <p className="text-[14px] text-[#6b7587]">Help pages, banners, and site rules used across MeroAuction.</p>
       </div>
       {error ? <p className="nexlo-alert nexlo-alert-error">{error}</p> : null}
       {notice ? <p className="nexlo-alert nexlo-alert-info">{notice}</p> : null}

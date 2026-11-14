@@ -3,12 +3,13 @@ import { Caveat } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
 import { ForgotForm } from "@/components/auth/ForgotForm";
+import BrandLogo from "@/components/BrandLogo";
 
 const script = Caveat({ subsets: ["latin"], weight: ["600", "700"] });
 
 export const metadata: Metadata = {
-  title: "Reset your password | Nexlo",
-  description: "Send a one-time code and choose a new Nexlo password.",
+  title: "Reset your password | MeroAuction",
+  description: "Send a one-time code and choose a new MeroAuction password.",
 };
 
 const features = [
@@ -45,15 +46,8 @@ export default function ForgotPage() {
 
       <section className="relative hidden h-full min-h-0 flex-col overflow-hidden lg:flex">
         <div className="relative z-10 flex min-h-0 flex-1 flex-col px-10 pt-8 xl:px-14">
-          <Link href="/" aria-label="Nexlo home" className="w-fit">
-            <Image
-              src="/logo-transparent.png"
-              alt="Nexlo: Find What Comes Next."
-              width={808}
-              height={256}
-              priority
-              className="h-12 w-auto"
-            />
+          <Link href="/" aria-label="MeroAuction home" className="w-fit">
+            <BrandLogo className="text-[30px]" />
           </Link>
 
           <div className="mt-8 flex min-h-0 flex-1 items-center gap-4 xl:mt-4 xl:gap-6">
@@ -118,8 +112,8 @@ export default function ForgotPage() {
 
       <section className="relative flex min-h-dvh flex-col overflow-y-auto lg:h-full lg:min-h-0 lg:overflow-hidden">
         <header className="relative z-10 flex shrink-0 items-center justify-between px-5 py-4 sm:px-8 lg:hidden">
-          <Link href="/" aria-label="Nexlo home">
-            <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" />
+          <Link href="/" aria-label="MeroAuction home">
+            <BrandLogo className="text-[26px]" />
           </Link>
         </header>
         <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-5 pb-6 sm:px-10">

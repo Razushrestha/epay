@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { Caveat } from "next/font/google";
-import Image from "next/image";
 import Link from "next/link";
 import { AdminLoginForm } from "@/components/admin/AdminLoginForm";
+import BrandLogo from "@/components/BrandLogo";
 
 export const metadata: Metadata = {
-  title: "Admin Login | Nexlo",
-  description: "Sign in to the Nexlo admin portal.",
+  title: "Admin Login | MeroAuction",
+  description: "Sign in to the MeroAuction admin portal.",
 };
 
 const script = Caveat({ subsets: ["latin"], weight: ["600", "700"] });
@@ -25,7 +25,7 @@ function LaptopScene() {
         <div className="flex min-h-[220px] overflow-hidden rounded-[8px]">
           <aside className="w-[108px] shrink-0 bg-[#eef3ff] px-2.5 py-3">
             <div className="mb-3 flex items-center gap-1 px-1">
-              <Image src="/logo-transparent.png" alt="" width={80} height={24} className="h-5 w-auto" />
+              <BrandLogo className="text-[11px]" />
             </div>
             {["Dashboard", "Users", "Products", "Orders", "Analytics", "Settings"].map((item, i) => (
               <p key={item} className={`rounded-md px-2 py-1 text-[8px] font-semibold ${i === 0 ? "bg-[#e8f0ff] text-[#3665f3]" : "text-[#8a94a6]"}`}>
@@ -82,8 +82,8 @@ export default function AdminLoginPage() {
       <div aria-hidden className="pointer-events-none absolute -right-20 top-10 h-[360px] w-[360px] rounded-full bg-[#e4f0ff] blur-3xl" />
 
       <section className="relative hidden flex-col px-12 pb-8 pt-10 lg:flex xl:px-16">
-        <Link href="/" className="w-fit" aria-label="Nexlo home">
-          <Image src="/logo-transparent.png" alt="Nexlo: Find What Comes Next." width={808} height={256} priority className="h-12 w-auto" />
+        <Link href="/" className="w-fit" aria-label="MeroAuction home">
+          <BrandLogo className="text-[30px]" />
         </Link>
         <p className="mt-10 text-[15px] font-semibold text-[#3665f3]">Admin Portal</p>
         <h2 className="mt-1 text-[44px] font-extrabold leading-[1.05] tracking-tight text-[#0f1c3f] xl:text-[52px]">

@@ -326,7 +326,7 @@ export async function generateKhaltiPaymentUrl(order, paymentId, headers = {}) {
     purchase_order_id: `${order.order_number}-${paymentId}`,
     purchase_order_name: `Order ${order.order_number}`,
     customer_info: {
-      name: order.shipping_name || 'Nexlo Buyer',
+      name: order.shipping_name || 'MeroAuction Buyer',
       email: 'buyer@example.com',
       phone: order.shipping_phone || '9800000000'
     }

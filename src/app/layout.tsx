@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nexlo: Find What Comes Next",
+  title: "MeroAuction: Find What Comes Next",
   description:
-    "Shop, bid, and sell in Nepal. Auctions, deals, and buyer protection on Nexlo.",
+    "Shop, bid, and sell in Nepal. Auctions, deals, and buyer protection on MeroAuction.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

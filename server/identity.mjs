@@ -599,7 +599,7 @@ async function startTwoFactorSetup(user, requestedMethod) {
       [user.id, secret],
     );
     const label = encodeURIComponent(user.email || user.phone || "nexlo");
-    return { ok: true, data: { method: "authenticator", secret, uri: `otpauth://totp/Nexlo:${label}?secret=${secret}&issuer=Nexlo` } };
+    return { ok: true, data: { method: "authenticator", secret, uri: `otpauth://totp/MeroAuction:${label}?secret=${secret}&issuer=MeroAuction` } };
   }
   const dest = user.email || user.phone;
   if (!dest) return { ok: false, error: "This account has no email or phone for a code" };

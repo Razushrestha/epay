@@ -199,7 +199,7 @@ export function LoginForm() {
       <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-[#0f1c3f]">
         Sign in to{" "}
         <span className="bg-gradient-to-r from-[#08c4a6] to-[#3665f3] bg-clip-text text-transparent">
-          Nexlo
+          MeroAuction
         </span>
       </h1>
       <p className="mt-1.5 text-[13.5px] text-[#6b7587]">

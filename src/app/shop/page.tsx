@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "Shop now | Nexlo",
+  title: "Shop now | MeroAuction",
   description: "Free shipping on top categories, tech, fashion, and collectibles.",
 };
 

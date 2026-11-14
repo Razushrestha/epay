@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { accountApi, getToken } from "@/lib/account-api";
 import { money } from "@/components/commerce/BuyShell";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function InvoicePage() {
   const params = useParams<{ id: string }>();
@@ -50,7 +50,7 @@ export default function InvoicePage() {
         <div className="nexlo-card p-6 sm:p-10 print:border-0 print:p-0 print:shadow-none">
           <div className="flex items-start justify-between gap-4 border-b border-[#e7eef6] pb-5">
             <div>
-              <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" />
+              <BrandLogo className="text-[26px]" />
               <h1 className="mt-4 text-[22px] font-extrabold text-[#0f1c3f]">VAT invoice</h1>
               <p className="mt-0.5 text-[13px] text-[#6b7587]">{data.invoiceNumber}</p>
             </div>
@@ -108,7 +108,7 @@ export default function InvoicePage() {
               <p className="mt-1 font-semibold text-[#0f1c3f]">Net to seller {money(data.fees.net_to_seller)}</p>
             </div>
           ) : null}
-          <p className="mt-8 text-[12px] text-[#8a94a6]">Nexlo holds buyer funds in escrow until delivery. VAT invoice for Nepal marketplace sales.</p>
+          <p className="mt-8 text-[12px] text-[#8a94a6]">MeroAuction holds buyer funds in escrow until delivery. VAT invoice for Nepal marketplace sales.</p>
         </div>
       </main>
     </div>

@@ -1,4 +1,4 @@
-# Nexlo
+# MeroAuction
 
 Full-stack starter with **Next.js** (React, App Router, TypeScript, Tailwind) and a small **Node.js** HTTP API.
 

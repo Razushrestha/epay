@@ -120,7 +120,7 @@ export async function addToCart(input: {
     photo_url: input.photo ?? null,
     price: parseMoney(input.price),
     quantity,
-    seller_username: input.seller || "Nexlo",
+    seller_username: input.seller || "MeroAuction",
   };
 
   if (!input.localOnly) {

@@ -66,7 +66,7 @@ export function apiUnreachableMessage(err: unknown) {
   if (err instanceof Error && err.name === "AbortError") {
     return "The request timed out. Make sure the API is running (`npm run dev:api`), then try again.";
   }
-  return "Cannot reach the Nexlo API. On this computer run `npm run dev` and `npm run dev:api` together.";
+  return "Cannot reach the MeroAuction API. On this computer run `npm run dev` and `npm run dev:api` together.";
 }
 
 export function digitsCode(value: unknown) {

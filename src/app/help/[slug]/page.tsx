@@ -10,7 +10,7 @@ const fallback: Record<string, { title: string; body: string }> = {
   faq: { title: "Frequently asked questions", body: "Bidding uses proxy bids and a soft close. Best Offer gives the seller 48 hours. Pay with eSewa or Khalti. Funds stay in escrow until delivery." },
   "buyer-protection": { title: "Buyer protection", body: "You have 30 days after delivery to open a return for not as described, damaged, or wrong item. Escrow stays frozen until the case is closed." },
   "selling-guide": { title: "Selling guide", body: "Create a listing, add photos, and publish. Ship within the handling time. Request payouts to bank, eSewa, or Khalti after funds clear." },
-  returns: { title: "Returns policy", body: "Sellers have 3 days to respond. If they stay silent the case escalates to Nexlo staff. Changed-mind returns depend on the listing." },
+  returns: { title: "Returns policy", body: "Sellers have 3 days to respond. If they stay silent the case escalates to MeroAuction staff. Changed-mind returns depend on the listing." },
 };
 
 export default function HelpArticlePage() {
@@ -35,7 +35,7 @@ export default function HelpArticlePage() {
         { label: page?.title || "Guide" },
       ]}
       title={page?.title || (error ? "Guide not found" : "Loading guide…")}
-      body="Escrow, returns, and staff review: the same rules that protect every order on Nexlo."
+      body="Escrow, returns, and staff review: the same rules that protect every order on MeroAuction."
       aside={
         <Link href="/help" className="text-[13px] font-semibold text-[#3665f3] hover:underline">
           All guides →

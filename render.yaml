@@ -48,3 +48,27 @@ services:
         sync: false
       - key: MAILGUN_API_URL
         value: https://api.mailgun.net
+
+  # Next.js website (meroauction.com). Browser calls /api/v1/* on this origin and
+  # next.config.ts rewrites them to the backend service above.
+  - type: web
+    name: meroauction-web
+    runtime: node
+    region: ohio
+    plan: starter # the free plan (512 MB) can run out of memory during `next build`
+    branch: main
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22
+      - key: NEXT_TELEMETRY_DISABLED
+        value: 1
+      # Public URL of the backend service, e.g. https://api.meroauction.com
+      - key: API_PROXY_TARGET
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

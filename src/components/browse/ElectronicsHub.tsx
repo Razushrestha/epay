@@ -11,7 +11,7 @@ const popular = [
   { name: "TV, video and home audio electronics", href: search("television") },
   { name: "Surveillance and smart home electronics", href: search("smart home") },
   { name: "Vehicle electronics and gps", href: search("vehicle electronics") },
-  { name: "Nexlo refurbished", href: search("refurbished electronics") },
+  { name: "MeroAuction refurbished", href: search("refurbished electronics") },
 ];
 
 const more = [

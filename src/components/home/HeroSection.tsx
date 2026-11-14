@@ -7,7 +7,7 @@ import { heroRightImages } from "@/lib/home-data";
 
 const slides = [
   {
-    eyebrow: "Welcome to Nexlo",
+    eyebrow: "Welcome to MeroAuction",
     title: "All your favorites in one place",
     body: "Discover great deals, unique finds and top brands from around the world.",
     cta: "Shop now",

@@ -976,7 +976,7 @@ function AccountScreen() {
       {tab === "payment" && (
         <AccountSection
           title="Payment information"
-          body="Pay at checkout with eSewa or Khalti. Funds stay in escrow until delivery. No card numbers are stored on Nexlo."
+          body="Pay at checkout with eSewa or Khalti. Funds stay in escrow until delivery. No card numbers are stored on MeroAuction."
         >
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="nexlo-card p-5">
@@ -1004,7 +1004,7 @@ function AccountScreen() {
       {tab === "donations" && (
         <AccountSection
           title="Donation preferences"
-          body="Optionally round up at checkout. The extra amount goes to the charity you pick, not to Nexlo or the seller."
+          body="Optionally round up at checkout. The extra amount goes to the charity you pick, not to MeroAuction or the seller."
         >
           <DonationPrefs />
         </AccountSection>
@@ -1288,8 +1288,8 @@ function AccountScreen() {
             </SecurityField>
 
             <SecurityField
-              title="Sign in with your Nexlo app"
-              description="Use the Nexlo app to sign in on other devices without a password."
+              title="Sign in with your MeroAuction app"
+              description="Use the MeroAuction app to sign in on other devices without a password."
               action={appSignIn ? "Turn off" : "Turn on"}
               onToggle={() => setAppSignIn((v) => !v)}
             />
@@ -1357,7 +1357,7 @@ function AccountScreen() {
 
             <SecurityField
               title="Third-party app access"
-              description="View or edit the third-party apps with access to your Nexlo account."
+              description="View or edit the third-party apps with access to your MeroAuction account."
               action="View"
               open={secPanel === "apps"}
               onToggle={() => setSecPanel(secPanel === "apps" ? null : "apps")}

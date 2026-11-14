@@ -3,12 +3,13 @@ import { Caveat } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
 import { RegisterForm } from "@/components/auth/RegisterForm";
+import BrandLogo from "@/components/BrandLogo";
 
 const script = Caveat({ subsets: ["latin"], weight: ["600", "700"] });
 
 export const metadata: Metadata = {
-  title: "Create account | Nexlo",
-  description: "Create a Nexlo account to bid, buy and sell.",
+  title: "Create account | MeroAuction",
+  description: "Create a MeroAuction account to bid, buy and sell.",
 };
 
 const features = [
@@ -49,11 +50,11 @@ export default function RegisterPage() {
         ))}
 
         <div className="relative z-10 flex h-full flex-col px-10 pt-7 xl:px-12">
-          <Link href="/" aria-label="Nexlo home" className="w-fit">
-            <Image src="/logo-transparent.png" alt="Nexlo: Find What Comes Next." width={808} height={256} priority className="h-12 w-auto" />
+          <Link href="/" aria-label="MeroAuction home" className="w-fit">
+            <BrandLogo className="text-[30px]" />
           </Link>
           <h2 className="mt-6 max-w-[340px] text-[38px] font-extrabold leading-[1.05] tracking-tight text-[#0f1c3f] xl:text-[42px]">
-            Join Nexlo and{" "}
+            Join MeroAuction and{" "}
             <span className="bg-gradient-to-r from-[#12c4b0] to-[#3665f3] bg-clip-text text-transparent">
               be part of something bigger.
             </span>
@@ -92,8 +93,8 @@ export default function RegisterPage() {
 
       <section className="relative flex h-full min-h-0 flex-col overflow-hidden">
         <header className="flex shrink-0 items-center justify-between px-5 py-3.5 sm:px-8 lg:justify-end">
-          <Link href="/" aria-label="Nexlo home" className="lg:hidden">
-            <Image src="/logo-transparent.png" alt="Nexlo" width={808} height={256} className="h-10 w-auto" />
+          <Link href="/" aria-label="MeroAuction home" className="lg:hidden">
+            <BrandLogo className="text-[26px]" />
           </Link>
           <p className="flex items-center gap-2 text-[13px] text-[#4b566b]">
             <span className="hidden sm:inline">Already have an account?</span>

@@ -164,7 +164,7 @@ export default function CartPage() {
         <PageHero
           eyebrow="Your cart"
           title="Nothing here yet"
-          body="Start shopping to fill your cart. Escrow holds payment until delivery on every Nexlo order."
+          body="Start shopping to fill your cart. Escrow holds payment until delivery on every MeroAuction order."
           cta="Continue shopping"
           href="/search"
         />
@@ -205,7 +205,7 @@ export default function CartPage() {
                     <h3 className="mt-1 text-[15px] font-bold text-[#0f1c3f]">
                       Sold by{" "}
                       {seller.seller_id < 0 || !seller.seller_username ? (
-                        <span>{seller.seller_display || seller.seller_username || "Nexlo seller"}</span>
+                        <span>{seller.seller_display || seller.seller_username || "MeroAuction seller"}</span>
                       ) : (
                         <Link href={`/seller/${seller.seller_username}`} className="nexlo-link">
                           {seller.seller_display || seller.seller_username}

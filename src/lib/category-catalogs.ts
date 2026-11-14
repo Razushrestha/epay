@@ -37,7 +37,7 @@ function p(
     verified: true,
     rating: 4.6,
     reviews: 214,
-    seller: "Nexlo Seller",
+    seller: "MeroAuction Seller",
     shipping: "Free shipping",
     format: "fixed",
     city: "Kathmandu",
@@ -79,7 +79,7 @@ const collectibles: ElecProduct[] = [
   p({ title: "Cased Baseball Display", price: 4500, was: 6200, img: "/categories/collect-ball.jpg", group: "cards", sub: "Sports cards", brand: "Diamond", seller: "CardRoom", city: "Pokhara", rating: 4.6, reviews: 155 }),
   p({ title: "Comic Issue Collection", price: 2800, was: 3600, img: "/shop/shop-comic.png", group: "cards", sub: "Non-sport cards", brand: "Ink", condition: "Used", grade: "Good", seller: "InkWell" }),
   p({ title: "Seated Explorer Figure", price: 5400, was: 7000, img: "/shop/shop-figure.png", group: "toys", sub: "Action figures", brand: "Studio", seller: "HobbyDesk", city: "Lalitpur", rating: 4.7, reviews: 88 }),
-  p({ title: "Trading Card Box", price: 3900, was: 4800, img: "/categories/collect-box.jpg", group: "cards", sub: "Card games", brand: "Nexlo Cards", condition: "New", seller: "CardRoom", rating: 4.8, reviews: 240 }),
+  p({ title: "Trading Card Box", price: 3900, was: 4800, img: "/categories/collect-box.jpg", group: "cards", sub: "Card games", brand: "MeroAuction Cards", condition: "New", seller: "CardRoom", rating: 4.8, reviews: 240 }),
 ];
 
 const sports: ElecProduct[] = [
@@ -96,9 +96,9 @@ const sports: ElecProduct[] = [
 const beauty: ElecProduct[] = [
   p({ id: 14, title: "Skincare Gift Set 5 Pieces", price: 4800, img: "/trending/beauty.png", group: "makeup", sub: "Skin care", brand: "Glow", condition: "New", seller: "GlowBar", href: "/listing/14", rating: 4.7, reviews: 366 }),
   p({ title: "Vanity Mirror Makeup Look", price: 6200, was: 7900, img: "/categories/beauty-mirror.jpg", group: "makeup", sub: "Makeup", brand: "Glow", seller: "GlowBar", rating: 4.8, reviews: 210 }),
-  p({ title: "Eau de Parfum Bottle Set", price: 5400, was: 7200, img: "/categories/beauty-perfume.jpg", group: "scent", sub: "Fragrances for women", brand: "Nexlo", seller: "ScentRoom", city: "Lalitpur", rating: 4.6, reviews: 148 }),
+  p({ title: "Eau de Parfum Bottle Set", price: 5400, was: 7200, img: "/categories/beauty-perfume.jpg", group: "scent", sub: "Fragrances for women", brand: "MeroAuction", seller: "ScentRoom", city: "Lalitpur", rating: 4.6, reviews: 148 }),
   p({ title: "Coral Lipstick", price: 900, was: 1400, img: "/categories/beauty-lipstick.jpg", group: "makeup", sub: "Makeup", brand: "Glow", condition: "New", grade: "Excellent", seller: "GlowBar", rating: 4.5, reviews: 512 }),
-  p({ title: "Men's Fragrance", price: 4600, was: 6100, img: "/categories/beauty-perfume.jpg", group: "scent", sub: "Fragrances for men", brand: "Nexlo", seller: "ScentRoom", city: "Pokhara" }),
+  p({ title: "Men's Fragrance", price: 4600, was: 6100, img: "/categories/beauty-perfume.jpg", group: "scent", sub: "Fragrances for men", brand: "MeroAuction", seller: "ScentRoom", city: "Pokhara" }),
   p({ title: "Hair Care Duo", price: 2100, was: 2800, img: "/trending/beauty.png", group: "makeup", sub: "Hair", brand: "Glow", condition: "New", seller: "SalonNepal", rating: 4.4, reviews: 97 }),
   p({ title: "Daily Vitamin Pack", price: 1600, was: 2100, img: "/categories/beauty-lipstick.jpg", group: "wellness", sub: "Vitamins", brand: "Well", condition: "New", seller: "WellHouse", rating: 4.3, reviews: 80 }),
   p({ title: "Soft Face Cream", price: 2400, was: 3200, img: "/categories/beauty-perfume.jpg", group: "makeup", sub: "Skin care", brand: "Glow", seller: "GlowBar", grade: "Very Good" }),

@@ -14,7 +14,7 @@ const popular = [
 ];
 
 const more = [
-  { name: "Luxury on Nexlo", href: search("luxury fashion") },
+  { name: "Luxury on MeroAuction", href: search("luxury fashion") },
   { name: "Watches", href: search("watches") },
   { name: "Fine jewelry", href: search("fine jewelry") },
   { name: "Bags and handbags", href: search("handbags") },

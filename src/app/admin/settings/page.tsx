@@ -16,7 +16,7 @@ type Appeal = { public_id: string; message: string; email: string; display_name:
 type Settings = { siteName: string; currency: string; country: string; supportEmail: string; maintenance: boolean };
 
 export default function AdminSettingsPage() {
-  const [settings, setSettings] = useState<Settings>({ siteName: "Nexlo", currency: "NPR", country: "Nepal", supportEmail: "", maintenance: false });
+  const [settings, setSettings] = useState<Settings>({ siteName: "MeroAuction", currency: "NPR", country: "Nepal", supportEmail: "", maintenance: false });
   const [staff, setStaff] = useState<{ public_id: string; email: string; name: string }[]>([]);
   const [kyc, setKyc] = useState<Kyc[]>([]);
   const [appeals, setAppeals] = useState<Appeal[]>([]);

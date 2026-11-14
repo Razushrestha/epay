@@ -10,16 +10,16 @@ const covered = [
 ];
 
 const steps = [
-  { n: "1", title: "Pay on Nexlo", text: "Use eSewa or Khalti. Funds sit in escrow, not with the seller." },
+  { n: "1", title: "Pay on MeroAuction", text: "Use eSewa or Khalti. Funds sit in escrow, not with the seller." },
   { n: "2", title: "Confirm delivery", text: "Mark the order received, or wait for the auto-complete window." },
   { n: "3", title: "Open a case", text: "You have 30 days after delivery. File from Resolution Center." },
-  { n: "4", title: "We hold the money", text: "Escrow stays frozen until the seller, then Nexlo staff, resolve it." },
+  { n: "4", title: "We hold the money", text: "Escrow stays frozen until the seller, then MeroAuction staff, resolve it." },
 ];
 
 const notCovered = [
   "Changed-mind returns unless the listing allows them",
   "Items you already used beyond inspecting them",
-  "Purchases paid outside Nexlo",
+  "Purchases paid outside MeroAuction",
   "Counterfeit claims that need a separate authenticity programme (not in this fee)",
 ];
 
@@ -69,7 +69,7 @@ export default function BuyerProtectionPage() {
             <li>Open the order and choose Return or open Resolution Center.</li>
             <li>Pick a reason, add photos, and say whether you want a refund.</li>
             <li>The seller has 3 days to accept or decline.</li>
-            <li>If they stay silent, Nexlo staff decide. Escrow stays frozen.</li>
+            <li>If they stay silent, MeroAuction staff decide. Escrow stays frozen.</li>
           </ol>
           <p className="mt-4 text-[13px] text-[#8a94a6]">Prepaid return labels are not included in this go-live. Arrange return shipping with the seller if a return is approved.</p>
         </div>

@@ -34,7 +34,7 @@ export async function sendSms(to, text) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token,
-        from: process.env.SMS_FROM || "NEXLO",
+        from: process.env.SMS_FROM || "MEROAUCTION",
         to: sparrowTo,
         text,
       }),

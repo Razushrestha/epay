@@ -28,7 +28,7 @@ export function BrowsePage({
           <div>
             <h1 className="text-[26px] font-extrabold tracking-tight text-[#0f1c3f] sm:text-[30px]">{title}</h1>
             <p className="mt-1 text-[13px] text-[#6b7587]">
-              {subtitle ?? `${items.length.toLocaleString()} results · Same buyer protection as the rest of Nexlo.`}
+              {subtitle ?? `${items.length.toLocaleString()} results · Same buyer protection as the rest of MeroAuction.`}
             </p>
           </div>
           <Link href="/search" className="text-[13px] font-semibold text-[#3665f3] hover:underline">

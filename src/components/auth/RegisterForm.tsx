@@ -208,7 +208,7 @@ export function RegisterForm() {
     <div className="w-full max-w-[460px] rounded-[22px] bg-white px-6 py-5 shadow-[0_18px_50px_-24px_rgba(20,48,110,0.35)] sm:px-7">
       <h1 className="text-[24px] font-extrabold tracking-tight text-[#0f1c3f]">Create your account</h1>
       <p className="mt-1 text-[13px] text-[#6b7587]">
-        Join Nexlo and start exploring a world of endless possibilities.
+        Join MeroAuction and start exploring a world of endless possibilities.
       </p>
 
       <div className="mt-4 grid grid-cols-2 gap-2.5">
@@ -463,7 +463,7 @@ export function RegisterForm() {
                 onChange={(e) => setBuyerOnly(e.target.checked)}
                 className="mt-0.5 h-4 w-4 rounded border-[#c9d2e0] accent-[#3665f3]"
               />
-              I&apos;m only interested in buying on Nexlo for now
+              I&apos;m only interested in buying on MeroAuction for now
             </label>
             <p className="text-[12.5px] leading-snug text-[#3a4458]">
               By selecting <span className="font-semibold">Create business account</span>, you agree to our{" "}
@@ -496,7 +496,7 @@ export function RegisterForm() {
             </svg>
           </span>
           <span>
-            I agree to Nexlo&apos;s{" "}
+            I agree to MeroAuction&apos;s{" "}
             <Link href="/terms" target="_blank" rel="noopener noreferrer" className={legalLinkClass} onClick={stopLabelToggle}>
               Terms of Service
             </Link>{" "}
