@@ -12,6 +12,7 @@
     "db:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
     "build": "next build",
     "start": "next start",
+    "start:all": "node scripts/start-all.mjs",
     "lint": "eslint",
     "test": "node --test server/*.test.mjs",
     "test:load": "node scripts/load-test.mjs",
