@@ -53,7 +53,7 @@
   "devDependencies": {
     "@types/qrcode": "^1.5.6",
     "concurrently": "^10.0.5",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-config-next": "^16.4.5"
   },
   "overrides": {
