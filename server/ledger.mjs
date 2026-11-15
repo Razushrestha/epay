@@ -153,16 +153,22 @@ export async function ledgerIntegrity() {
 }
 
 export async function reconcileGateways() {
+  // Only money that actually arrived counts. Pending/abandoned checkouts never reach the ledger.
   const payments = await query(
-    `SELECT gateway, COALESCE(SUM(amount),0) AS total, COUNT(*) FILTER (WHERE status = 'completed')::int AS paid
-     FROM payments GROUP BY gateway`,
+    `SELECT gateway, COALESCE(SUM(amount),0) AS total, COUNT(*)::int AS paid
+     FROM payments WHERE status = 'completed' GROUP BY gateway`,
   );
+  const pending = await query(
+    `SELECT COALESCE(SUM(amount),0) AS total, COUNT(*)::int AS n FROM payments WHERE status <> 'completed'`,
+  );
+  // Compare against cash RECEIVED (debits). Payouts and refunds are credits and are not buyer payments.
   const cash = await query(
-    `SELECT COALESCE(SUM(le.debit - le.credit),0) AS cash
+    `SELECT COALESCE(SUM(le.debit),0) AS received, COALESCE(SUM(le.credit),0) AS paid_out
      FROM ledger_entries le JOIN ledger_accounts a ON a.id = le.account_id
      WHERE a.code = 'PLATFORM_CASH'`,
   );
-  const ledgerCash = Number(cash.rows[0]?.cash || 0);
+  const ledgerCash = Number(cash.rows[0]?.received || 0);
+  const cashPaidOut = Number(cash.rows[0]?.paid_out || 0);
   const paymentTotal = payments.rows.reduce((s, r) => s + Number(r.total || 0), 0);
   const unmatched = await query(
     `SELECT COUNT(*)::int AS c FROM payments p
@@ -173,8 +179,11 @@ export async function reconcileGateways() {
     payments: payments.rows,
     paymentTotal,
     ledgerCash,
+    cashPaidOut,
+    pendingPayments: { count: Number(pending.rows[0]?.n || 0), total: Number(pending.rows[0]?.total || 0) },
+    difference: +(ledgerCash - paymentTotal).toFixed(2),
     unmatched: Number(unmatched.rows[0]?.c || 0),
-    balanced: Math.abs(paymentTotal - Math.abs(ledgerCash)) < 1,
+    balanced: Math.abs(paymentTotal - ledgerCash) < 1,
   };
   await query(
     `INSERT INTO gateway_reconcile_runs (gateway, payments_total, ledger_cash, unmatched, balanced, details)
