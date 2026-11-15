@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 const khaltiCalls = [];
+const runId = Date.now();
 let lookupStatus = "Completed";
 
 globalThis.fetch = async (input, init = {}) => {
@@ -14,7 +15,8 @@ globalThis.fetch = async (input, init = {}) => {
       JSON.stringify({
         pidx: "lookupPidxQA",
         status: lookupStatus,
-        transaction_id: lookupStatus === "Completed" ? "LOOKUPTXN001" : null,
+        // Real Khalti transaction ids are unique per payment; a fixed id would look like a replay.
+        transaction_id: lookupStatus === "Completed" ? `LOOKUPTXN${runId}` : null,
         total_amount: 192100,
         fee: 0,
         refunded: false,
@@ -61,7 +63,7 @@ test("lookup POSTs {pidx} to khalti.com and Completed marks payment completed", 
 
   const payment = await query("SELECT status, gateway_transaction_id FROM payments WHERE id = $1", [seeded.paymentId]);
   assert.equal(payment.rows[0].status, "completed");
-  assert.equal(payment.rows[0].gateway_transaction_id, "LOOKUPTXN001");
+  assert.equal(payment.rows[0].gateway_transaction_id, `LOOKUPTXN${runId}`);
 
   const order = await query("SELECT status FROM orders WHERE order_number = $1", [seeded.orderNumber]);
   assert.equal(order.rows[0].status, "paid");

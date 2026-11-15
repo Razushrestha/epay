@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 const khaltiCalls = [];
+const runId = Date.now();
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input.url;
   khaltiCalls.push({ url, method: init.method || "GET", headers: init.headers || {}, body: init.body || null });
@@ -18,8 +19,9 @@ globalThis.fetch = async (input, init = {}) => {
   }
   return {
     ok: true,
-    json: async () => ({ status: "Completed", transaction_id: "KHALTITXN001" }),
-    text: async () => JSON.stringify({ status: "Completed" }),
+    // A real lookup reports the amount paid (in paisa) and a unique transaction id.
+    json: async () => ({ status: "Completed", transaction_id: `KHALTITXN${runId}`, total_amount: 192100 }),
+    text: async () => JSON.stringify({ status: "Completed", transaction_id: `KHALTITXN${runId}`, total_amount: 192100 }),
   };
 };
 

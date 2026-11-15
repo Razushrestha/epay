@@ -4,10 +4,55 @@
  */
 
 import { query } from './db.mjs';
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { onOrderPaid } from './ledger.mjs';
 import { parseGatewayPid, publicApi, publicFrontend } from './public-urls.mjs';
 import { ensureCheckoutSessionTables } from './cart.mjs';
+
+/** Parse an amount from a gateway ("1,921.0", "1921") into a number, or NaN. */
+export function parseGatewayAmount(value) {
+  const n = Number(String(value ?? '').replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : NaN;
+}
+
+export function sameAmount(a, b) {
+  return Math.abs(Number(a) - Number(b)) < 0.01;
+}
+
+/** The amounts our own eSewa form sends: the order total, or total minus tax (the `amt` field). */
+export function esewaAcceptableAmounts(row) {
+  const total = Number(row.total_amount) || 0;
+  const tax = Number(row.tax_amount) || 0;
+  const list = [total, Number((total - tax).toFixed(2)), Number(row.amount) || 0];
+  return list.filter((n, i) => n > 0 && list.indexOf(n) === i);
+}
+
+/** Sandbox fallbacks and public test keys are for testing only. PAYMENTS_LIVE=1 turns them off. */
+function sandboxFallbackAllowed() {
+  return process.env.PAYMENTS_LIVE !== '1';
+}
+
+/** True if this gateway transaction already completed a DIFFERENT payment (replay of one real payment). */
+async function transactionUsedElsewhere(gateway, transactionId, paymentId) {
+  if (!transactionId) return false;
+  const used = await query(
+    `SELECT 1 FROM payments
+     WHERE gateway = $1 AND gateway_transaction_id = $2 AND id <> $3 AND status = 'completed' LIMIT 1`,
+    [gateway, String(transactionId), paymentId],
+  );
+  return Boolean(used.rows[0]);
+}
+
+async function loadGatewayPayment(paymentId, gateway) {
+  if (!/^\d+$/.test(String(paymentId ?? ''))) return null;
+  const found = await query(
+    `SELECT p.id, p.amount, p.status, p.order_id, o.order_number, o.total_amount, o.tax_amount
+     FROM payments p JOIN orders o ON o.id = p.order_id
+     WHERE p.id = $1 AND p.gateway = $2`,
+    [paymentId, gateway],
+  );
+  return found.rows[0] || null;
+}
 
 async function markOrderPaid(orderNumber, notes) {
   const found = await query(
@@ -100,7 +145,11 @@ export async function handlePayments(req, method, urlPath, headers, body, ipAddr
       if (!body?.pidx) {
         return { status: 400, body: { error: 'pidx is required' } };
       }
-      return { status: 200, body: await confirmKhaltiLookup(body.pidx, body.purchase_order_id) };
+      const confirmed = await confirmKhaltiLookup(body.pidx);
+      return {
+        status: 200,
+        body: { verified: confirmed.verified, status: confirmed.status, order_number: confirmed.order_number },
+      };
     }
 
     return { status: 404, body: { error: 'Not found' } };
@@ -301,7 +350,7 @@ async function postKhalti(url, body, fallbackUrl) {
   console.log('[khalti] POST', url);
   let response = await fetch(url, { method: 'POST', headers, body: payload });
   let raw = await response.text();
-  if (!response.ok && fallbackUrl && (response.status === 401 || response.status === 403)) {
+  if (!response.ok && fallbackUrl && sandboxFallbackAllowed() && (response.status === 401 || response.status === 403)) {
     console.log('[khalti] POST fallback', fallbackUrl);
     response = await fetch(fallbackUrl, { method: 'POST', headers, body: payload });
     raw = await response.text();
@@ -388,7 +437,6 @@ export async function handleEsewaCallback(params) {
   let oid = params.get('oid') || params.get('pid');
   let refId = params.get('refId') || params.get('ref_id') || params.get('rid') || params.get('transaction_code');
   let amt = params.get('amt') || params.get('amount') || params.get('total_amount');
-  const scd = params.get('scd') || esewaMerchantCode();
   const encoded = params.get('data');
   if (encoded && (!oid || !refId)) {
     try {
@@ -409,40 +457,46 @@ export async function handleEsewaCallback(params) {
     return redirectPaymentCancelled(frontend, found.paymentId);
   }
 
-  const verified = await verifyEsewaPayment(amt, refId, oid, scd);
-
-  if (verified) {
-    if (found.paymentId) {
+  // Everything below is checked against OUR records, never against what the URL claims.
+  const payment = found.paymentId ? await loadGatewayPayment(found.paymentId, 'esewa') : null;
+  const failWith = async (reason) => {
+    if (payment) {
       await query(
-        `UPDATE payments
-         SET status = 'completed', gateway_transaction_id = $1,
-             completed_at = NOW(), gateway_response = $2
-         WHERE id = $3`,
-        [refId, JSON.stringify({ amt, refId, oid }), found.paymentId],
+        `UPDATE payments SET status = 'failed', failed_at = NOW(), failure_reason = $2
+         WHERE id = $1 AND status = 'pending'`,
+        [payment.id, reason],
       );
     }
-    await markOrderPaid(found.orderNumber, 'Payment successful via eSewa');
-    const refQuery = refId ? `&ref=${encodeURIComponent(refId)}` : '';
-    return {
-      status: 302,
-      headers: { Location: `${frontend}/order/${found.orderNumber}?success=true${refQuery}` },
-      body: {},
-    };
+    return { status: 302, headers: { Location: `${frontend}/payment/failed` }, body: {} };
+  };
+
+  if (!payment || payment.order_number !== found.orderNumber) {
+    return failWith('Payment reference not recognised');
+  }
+  const paidAmount = parseGatewayAmount(amt);
+  if (!esewaAcceptableAmounts(payment).some((expected) => sameAmount(expected, paidAmount))) {
+    return failWith('Amount did not match the order');
+  }
+  if (await transactionUsedElsewhere('esewa', refId, payment.id)) {
+    return failWith('Transaction already used for another payment');
   }
 
-  if (found.paymentId) {
-    await query(
-      `UPDATE payments
-       SET status = 'failed', failed_at = NOW(),
-           failure_reason = 'Payment verification failed'
-       WHERE id = $1`,
-      [found.paymentId],
-    );
-  }
+  // The merchant code always comes from our config, never from the request.
+  const verified = await verifyEsewaPayment(amt, refId, oid, esewaMerchantCode());
+  if (!verified) return failWith('Payment verification failed');
 
+  await query(
+    `UPDATE payments
+     SET status = 'completed', gateway_transaction_id = $1,
+         completed_at = COALESCE(completed_at, NOW()), gateway_response = $2
+     WHERE id = $3`,
+    [refId, JSON.stringify({ amt, refId, oid }), payment.id],
+  );
+  await markOrderPaid(payment.order_number, 'Payment successful via eSewa');
+  const refQuery = refId ? `&ref=${encodeURIComponent(refId)}` : '';
   return {
     status: 302,
-    headers: { Location: `${frontend}/payment/failed` },
+    headers: { Location: `${frontend}/order/${payment.order_number}?success=true${refQuery}` },
     body: {},
   };
 }
@@ -558,26 +612,31 @@ export async function verifyKhaltiPayment(pidx) {
   };
 }
 
-async function findKhaltiPayment(pidx, purchaseOrderId) {
-  const fromPid = parseGatewayPid(purchaseOrderId);
-  if (fromPid.paymentId) return fromPid;
+async function findKhaltiPayment(pidx) {
   const byPidx = await query(
-    `SELECT p.id, o.order_number
+    `SELECT p.id, p.amount, p.status, o.order_number
      FROM payments p
      JOIN orders o ON o.id = p.order_id
      WHERE p.gateway = 'khalti' AND p.gateway_response->>'pidx' = $1
      ORDER BY p.id DESC LIMIT 1`,
     [pidx],
   );
-  if (byPidx.rows[0]) {
-    return { paymentId: byPidx.rows[0].id, orderNumber: byPidx.rows[0].order_number };
-  }
-  return { paymentId: null, orderNumber: fromPid.orderNumber || null };
+  return byPidx.rows[0] || null;
 }
 
-export async function confirmKhaltiLookup(pidx, purchaseOrderId) {
+export async function confirmKhaltiLookup(pidx) {
+  // Pick the payment by the pidx WE stored when it was started. An order number sent in the request
+  // is never trusted, otherwise a cheap real payment could be used to mark an expensive order paid.
+  const payment = await findKhaltiPayment(pidx);
+  if (!payment) {
+    return { verified: false, status: null, transaction_id: null, payment_id: null, order_number: null, lookup: null };
+  }
+
   const verified = await verifyKhaltiPayment(pidx);
-  const found = await findKhaltiPayment(pidx, purchaseOrderId);
+  const expectedPaisa = Math.round(Number(payment.amount) * 100);
+  const amountMatches = Number(verified.lookup?.total_amount) === expectedPaisa;
+  const reused = verified.ok ? await transactionUsedElsewhere('khalti', verified.transaction_id, payment.id) : false;
+  const ok = Boolean(verified.ok && amountMatches && !reused);
   const payload = {
     pidx,
     lookup_url: 'https://khalti.com/api/v2/epayment/lookup/',
@@ -585,36 +644,33 @@ export async function confirmKhaltiLookup(pidx, purchaseOrderId) {
     lookup: verified.lookup,
     status: verified.status,
     transaction_id: verified.transaction_id,
+    amount_matches: amountMatches,
   };
 
-  if (found.paymentId) {
-    if (verified.ok) {
-      await query(
-        `UPDATE payments
-         SET status = 'completed',
-             gateway_transaction_id = COALESCE($1, gateway_transaction_id),
-             completed_at = COALESCE(completed_at, NOW()),
-             gateway_response = $2
-         WHERE id = $3`,
-        [verified.transaction_id, JSON.stringify(payload), found.paymentId],
-      );
-      if (found.orderNumber) {
-        await markOrderPaid(found.orderNumber, 'Payment successful via Khalti lookup');
-      }
-    } else {
-      await query(
-        `UPDATE payments SET gateway_response = $1 WHERE id = $2 AND status != 'completed'`,
-        [JSON.stringify(payload), found.paymentId],
-      );
-    }
+  if (ok) {
+    await query(
+      `UPDATE payments
+       SET status = 'completed',
+           gateway_transaction_id = COALESCE($1, gateway_transaction_id),
+           completed_at = COALESCE(completed_at, NOW()),
+           gateway_response = $2
+       WHERE id = $3`,
+      [verified.transaction_id, JSON.stringify(payload), payment.id],
+    );
+    await markOrderPaid(payment.order_number, 'Payment successful via Khalti lookup');
+  } else {
+    await query(
+      `UPDATE payments SET gateway_response = $1 WHERE id = $2 AND status != 'completed'`,
+      [JSON.stringify(payload), payment.id],
+    );
   }
 
   return {
-    verified: Boolean(verified.ok && found.paymentId),
+    verified: ok,
     status: verified.status,
     transaction_id: verified.transaction_id,
-    payment_id: found.paymentId,
-    order_number: found.orderNumber,
+    payment_id: payment.id,
+    order_number: payment.order_number,
     lookup: verified.lookup,
   };
 }
@@ -632,7 +688,9 @@ export function webhookSignatureValid(gateway, payload, headers = {}) {
   const sig = headers['x-khalti-signature'] || headers['x-webhook-signature'] || headers.signature;
   if (!sig) return { ok: false, reason: 'signature_missing' };
   const expected = createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
-  if (String(sig) === expected) return { ok: true };
+  const given = Buffer.from(String(sig));
+  const wanted = Buffer.from(expected);
+  if (given.length === wanted.length && timingSafeEqual(given, wanted)) return { ok: true };
   return { ok: false, reason: 'mismatch' };
 }
 
@@ -691,7 +749,26 @@ async function processKhaltiWebhook(payload) {
     }
   }
 
-  if (/^completed$/i.test(String(status || '')) && found.paymentId) {
+  // Bind the event to a real Khalti payment of ours and to the amount we asked for.
+  let amountOk = true;
+  if (found.paymentId) {
+    const known = /^\d+$/.test(String(found.paymentId))
+      ? await query(
+          `SELECT p.amount, o.order_number FROM payments p JOIN orders o ON o.id = p.order_id
+           WHERE p.id = $1 AND p.gateway = 'khalti'`,
+          [found.paymentId],
+        )
+      : { rows: [] };
+    if (!known.rows[0]) {
+      found = { paymentId: null, orderNumber: null };
+    } else {
+      found = { paymentId: found.paymentId, orderNumber: known.rows[0].order_number };
+      const sent = payload.amount ?? payload.total_amount;
+      if (sent != null) amountOk = Number(sent) === Math.round(Number(known.rows[0].amount) * 100);
+    }
+  }
+
+  if (/^completed$/i.test(String(status || '')) && found.paymentId && amountOk) {
     await query(
       `UPDATE payments
        SET status = 'completed', gateway_transaction_id = $1, completed_at = COALESCE(completed_at, NOW())

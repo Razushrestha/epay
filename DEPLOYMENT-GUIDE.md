@@ -49,8 +49,8 @@ DATABASE_URL=postgresql://neondb_owner:npg_...@ep-divine-credit-b5zophl9-pooler.
 
 #### **Object Storage (Required)**
 ```bash
-AWS_ACCESS_KEY_ID=nak_live_3a1a29f79a914fd6b12042657b840292
-AWS_SECRET_ACCESS_KEY=nsk_live_51cf0e0bf9f7b18b43168846a0702e6ba0f4eb9f17a84e828ae7deb589c8bca0
+AWS_ACCESS_KEY_ID=your_storage_access_key_id
+AWS_SECRET_ACCESS_KEY=your_storage_secret_access_key
 AWS_ENDPOINT_URL_S3=https://br-cool-surf-b5ge95du.storage.c-7.us-east-2.aws.neon.tech
 AWS_REGION=us-east-2
 ```

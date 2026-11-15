@@ -13,6 +13,33 @@ const KNOWN_WEAK_SECRETS = new Set([
   "changeme",
 ]);
 
+/** Public sandbox values from the eSewa/Khalti docs. Anyone can forge requests signed with these. */
+const KNOWN_SANDBOX_PAYMENT_VALUES = new Set(["live_secret_key_68791341fdd94846a146f0457ff7b455", "8gBm/:&EnhH.1/q", "EPAYTEST"]);
+
+/**
+ * Set PAYMENTS_LIVE=1 when you start taking real money. The API then refuses to start while any
+ * payment setting is still a public sandbox default.
+ */
+export function paymentsLiveProblems(env = process.env) {
+  if (env.PAYMENTS_LIVE !== "1") return [];
+  const problems = [];
+  const need = (name, why) => {
+    const value = String(env[name] || "");
+    if (!value || KNOWN_SANDBOX_PAYMENT_VALUES.has(value)) problems.push(`${name} must be your real value (${why})`);
+  };
+  need("KHALTI_SECRET_KEY", "the sandbox key is public");
+  need("ESEWA_SECRET_KEY", "the sandbox secret is public");
+  need("ESEWA_MERCHANT_CODE", "EPAYTEST is the sandbox merchant");
+  for (const name of ["ESEWA_URL", "ESEWA_VERIFY_URL"]) {
+    const value = String(env[name] || "");
+    if (!value || /rc-epay|uat\.|dev\.khalti/i.test(value)) problems.push(`${name} must point at the live eSewa service`);
+  }
+  for (const name of ["KHALTI_API_URL", "KHALTI_VERIFY_URL"]) {
+    if (/dev\.khalti/i.test(String(env[name] || ""))) problems.push(`${name} must not point at the Khalti sandbox`);
+  }
+  return problems;
+}
+
 export function productionConfigProblems(env = process.env) {
   const problems = [];
   const jwt = String(env.JWT_SECRET || env.SESSION_SECRET || "");
@@ -28,6 +55,7 @@ export function productionConfigProblems(env = process.env) {
   if (!String(env.CORS_ORIGIN || "").trim()) problems.push("CORS_ORIGIN must list your frontend origin(s)");
   if (env.ALLOW_DEMO_SOCIAL === "1") problems.push("ALLOW_DEMO_SOCIAL=1 lets anyone sign in with a made-up email");
   if (env.ALLOW_STATIC_OTP === "1") problems.push("ALLOW_STATIC_OTP=1 accepts a fixed, publicly known verification code");
+  problems.push(...paymentsLiveProblems(env));
   return problems;
 }
 

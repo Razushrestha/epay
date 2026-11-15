@@ -67,4 +67,13 @@ test("production config rejects default/weak secrets and wildcard CORS", () => {
       /ALLOW_STATIC_OTP/.test(p),
     ),
   );
+  assert.deepEqual(
+    productionConfigProblems({
+      JWT_SECRET: strong,
+      CORS_ORIGIN: "https://s.example",
+      ALLOW_STATIC_OTP: "0",
+      ALLOW_DEMO_SOCIAL: "0",
+    }),
+    [],
+  );
 });

@@ -8,6 +8,9 @@ const { query, initDb } = await import("./db.mjs");
 test("multi-seller checkout creates two orders linked by one session", async () => {
   await initDb();
   await query(`DELETE FROM cart_items WHERE user_id = 145`);
+  // Earlier runs sell these fixtures out; restock them so the test does not depend on leftover inventory.
+  await query(`DELETE FROM stock_reservations WHERE listing_id IN (21, 63)`);
+  await query(`UPDATE listings SET quantity = GREATEST(quantity, 5) WHERE id IN (21, 63)`);
   const listings = await query(
     `SELECT id, seller_id, price FROM listings WHERE id IN (21, 63)`,
   );
