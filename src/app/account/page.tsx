@@ -18,6 +18,7 @@ import { RecentlyViewed } from "@/components/browse/RecentlyViewed";
 import { CollectionsBoard } from "@/components/account/CollectionsBoard";
 import { FollowedSellers } from "@/components/account/FollowedSellers";
 import { PasskeyManager } from "@/components/account/PasskeyManager";
+import { LocalQrCode } from "@/components/auth/LocalQrCode";
 
 type User = {
   id: string;
@@ -1261,14 +1262,7 @@ function AccountScreen() {
                 }}>Use email or phone code</button>
               </div>
               {otpUri ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt="Authenticator QR code"
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(otpUri)}`}
-                  width={180}
-                  height={180}
-                  className="mt-3 rounded-xl border border-[#e3e8f0] bg-white p-2"
-                />
+                <LocalQrCode value={otpUri} className="mt-3 rounded-xl border border-[#e3e8f0] bg-white p-2" />
               ) : null}
               {secret ? <p className="mt-3 break-all rounded-lg bg-[#f6f8fb] px-3 py-2 font-mono text-[13px]">{secret}</p> : null}
               <form className="mt-3 flex max-w-md gap-2" onSubmit={async (e) => {

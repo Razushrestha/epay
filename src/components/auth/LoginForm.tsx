@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiBase, apiUnreachableMessage, setToken } from "@/lib/account-api";
+import { LocalQrCode } from "@/components/auth/LocalQrCode";
 import { SocialSignIn, type SocialChallenge } from "@/components/auth/SocialSignIn";
 import { authenticatePasskey, passkeysSupported } from "@/lib/webauthn";
 
@@ -258,14 +259,7 @@ export function LoginForm() {
             </button>
           </div>
           {otpUri ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt="Authenticator QR code"
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(otpUri)}`}
-              width={180}
-              height={180}
-              className="rounded-xl border border-[#e3e8f0] bg-white p-2"
-            />
+            <LocalQrCode value={otpUri} className="rounded-xl border border-[#e3e8f0] bg-white p-2" />
           ) : null}
           {secret ? <p className="break-all rounded-lg bg-[#f6f8fb] px-3 py-2 font-mono text-[13px]">{secret}</p> : null}
           {enrollMethod ? (

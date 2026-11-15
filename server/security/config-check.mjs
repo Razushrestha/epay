@@ -27,6 +27,7 @@ export function productionConfigProblems(env = process.env) {
   if (cors.includes("*")) problems.push("CORS_ORIGIN must not be '*' in production");
   if (!String(env.CORS_ORIGIN || "").trim()) problems.push("CORS_ORIGIN must list your frontend origin(s)");
   if (env.ALLOW_DEMO_SOCIAL === "1") problems.push("ALLOW_DEMO_SOCIAL=1 lets anyone sign in with a made-up email");
+  if (env.ALLOW_STATIC_OTP === "1") problems.push("ALLOW_STATIC_OTP=1 accepts a fixed, publicly known verification code");
   return problems;
 }
 

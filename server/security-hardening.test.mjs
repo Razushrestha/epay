@@ -62,4 +62,9 @@ test("production config rejects default/weak secrets and wildcard CORS", () => {
   assert.ok(productionConfigProblems({ JWT_SECRET: "nexlo-dev-jwt", CORS_ORIGIN: "https://s.example" }).length > 0);
   assert.ok(productionConfigProblems({ JWT_SECRET: strong, CORS_ORIGIN: "*" }).some((p) => /CORS_ORIGIN/.test(p)));
   assert.ok(productionConfigProblems({ JWT_SECRET: strong, CORS_ORIGIN: "https://s.example", ALLOW_DEMO_SOCIAL: "1" }).length > 0);
+  assert.ok(
+    productionConfigProblems({ JWT_SECRET: strong, CORS_ORIGIN: "https://s.example", ALLOW_STATIC_OTP: "1" }).some((p) =>
+      /ALLOW_STATIC_OTP/.test(p),
+    ),
+  );
 });

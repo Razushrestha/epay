@@ -27,7 +27,30 @@ const remotePatterns = [
   hostPattern(process.env.AWS_ENDPOINT_URL_S3),
 ].filter(Boolean) as { protocol: "http" | "https"; hostname: string; pathname?: `/${string}` }[];
 
+/**
+ * Content-Security-Policy for the website (production only: dev hot reload needs eval/websockets).
+ * Next.js emits inline bootstrap scripts, so script-src keeps 'unsafe-inline'. This policy still blocks
+ * plugins, <base> hijacking, framing by other sites, and data leaving to unlisted hosts via fetch/XHR.
+ * Hosts below are the social sign-in providers used by SocialSignIn.tsx.
+ */
+const cspDirectives = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://appleid.cdn-apple.com https://connect.facebook.net",
+  "style-src 'self' 'unsafe-inline' https://accounts.google.com",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://graph.facebook.com https://www.facebook.com https://appleid.apple.com",
+  "frame-src 'self' https://accounts.google.com https://appleid.apple.com https://www.facebook.com https://staticxx.facebook.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'self'",
+  "upgrade-insecure-requests",
+].join("; ");
+
 const securityHeaders = [
+  ...(process.env.NODE_ENV === "production"
+    ? [{ key: "Content-Security-Policy", value: cspDirectives }]
+    : []),
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
