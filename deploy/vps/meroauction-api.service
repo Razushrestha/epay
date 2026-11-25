@@ -1,0 +1,29 @@
+[Unit]
+Description=MeroAuction API (Node.js)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=meroauction
+Group=meroauction
+WorkingDirectory=/var/www/meroauction/app
+EnvironmentFile=/etc/meroauction/api.env
+ExecStart=/usr/bin/node server/index.mjs
+Restart=always
+RestartSec=3
+# The API also runs the background jobs (auction closing, e-mails) in this same process.
+
+# Sandboxing: the API can only write to its data folders.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/meroauction
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

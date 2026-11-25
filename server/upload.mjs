@@ -9,11 +9,23 @@ import { randomBytes } from 'node:crypto';
 import { query } from './db.mjs';
 import { Files } from 'files-sdk';
 import { neon } from 'files-sdk/neon';
+import { fs as fsAdapter } from 'files-sdk/fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { publicObjectUrl } from './cdn.mjs';
 
-// Neon Object Storage configuration
-const storage = new Files({ 
-  adapter: neon({ bucket: 'uploads' }) 
+// Storage backend:
+//   STORAGE_DRIVER=fs  -> files live on this server's disk under UPLOAD_DIR (VPS hosting).
+//                         A web server (nginx) must serve that folder at /uploads/.
+//                         Leave AWS_ENDPOINT_URL_S3 and CDN_PUBLIC_URL unset so URLs stay /uploads/...
+//   otherwise          -> Neon Object Storage (S3-compatible), the original behaviour.
+const uploadRoot =
+  process.env.UPLOAD_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '.data', 'uploads');
+const storage = new Files({
+  adapter:
+    process.env.STORAGE_DRIVER === 'fs'
+      ? fsAdapter({ root: uploadRoot })
+      : neon({ bucket: 'uploads' }),
 });
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB

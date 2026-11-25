@@ -1,0 +1,28 @@
+[Unit]
+Description=MeroAuction website (Next.js)
+After=network-online.target meroauction-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=meroauction
+Group=meroauction
+WorkingDirectory=/var/www/meroauction/app
+EnvironmentFile=/etc/meroauction/web.env
+# Listens on localhost only. nginx is the only public entrance.
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -p 3000 -H 127.0.0.1
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+# Next.js writes its image/page cache here.
+ReadWritePaths=/var/www/meroauction/app/.next
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
