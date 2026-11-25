@@ -20,7 +20,7 @@ Server layout
 | `/var/lib/meroauction/data` | KYC documents and appeal files (private, never served by nginx) |
 | `/var/backups/meroauction` | nightly backups, 14 days |
 
-What you need: a Namecheap VPS with **at least 2 GB RAM**, **Ubuntu 24.04 LTS**, no cPanel (choose the self-managed option).
+What you need: a Namecheap VPS with **at least 2 GB RAM**, no cPanel. **Ubuntu 24.04 LTS** is the best tested choice; **AlmaLinux 9** (or Rocky 9) also works. Check yours with `cat /etc/os-release`.
 Namecheap emails you the server IP and the `root` password.
 
 ---
@@ -33,7 +33,8 @@ The server clones the repo, so commit and push the `deploy/vps` folder, `server/
 
 ```bash
 ssh root@YOUR_SERVER_IP
-apt-get update && apt-get install -y git
+apt-get update && apt-get install -y git      # Ubuntu
+# dnf install -y git                          # AlmaLinux / Rocky (use this line instead)
 git clone https://github.com/Razushrestha/epay.git /root/epay
 bash /root/epay/deploy/vps/setup-server.sh
 ```
@@ -62,6 +63,7 @@ scp -r .data\neon-uploads-export\* root@YOUR_SERVER_IP:/var/lib/meroauction/uplo
 ```bash
 chown -R meroauction:meroauction /var/lib/meroauction/uploads
 find /var/lib/meroauction/uploads -type f | wc -l     # expect 95
+restorecon -R /var/lib/meroauction/uploads             # AlmaLinux only (SELinux label so nginx can read the files)
 ```
 
 ## 4. Copy the database from Neon (on the server)
@@ -114,7 +116,7 @@ certbot --nginx -d meroauction.com -d www.meroauction.com --redirect -m you@exam
 ```
 
 Before the switch, re-run step 4 on an emptied database so the copy is fresh:
-`systemctl stop meroauction-api meroauction-web; sudo -u postgres dropdb meroauction; sudo -u postgres createdb -O meroauction meroauction`, then step 4 again, then `deploy.sh`.
+`systemctl stop meroauction-api meroauction-web; runuser -u postgres -- dropdb meroauction; runuser -u postgres -- createdb -O meroauction meroauction`, then step 4 again, then `deploy.sh`.
 
 **Rollback:** set the `A` records back to the old Render target. Neon is untouched.
 
@@ -133,15 +135,15 @@ Log in with a key, then turn off passwords:
 
 ```bash
 # on your PC:  ssh-copy-id root@YOUR_SERVER_IP     (or add your public key to /root/.ssh/authorized_keys)
-cat > /etc/ssh/sshd_config.d/99-hardening.conf <<'EOF'
+cat > /etc/ssh/sshd_config.d/00-hardening.conf <<'EOF'
 PasswordAuthentication no
 PermitRootLogin prohibit-password
 EOF
-sshd -t && systemctl restart ssh
+sshd -t && (systemctl restart sshd 2>/dev/null || systemctl restart ssh)
 ```
 
 Keep your current session open and test a new login in a second window before closing it.
-Already in place: firewall (22, 80, 443 only), fail2ban, automatic security updates, database on localhost, services sandboxed, API and site bound to localhost.
+The file is named `00-` so it wins over other SSH settings files (SSH uses the first value it finds). Already in place: firewall (22, 80, 443 only), fail2ban, automatic security updates, database on localhost, services sandboxed, API and site bound to localhost.
 
 ## 9. Backups
 
@@ -153,7 +155,7 @@ scp -r root@YOUR_SERVER_IP:/var/backups/meroauction C:\Backups\meroauction
 ```
 
 The backups contain personal documents; keep that copy private.
-Restore the database: `sudo -u postgres dropdb meroauction; sudo -u postgres createdb -O meroauction meroauction; pg_restore --no-owner -d "postgresql://meroauction:PASSWORD@127.0.0.1/meroauction" db-XXXX.dump`.
+Restore the database: `runuser -u postgres -- dropdb meroauction; runuser -u postgres -- createdb -O meroauction meroauction; pg_restore --no-owner -d "postgresql://meroauction:PASSWORD@127.0.0.1/meroauction" db-XXXX.dump`.
 
 ## 10. Updating the site later
 

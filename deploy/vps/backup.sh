@@ -6,13 +6,14 @@
 # copy /var/backups/meroauction somewhere else too (see the guide, "Off-server copy").
 set -euo pipefail
 
+export PATH="/usr/pgsql-18/bin:$PATH"   # AlmaLinux installs PostgreSQL tools here
 DEST="/var/backups/meroauction"
 KEEP_DAYS="${KEEP_DAYS:-14}"
 STAMP="$(date +%Y%m%d-%H%M)"
 umask 077
 mkdir -p "$DEST"
 
-sudo -u postgres pg_dump --format=custom meroauction > "$DEST/db-$STAMP.dump"
+(cd /tmp && runuser -u postgres -- pg_dump --format=custom meroauction) > "$DEST/db-$STAMP.dump"
 tar -czf "$DEST/files-$STAMP.tar.gz" -C /var/lib/meroauction uploads data
 
 # Make sure the dump can be read back before deleting old ones.

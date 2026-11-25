@@ -4,7 +4,7 @@
 # Steps: pull code -> install -> database migrations -> build website -> restart -> health check.
 set -euo pipefail
 
-[ "$(id -u)" -eq 0 ] || { echo "Run as root (sudo -i)."; exit 1; }
+[ "$(id -u)" -eq 0 ] || { echo "Run as root."; exit 1; }
 
 APP_USER="meroauction"
 APP_DIR="/var/www/meroauction/app"
@@ -12,7 +12,8 @@ BRANCH="${BRANCH:-main}"
 cd "$APP_DIR"
 
 say() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
-as_app() { sudo -u "$APP_USER" bash -c "$*"; }
+# runuser (not sudo): works on Ubuntu and AlmaLinux. HOME is set so npm can use its cache.
+as_app() { runuser -u "$APP_USER" -- env HOME="/var/www/meroauction" bash -c "$*"; }
 
 say "Pull latest code ($BRANCH)"
 as_app "cd $APP_DIR && git fetch --quiet origin $BRANCH && git reset --hard origin/$BRANCH"

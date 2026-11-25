@@ -10,9 +10,10 @@
 # Neon is only read. Nothing is changed or deleted there.
 set -euo pipefail
 
-[ "$(id -u)" -eq 0 ] || { echo "Run as root (sudo -i)."; exit 1; }
+[ "$(id -u)" -eq 0 ] || { echo "Run as root."; exit 1; }
 : "${NEON_URL:?Set NEON_URL to the Neon connection string}"
 
+export PATH="/usr/pgsql-18/bin:$PATH"   # AlmaLinux installs PostgreSQL tools here
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="/etc/meroauction/api.env"
 DUMP="/root/neon-$(date +%Y%m%d-%H%M).dump"
@@ -26,7 +27,7 @@ say() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 existing="$(psql "$LOCAL_URL" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")"
 if [ "$existing" != "0" ]; then
   echo "The local database already has $existing tables. Refusing to overwrite."
-  echo "To start over:  sudo -u postgres dropdb meroauction && sudo -u postgres createdb -O meroauction meroauction"
+  echo "To start over:  runuser -u postgres -- dropdb meroauction && runuser -u postgres -- createdb -O meroauction meroauction"
   exit 1
 fi
 
