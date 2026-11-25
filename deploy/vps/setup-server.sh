@@ -56,6 +56,7 @@ else
   dnf -y install certbot python3-certbot-nginx fail2ban
   dnf -y install fail2ban-firewalld || true
   systemctl enable --now crond
+  systemctl enable --now certbot-renew.timer   # AlmaLinux does not start certificate renewal by itself
 fi
 
 say "Swap (2 GB) - the website build needs the extra memory on small servers"

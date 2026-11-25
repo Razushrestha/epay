@@ -109,7 +109,7 @@ In Namecheap, **Domain List > Manage > Advanced DNS**:
 | **Keep** | every `MX`, `TXT` (SPF, DKIM, DMARC) and the `resend._domainkey` record. They make e-mail work |
 
 If the domain does not use Namecheap's own nameservers, change the records where its DNS is hosted.
-When `dig +short meroauction.com` shows your server IP, issue the certificate (it also renews itself):
+When `dig +short meroauction.com` shows your server IP, issue the certificate (it also renews itself; on AlmaLinux make sure the timer runs: `systemctl enable --now certbot-renew.timer`):
 
 ```bash
 certbot --nginx -d meroauction.com -d www.meroauction.com --redirect -m you@example.com --agree-tos
