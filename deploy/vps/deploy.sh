@@ -19,7 +19,8 @@ say "Pull latest code ($BRANCH)"
 as_app "cd $APP_DIR && git fetch --quiet origin $BRANCH && git reset --hard origin/$BRANCH"
 
 say "Install dependencies"
-as_app "cd $APP_DIR && npm ci --no-audit --no-fund"
+# onnxruntime-node (used for optional background removal) tries to download GPU files that do not exist; skip them. The CPU version is bundled.
+as_app "cd $APP_DIR && npm_config_onnxruntime_node_install_cuda=skip npm ci --no-audit --no-fund"
 
 say "Database migrations (only new ones are applied)"
 as_app "cd $APP_DIR && set -a && . /etc/meroauction/api.env && set +a && npm run db:migrate"
